@@ -35,6 +35,13 @@ class RepaymentReportController extends Controller
             });
         }
 
+        $currency = $request->query('currency');
+        if ($currency && $currency !== 'all') {
+            $query->whereHas('loan', function ($q) use ($currency) {
+                $q->where('currency', $currency);
+            });
+        }
+
         $reports = $query->orderBy('transaction_date', 'desc')->get();
 
         // Using resolve() to return a flat array for frontend compatibility (Export)

@@ -33,7 +33,7 @@ class LoanCalculator
 
         // Function to apply currency-specific rounding
         $applyRounding = function ($amount, $currency) use ($customRoundKHR) {
-            if ($currency === 'KHR') {
+            if (strpos($currency, 'KHR') !== false) {
                 return $customRoundKHR($amount);
             }
             return round($amount); // No cents for USD

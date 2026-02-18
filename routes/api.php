@@ -1,11 +1,38 @@
 <?php
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Route;
 
+use App\Http\Controllers\AuthController;
+
+Route::post('/login', [AuthController::class, 'login']);
+Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+
 Route::get('/user', function (Request $request) {
-    return $request->user();
+    $user = $request->user();
+    return response()->json([
+        'id' => $user->id,
+        'name' => $user->name,
+        'email' => $user->email,
+        'role' => $user->role ?? 'Staff',
+    ]);
 })->middleware('auth:sanctum');
+
+// Footer when not logged in: config fallback. When logged in, frontend uses GET /user.
+Route::get('/app/footer-user', function () {
+    return response()->json([
+        'display_name' => Config::get('app.footer_user_name', '—'),
+        'profile' => Config::get('app.footer_user_profile', '—'),
+    ]);
+});
+
+// App settings (company name for header & Excel). Backend is source of truth.
+Route::get('/app/settings', function () {
+    return response()->json([
+        'company_name' => Config::get('app.company_name', 'Company Name'),
+    ]);
+});
 
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\BorrowerController;
@@ -69,7 +96,24 @@ Route::get('customer-history/details', [CustomerHistoryController::class, 'getHi
 Route::apiResource('saving-accounts', SavingAccountController::class);
 Route::post('saving-accounts/{account}/deposit', [SavingAccountController::class, 'deposit']);
 Route::post('saving-accounts/{account}/withdraw', [SavingAccountController::class, 'withdraw']);
+Route::post('saving-accounts/post-interest', [SavingAccountController::class, 'postInterest']);
+Route::get('saving-accounts-report', [SavingAccountController::class, 'getSavingReport']);
 Route::apiResource('capital-shares', CapitalShareController::class);
+Route::post('capital-shares/{share}/sell', [CapitalShareController::class, 'sellShare']);
+
+// Excel Export
+use App\Http\Controllers\ExportController;
+Route::get('export/saving-report', [ExportController::class, 'exportSavingReport']);
+Route::get('export/capital-report', [ExportController::class, 'exportCapitalReport']);
+
+// Dividend Management
+use App\Http\Controllers\DividendController;
+Route::get('/dividends-preview', [DividendController::class, 'preview']);
+Route::get('/dividends-report', [DividendController::class, 'getDividendReport']);
+Route::apiResource('dividends', DividendController::class);
+Route::post('dividends/{dividend}/distribute', [DividendController::class, 'distribute']);
+Route::get('dividends/{dividend}/transactions', [DividendController::class, 'transactions']);
+
 
 // Savers & Investors
 Route::get('savers/next-code', [SaverController::class, 'nextCode']);
@@ -113,11 +157,7 @@ Route::apiResource('positions', PositionController::class);
 Route::apiResource('employees', EmployeeController::class);
 Route::apiResource('payrolls', PayrollController::class);
 
-Route::get('/dashboard/stats', function () {
-    return response()->json([
-        'total_customers' => \App\Models\Customer::count(),
-        'total_loans' => \App\Models\Loan::count(),
-        'active_loans' => \App\Models\Loan::where('status', 'active')->count(),
-        'total_payments' => \App\Models\Payment::sum('total_paid'),
-    ]);
-});
+use App\Http\Controllers\DashboardController;
+
+
+Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);

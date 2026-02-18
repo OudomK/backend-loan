@@ -13,6 +13,7 @@ class CapitalShare extends Model
         'share_qty',
         'par_value',
         'total_capital',
+        'currency',
         'purchase_date',
         'status',
     ];

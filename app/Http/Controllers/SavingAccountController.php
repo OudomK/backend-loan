@@ -20,7 +20,7 @@ class SavingAccountController extends Controller
             'borrower_id' => 'required|exists:borrowers,id',
             'account_number' => 'required|unique:saving_accounts',
             'account_type' => 'required|in:Daily Saving,Goal Saving,Fixed Deposit',
-            'currency' => 'required|string|max:3',
+            'currency' => 'required|string|max:20',
             'interest_rate' => 'required|numeric',
             'balance' => 'required|numeric',
             'term' => 'nullable|string',
@@ -67,19 +67,24 @@ class SavingAccountController extends Controller
         ]);
 
         return DB::transaction(function () use ($account, $validated) {
-            $account->increment('balance', $validated['amount']);
+            $account->lockForUpdate(); // Prevent race conditions
+
+            // Reload account to get latest balance after lock
+            $freshAccount = $account->fresh();
+
+            $freshAccount->increment('balance', $validated['amount']);
 
             $transaction = SavingTransaction::create([
-                'saving_account_id' => $account->id,
+                'saving_account_id' => $freshAccount->id,
                 'transaction_type' => 'Deposit',
                 'amount' => $validated['amount'],
-                'currency' => $account->currency,
+                'currency' => $freshAccount->currency,
                 'transaction_date' => now(),
                 'reference_no' => $validated['reference_no'],
                 'description' => $validated['description'],
             ]);
 
-            return response()->json(['message' => 'Deposit successful', 'balance' => $account->balance]);
+            return response()->json(['message' => 'Deposit successful', 'balance' => $freshAccount->balance]);
         });
     }
 
@@ -91,24 +96,87 @@ class SavingAccountController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        if ($account->balance < $validated['amount']) {
-            return response()->json(['message' => 'Insufficient balance'], 400);
-        }
-
         return DB::transaction(function () use ($account, $validated) {
-            $account->decrement('balance', $validated['amount']);
+            $account->lockForUpdate(); // Prevent race conditions
+
+            // Reload account to get latest balance after lock
+            $freshAccount = $account->fresh();
+
+            if ($freshAccount->balance < $validated['amount']) {
+                throw new \Exception('Insufficient balance'); // Will rollback transaction
+            }
+
+            $freshAccount->decrement('balance', $validated['amount']);
 
             $transaction = SavingTransaction::create([
-                'saving_account_id' => $account->id,
+                'saving_account_id' => $freshAccount->id,
                 'transaction_type' => 'Withdrawal',
                 'amount' => $validated['amount'],
-                'currency' => $account->currency,
+                'currency' => $freshAccount->currency,
                 'transaction_date' => now(),
                 'reference_no' => $validated['reference_no'],
                 'description' => $validated['description'],
             ]);
 
-            return response()->json(['message' => 'Withdrawal successful', 'balance' => $account->balance]);
+            return response()->json(['message' => 'Withdrawal successful', 'balance' => $freshAccount->balance]);
         });
+    }
+
+    public function getSavingReport()
+    {
+        $accounts = SavingAccount::with(['borrower', 'transactions'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json($accounts->map(function ($account) {
+            $deposits = $account->transactions->where('transaction_type', 'Deposit');
+            $withdrawals = $account->transactions->where('transaction_type', 'Withdrawal');
+            $interests = $account->transactions->where('transaction_type', 'Interest');
+            $lastTrans = $account->transactions->sortByDesc('transaction_date')->first();
+
+            return [
+                // Account Info
+                'account_id' => $account->id,
+                'account_number' => $account->account_number,
+                'saver_code' => $account->borrower->borrower_code ?? '-',
+                'saver_name' => $account->borrower
+                    ? trim($account->borrower->first_name . ' ' . $account->borrower->last_name)
+                    : 'Unknown',
+                'account_type' => $account->account_type,
+                'currency' => $account->currency,
+                'term' => $account->term,
+                'maturity_date' => $account->maturity_date,
+                'created_at' => $account->created_at,
+
+                // Financial Info
+                'opening_balance' => $deposits->first()->amount ?? 0,
+                'current_balance' => $account->balance,
+                'interest_rate' => $account->interest_rate,
+                'total_deposits' => $deposits->sum('amount'),
+                'total_withdrawals' => $withdrawals->sum('amount'),
+                'interest_earned' => $interests->sum('amount'),
+
+                // Status & Activity
+                'status' => $account->status,
+                'last_transaction_date' => $lastTrans->transaction_date ?? null,
+                'transaction_count' => $account->transactions->count(),
+            ];
+        }));
+    }
+    public function postInterest(Request $request)
+    {
+        try {
+            \Illuminate\Support\Facades\Artisan::call('app:post-monthly-interest');
+            $output = \Illuminate\Support\Facades\Artisan::output();
+
+            return response()->json([
+                'message' => 'Interest calculation triggered successfully',
+                'output' => $output
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to calculate interest: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

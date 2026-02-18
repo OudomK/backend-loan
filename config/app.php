@@ -123,4 +123,21 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Footer display (User name & Profile)
+    |--------------------------------------------------------------------------
+    | Shown in app footer. When auth is used, consider returning authenticated
+    | user from API instead. Set in .env: APP_FOOTER_USER_NAME, APP_FOOTER_USER_PROFILE.
+    */
+    'footer_user_name' => env('APP_FOOTER_USER_NAME', '—'),
+    'footer_user_profile' => env('APP_FOOTER_USER_PROFILE', '—'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Company name (header, Excel exports)
+    |--------------------------------------------------------------------------
+    */
+    'company_name' => env('APP_COMPANY_NAME', 'Company Name'),
+
 ];

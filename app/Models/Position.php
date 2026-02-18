@@ -6,7 +6,16 @@ use Illuminate\Database\Eloquent\Model;
 
 class Position extends Model
 {
-    protected $fillable = ['name', 'department', 'base_salary', 'status'];
+    protected $fillable = [
+        'code',
+        'name',
+        'department',
+        'type',
+        'base_salary',
+        'description',
+        'requirements',
+        'status',
+    ];
 
     public function employees()
     {

@@ -34,7 +34,6 @@ class RepaymentController extends Controller
             })
             ->get();
 
-        // Format for frontend
         $format = function ($loans, $isOverdue) use ($today) {
             return $loans->map(function ($loan) use ($isOverdue, $today) {
                 $nextPayment = $loan->payments()
@@ -48,14 +47,17 @@ class RepaymentController extends Controller
                     $dpd = $today->diffInDays(Carbon::parse($nextPayment->payment_date));
                 }
 
+                $symbol = (strpos($loan->currency, 'KHR') !== false) ? '៛' : '$';
+
                 return [
                     'id' => (string) $loan->id,
                     'name' => $loan->borrower->first_name . ' ' . $loan->borrower->last_name,
                     'code' => $loan->loan_code ?? ('L-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT)),
-                    'amount' => '$' . number_format($dueAmount, 2),
+                    'amount' => $symbol . number_format($dueAmount, 2),
                     'principal' => (string) number_format($nextPayment->principal_amount, 2),
                     'interest' => (string) number_format($nextPayment->interest_amount, 2),
-                    'dpd' => (string) $dpd,
+                    'dpd' => (string) abs($dpd),
+                    'symbol' => $symbol,
                 ];
             });
         };

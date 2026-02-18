@@ -14,9 +14,13 @@ class PositionController extends Controller
     public function store(\Illuminate\Http\Request $request)
     {
         $validated = $request->validate([
+            'code' => 'nullable|string|unique:positions',
             'name' => 'required|string',
             'department' => 'nullable|string',
+            'type' => 'required|string',
             'base_salary' => 'required|numeric',
+            'description' => 'nullable|string',
+            'requirements' => 'nullable|string',
             'status' => 'required|string',
         ]);
 
@@ -28,9 +32,13 @@ class PositionController extends Controller
     {
         $position = \App\Models\Position::findOrFail($id);
         $validated = $request->validate([
+            'code' => 'nullable|string|unique:positions,code,' . $id,
             'name' => 'sometimes|string',
             'department' => 'nullable|string',
+            'type' => 'sometimes|string',
             'base_salary' => 'sometimes|numeric',
+            'description' => 'nullable|string',
+            'requirements' => 'nullable|string',
             'status' => 'sometimes|string',
         ]);
 
