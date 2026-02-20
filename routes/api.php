@@ -97,9 +97,14 @@ Route::apiResource('saving-accounts', SavingAccountController::class);
 Route::post('saving-accounts/{account}/deposit', [SavingAccountController::class, 'deposit']);
 Route::post('saving-accounts/{account}/withdraw', [SavingAccountController::class, 'withdraw']);
 Route::post('saving-accounts/post-interest', [SavingAccountController::class, 'postInterest']);
+Route::get('saving-accounts/{account}/transactions', [SavingAccountController::class, 'getTransactions']);
 Route::get('saving-accounts-report', [SavingAccountController::class, 'getSavingReport']);
+Route::post('capital-shares/preview-schedule', [CapitalShareController::class, 'previewSchedule']);
 Route::apiResource('capital-shares', CapitalShareController::class);
-Route::post('capital-shares/{share}/sell', [CapitalShareController::class, 'sellShare']);
+Route::post('capital-shares/{share}/add-capital', [CapitalShareController::class, 'addCapital']);
+Route::post('capital-shares/{share}/withdraw-capital', [CapitalShareController::class, 'withdrawCapital']);
+Route::get('capital-shares/{id}/transactions', [CapitalShareController::class, 'getTransactions']);
+Route::post('capital-shares/{share}/sell', [CapitalShareController::class, 'sellShare']); // Legacy or alias
 
 // Excel Export
 use App\Http\Controllers\ExportController;
@@ -116,10 +121,10 @@ Route::get('dividends/{dividend}/transactions', [DividendController::class, 'tra
 
 
 // Savers & Investors
-Route::get('savers/next-code', [SaverController::class, 'nextCode']);
+Route::get('savers/next-code', [SaverController::class, 'getNextCode']);
 Route::apiResource('savers', SaverController::class);
 
-Route::get('investors/next-code', [InvestorController::class, 'nextCode']);
+Route::get('investors/next-code', [InvestorController::class, 'getNextCode']);
 Route::apiResource('investors', InvestorController::class);
 
 // External Borrowing Management

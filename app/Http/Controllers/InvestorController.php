@@ -100,7 +100,7 @@ class InvestorController extends Controller
         return response()->json(null, 204);
     }
 
-    public function nextCode()
+    public function getNextCode()
     {
         $lastCode = Investor::orderBy('id', 'desc')->first();
         $nextNumber = $lastCode ? intval(substr($lastCode->customer_code, 3)) + 1 : 1;
