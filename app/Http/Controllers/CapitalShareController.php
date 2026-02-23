@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\CapitalShare;
+use App\Models\CapitalShareTransaction;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use App\Services\LoanCalculator;
 use App\Services\BalloonPaymentCalculator;
 
@@ -83,9 +86,11 @@ class CapitalShareController extends Controller
         $share->lender_id = $validated['lender_id'];
         $share->account_no = $validated['account_no'] ?? $this->generateAccountNo();
         $share->category = $validated['category'];
-        $share->par_value = $validated['par_value'] ?? 0;
+        $share->par_value = $validated['par_value'] ?? 1.0;
         $share->share_qty = $validated['share_qty'] ?? 0;
-        $share->total_capital = ($validated['par_value'] ?? 0) * ($validated['share_qty'] ?? 0);
+        $share->amount = $validated['amount'] ?? 0;
+        $share->total_capital = $share->amount;
+        $share->balance = $validated['balance'] ?? $share->amount;
         $share->currency = $validated['currency'];
         $share->status = 'Active';
 
@@ -108,6 +113,18 @@ class CapitalShareController extends Controller
         $share->repayment_schedule = $validated['repayment_schedule'] ?? null;
 
         $share->save();
+
+        // Create initial transaction
+        CapitalShareTransaction::create([
+            'capital_share_id' => $share->id,
+            'transaction_type' => 'Initial',
+            'amount' => $share->total_capital,
+            'share_qty' => $share->share_qty,
+            'payment_method' => $share->payment_method,
+            'transaction_date' => $share->borrowing_date ?? now(),
+            'description' => 'Initial capital purchase',
+            'performed_by' => Auth::id(),
+        ]);
 
         return response()->json($share, 201);
     }
@@ -143,13 +160,16 @@ class CapitalShareController extends Controller
             'repayment_schedule' => 'nullable|array',
         ]);
 
-        if (isset($validated['share_qty']) || isset($validated['par_value'])) {
-            $qty = $validated['share_qty'] ?? $share->share_qty;
-            $par = $validated['par_value'] ?? $share->par_value;
-            $share->total_capital = $qty * $par;
+        if (isset($validated['amount'])) {
+            $share->total_capital = $validated['amount'];
+            $share->balance = $validated['amount'];
         }
 
         $share->update($validated);
+        // Ensure balance is saved if it was updated above but not in $validated
+        if ($share->isDirty('balance')) {
+            $share->save();
+        }
         return response()->json($share);
     }
 
@@ -157,47 +177,117 @@ class CapitalShareController extends Controller
     {
         $share = CapitalShare::findOrFail($id);
         $validated = $request->validate([
-            'share_qty' => 'required|integer|min:1',
+            'share_qty' => 'nullable|integer|min:1',
+            'amount' => 'nullable|numeric|min:0.01',
             'payment_method' => 'nullable|string',
             'transaction_date' => 'nullable|date',
             'description' => 'nullable|string',
         ]);
 
-        $share->share_qty += $validated['share_qty'];
-        $share->total_capital = $share->share_qty * $share->par_value;
-        $share->save();
+        return DB::transaction(function () use ($share, $validated) {
+            $parValue = $share->par_value > 0 ? (float) $share->par_value : 1;
 
-        // Optional: Create a transaction record if the model exists
-        // CapitalShareTransaction::create([...]);
+            // Calculate based on what was provided
+            if (!empty($validated['amount'])) {
+                $addAmount = (float) $validated['amount'];
+                $addShares = (int) floor($addAmount / $parValue);
+            } else {
+                $addShares = (int) $validated['share_qty'];
+                $addAmount = $addShares * $parValue;
+            }
 
-        return response()->json(['message' => 'Capital added successfully', 'data' => $share]);
+            $newShareQty = (int) $share->share_qty + $addShares;
+            $newTotalCapital = $newShareQty * $parValue;
+
+            // Use direct DB update instead of Eloquent save() to avoid dirty-checking issues
+            DB::table('capital_shares')->where('id', $share->id)->update([
+                'share_qty' => $newShareQty,
+                'total_capital' => $newTotalCapital,
+                'amount' => $newTotalCapital,
+                'balance' => $newTotalCapital,
+                'updated_at' => now(),
+            ]);
+
+            CapitalShareTransaction::create([
+                'capital_share_id' => $share->id,
+                'transaction_type' => 'Deposit',
+                'amount' => $addAmount,
+                'share_qty' => $addShares,
+                'payment_method' => $validated['payment_method'] ?? null,
+                'transaction_date' => $validated['transaction_date'] ?? now(),
+                'description' => $validated['description'] ?? 'Added capital',
+                'performed_by' => Auth::id(),
+            ]);
+
+            return response()->json([
+                'message' => 'Capital added successfully',
+                'data' => $share->fresh(),
+            ]);
+        });
     }
 
     public function withdrawCapital(Request $request, $id)
     {
         $share = CapitalShare::findOrFail($id);
         $validated = $request->validate([
-            'share_qty' => 'required|integer|min:1',
+            'share_qty' => 'nullable|integer|min:1',
+            'amount' => 'nullable|numeric|min:0.01',
             'payment_method' => 'nullable|string',
             'transaction_date' => 'nullable|date',
             'description' => 'nullable|string',
         ]);
 
-        if ($share->share_qty < $validated['share_qty']) {
+        $parValue = $share->par_value > 0 ? (float) $share->par_value : 1;
+
+        // Calculate based on what was provided
+        if (!empty($validated['amount'])) {
+            $withdrawAmount = (float) $validated['amount'];
+            $withdrawShares = (int) floor($withdrawAmount / $parValue);
+        } else {
+            $withdrawShares = (int) $validated['share_qty'];
+            $withdrawAmount = $withdrawShares * $parValue;
+        }
+
+        if ((int) $share->share_qty < $withdrawShares) {
             return response()->json(['message' => 'Insufficient share quantity'], 400);
         }
 
-        $share->share_qty -= $validated['share_qty'];
-        $share->total_capital = $share->share_qty * $share->par_value;
-        $share->save();
+        return DB::transaction(function () use ($share, $validated, $withdrawShares, $withdrawAmount, $parValue) {
+            $newShareQty = (int) $share->share_qty - $withdrawShares;
+            $newTotalCapital = $newShareQty * $parValue;
 
-        return response()->json(['message' => 'Capital withdrawn successfully', 'data' => $share]);
+            DB::table('capital_shares')->where('id', $share->id)->update([
+                'share_qty' => $newShareQty,
+                'total_capital' => $newTotalCapital,
+                'amount' => $newTotalCapital,
+                'balance' => $newTotalCapital,
+                'updated_at' => now(),
+            ]);
+
+            CapitalShareTransaction::create([
+                'capital_share_id' => $share->id,
+                'transaction_type' => 'Withdrawal',
+                'amount' => $withdrawAmount,
+                'share_qty' => $withdrawShares,
+                'payment_method' => $validated['payment_method'] ?? null,
+                'transaction_date' => $validated['transaction_date'] ?? now(),
+                'description' => $validated['description'] ?? 'Withdrawn capital',
+                'performed_by' => Auth::id(),
+            ]);
+
+            return response()->json([
+                'message' => 'Capital withdrawn successfully',
+                'data' => $share->fresh(),
+            ]);
+        });
     }
 
     public function getTransactions($id)
     {
-        // Placeholder or actual implementation if transactions table exists
-        return response()->json([]);
+        $transactions = CapitalShareTransaction::where('capital_share_id', $id)
+            ->orderBy('transaction_date', 'desc')
+            ->get();
+        return response()->json($transactions);
     }
 
     public function previewSchedule(Request $request, LoanCalculator $calculator)

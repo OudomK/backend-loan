@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CapitalShare;
+use App\Models\CapitalShareTransaction;
 use App\Models\Dividend;
 use App\Models\DividendTransaction;
 use Illuminate\Http\Request;
@@ -81,11 +82,33 @@ class DividendController extends Controller
         return DB::transaction(function () use ($dividend) {
             $dividend->update(['status' => 'Completed']);
 
-            $dividend->transactions()->update([
-                'status' => 'Paid',
-                'paid_at' => now(),
-                'payment_method' => 'Cash', // Default to Cash for now
-            ]);
+            $transactions = $dividend->transactions()->where('status', 'Pending')->get();
+
+            foreach ($transactions as $transaction) {
+                // Update the transaction status
+                $transaction->update([
+                    'status' => 'Paid',
+                    'paid_at' => now(),
+                    'payment_method' => 'Cash',
+                ]);
+
+                // Increment the dividends in CapitalShare model
+                $share = CapitalShare::find($transaction->capital_share_id);
+                if ($share) {
+                    $share->increment('dividends', $transaction->amount);
+
+                    // Also record in CapitalShareTransaction
+                    CapitalShareTransaction::create([
+                        'capital_share_id' => $share->id,
+                        'transaction_type' => 'Dividend',
+                        'amount' => $transaction->amount,
+                        'share_qty' => $share->share_qty,
+                        'payment_method' => $transaction->payment_method ?? 'Cash',
+                        'transaction_date' => now(),
+                        'description' => 'Dividend distribution from declaration #' . $dividend->id,
+                    ]);
+                }
+            }
 
             return response()->json(['message' => 'Dividend distributed successfully', 'dividend' => $dividend]);
         });

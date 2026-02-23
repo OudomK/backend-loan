@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\SavingAccount;
 use App\Models\SavingTransaction;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 
 class SavingAccountController extends Controller
 {
@@ -169,6 +171,167 @@ class SavingAccountController extends Controller
         $account->update($validated);
 
         return response()->json($account);
+    }
+
+    public function deposit(Request $request, $id)
+    {
+        $account = SavingAccount::findOrFail($id);
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'reference_no' => 'nullable|string',
+            'description' => 'nullable|string',
+            'transaction_date' => 'nullable|date',
+        ]);
+
+        return DB::transaction(function () use ($account, $validated) {
+            $account->increment('balance', $validated['amount']);
+            $account->increment('total_deposits', $validated['amount']);
+
+            SavingTransaction::create([
+                'saving_account_id' => $account->id,
+                'transaction_type' => 'Deposit',
+                'amount' => $validated['amount'],
+                'currency' => $account->currency,
+                'transaction_date' => $validated['transaction_date'] ?? now(),
+                'reference_no' => $validated['reference_no'],
+                'description' => $validated['description'] ?? 'Deposit to account',
+                'balance_after' => $account->balance,
+                'performed_by' => Auth::id(),
+            ]);
+
+            return response()->json($account->fresh());
+        });
+    }
+
+    public function withdraw(Request $request, $id)
+    {
+        $account = SavingAccount::findOrFail($id);
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0.01',
+            'reference_no' => 'nullable|string',
+            'description' => 'nullable|string',
+            'transaction_date' => 'nullable|date',
+        ]);
+
+        if ($account->balance < $validated['amount']) {
+            return response()->json(['message' => 'Insufficient balance'], 422);
+        }
+
+        return DB::transaction(function () use ($account, $validated) {
+            $account->decrement('balance', $validated['amount']);
+            $account->increment('total_withdrawals', $validated['amount']);
+
+            SavingTransaction::create([
+                'saving_account_id' => $account->id,
+                'transaction_type' => 'Withdrawal',
+                'amount' => $validated['amount'],
+                'currency' => $account->currency,
+                'transaction_date' => $validated['transaction_date'] ?? now(),
+                'reference_no' => $validated['reference_no'],
+                'description' => $validated['description'] ?? 'Withdrawal from account',
+                'balance_after' => $account->balance,
+                'performed_by' => Auth::id(),
+            ]);
+
+            return response()->json($account->fresh());
+        });
+    }
+
+    public function getTransactions($id)
+    {
+        $transactions = SavingTransaction::where('saving_account_id', $id)
+            ->orderBy('transaction_date', 'desc')
+            ->get();
+        return response()->json($transactions);
+    }
+
+    public function postInterest()
+    {
+        return DB::transaction(function () {
+            $accounts = SavingAccount::where('status', 'Active')
+                ->where('interest_rate', '>', 0)
+                ->get();
+
+            $posted = 0;
+
+            foreach ($accounts as $account) {
+                /** @var SavingAccount $account */
+                // Monthly interest = balance × (annual_rate / 12) / 100
+                $monthlyInterest = round(
+                    $account->balance * ($account->interest_rate / 12) / 100,
+                    2
+                );
+
+                if ($monthlyInterest <= 0)
+                    continue;
+
+                $account->increment('balance', $monthlyInterest);
+                $account->increment('interest_earned', $monthlyInterest);
+
+                SavingTransaction::create([
+                    'saving_account_id' => $account->id,
+                    'transaction_type' => 'Interest',
+                    'amount' => $monthlyInterest,
+                    'currency' => $account->currency,
+                    'transaction_date' => now(),
+                    'reference_no' => 'INT-' . now()->format('Ym'),
+                    'description' => 'Monthly interest for ' . now()->format('F Y'),
+                    'balance_after' => $account->balance,
+                    'performed_by' => Auth::id(),
+                ]);
+
+                $posted++;
+            }
+
+            return response()->json([
+                'message' => "Monthly interest posted for {$posted} account(s)",
+                'accounts_processed' => $posted,
+            ]);
+        });
+    }
+
+    public function closeAccount(Request $request, $id)
+    {
+        $account = SavingAccount::findOrFail($id);
+
+        if ($account->status === 'Closed') {
+            return response()->json(['message' => 'Account is already closed'], 400);
+        }
+
+        return DB::transaction(function () use ($account) {
+            $remainingBalance = $account->balance;
+
+            // Record final withdrawal if balance > 0
+            if ($remainingBalance > 0) {
+                SavingTransaction::create([
+                    'saving_account_id' => $account->id,
+                    'transaction_type' => 'Closure',
+                    'amount' => $remainingBalance,
+                    'currency' => $account->currency,
+                    'transaction_date' => now(),
+                    'reference_no' => 'CLS-' . $account->account_number,
+                    'description' => 'Account closure - final balance withdrawal',
+                    'balance_after' => 0,
+                    'performed_by' => Auth::id(),
+                ]);
+            }
+
+            $account->update([
+                'balance' => 0,
+                'status' => 'Closed',
+            ]);
+
+            return response()->json([
+                'message' => 'Account closed successfully',
+                'final_withdrawal' => $remainingBalance,
+            ]);
+        });
+    }
+
+    public function getSavingReport()
+    {
+        $savings = SavingAccount::with('saver')->where('status', 'Active')->get();
+        return response()->json($savings);
     }
 
     private function generateAccountNumber()

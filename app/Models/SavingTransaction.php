@@ -14,6 +14,8 @@ class SavingTransaction extends Model
         'transaction_date',
         'reference_no',
         'description',
+        'balance_after',
+        'performed_by',
     ];
 
     public function account()

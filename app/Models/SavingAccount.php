@@ -41,6 +41,11 @@ class SavingAccount extends Model
         return $this->belongsTo(Borrower::class);
     }
 
+    public function saver(): BelongsTo
+    {
+        return $this->belongsTo(Saver::class, 'saver_id');
+    }
+
     public function lender(): BelongsTo
     {
         return $this->belongsTo(Lender::class);
