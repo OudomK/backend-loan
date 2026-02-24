@@ -10,6 +10,7 @@ class SavingAccount extends Model
 {
     protected $fillable = [
         'borrower_id',
+        'saver_id',
         'lender_id',
         'transaction_no',
         'loan_account',

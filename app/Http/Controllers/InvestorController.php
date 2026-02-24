@@ -49,6 +49,11 @@ class InvestorController extends Controller
             'customer_type' => 'nullable|string'
         ]);
 
+        // Remove null status so MySQL uses DEFAULT 'Active'
+        if (array_key_exists('status', $validated) && empty($validated['status'])) {
+            unset($validated['status']);
+        }
+
         if (!isset($validated['customer_code'])) {
             $lastCode = Investor::orderBy('id', 'desc')->first();
             $nextNumber = $lastCode ? intval(substr($lastCode->customer_code, 3)) + 1 : 1;

@@ -12,15 +12,16 @@ class SavingAccountController extends Controller
 {
     public function index()
     {
-        $savings = SavingAccount::with('saver', 'lender')->get();
+        $savings = SavingAccount::with('saver')->get();
         return $savings->map(function ($a) {
+            $saverName = $a->saver ? trim($a->saver->first_name . ' ' . $a->saver->last_name) : 'N/A';
             return [
                 'id' => $a->id,
                 'account_number' => $a->account_number,
-                'customer_name' => $a->saver ? $a->saver->name : 'N/A',
-                'lender_name' => $a->lender ? $a->lender->name : '-',
-                'lender_code' => $a->lender ? $a->lender->code : '-',
-                'lender_type' => $a->lender ? ($a->lender->customer_type ?? 'Individual') : 'Individual',
+                'customer_name' => $saverName,
+                'lender_name' => $saverName,
+                'lender_code' => $a->saver ? $a->saver->customer_code : '-',
+                'lender_type' => $a->saver ? ($a->saver->customer_type ?? 'Individual') : 'Individual',
                 'balance' => $a->balance,
                 'currency' => $a->currency,
                 'interest_rate' => $a->interest_rate,
@@ -56,7 +57,7 @@ class SavingAccountController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'saver_id' => 'nullable|exists:savers,id', // or lender_id depending on flow
+            'saver_id' => 'nullable|exists:savers,id',
             'lender_id' => 'nullable|exists:lenders,id',
             'account_type' => 'required|string',
             'currency' => 'required|string',
@@ -85,7 +86,6 @@ class SavingAccountController extends Controller
         ]);
 
         $account = new SavingAccount();
-        // If it's a borrowing saving, we might use lender_id instead of saver_id or both
         $account->saver_id = $validated['saver_id'] ?? null;
         $account->lender_id = $validated['lender_id'] ?? null;
 

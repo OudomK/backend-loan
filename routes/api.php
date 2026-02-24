@@ -153,6 +153,8 @@ Route::get('/test/check-data', [App\Http\Controllers\TestDataController::class, 
 use App\Http\Controllers\PositionController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\LeaveRequestController;
+
 
 // ... existing routes ...
 
@@ -162,8 +164,21 @@ Route::apiResource('payments', PaymentController::class);
 Route::apiResource('positions', PositionController::class);
 Route::apiResource('employees', EmployeeController::class);
 Route::apiResource('payrolls', PayrollController::class);
+Route::apiResource('leave-requests', LeaveRequestController::class);
+
+// Financial Reports
+use App\Http\Controllers\IncomeStatementController;
+Route::get('/reports/income-statement', [IncomeStatementController::class, 'index']);
+
+// Miscellaneous Transactions
+use App\Http\Controllers\MiscellaneousTransactionController;
+Route::get('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'index']);
+Route::post('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'store']);
+Route::delete('/miscellaneous-transactions/{id}', [MiscellaneousTransactionController::class, 'destroy']);
+
 
 use App\Http\Controllers\DashboardController;
 
 
 Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
+

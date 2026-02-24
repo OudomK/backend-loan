@@ -14,20 +14,21 @@ class EmployeeService
 
         if ($employee->position_id == $loanOfficerPosition?->id) {
             LoanOfficer::updateOrCreate(
-                ['name' => $employee->name],
+                ['employee_id' => $employee->id],
                 [
+                    'name' => $employee->name,
                     'phone' => $employee->phone,
                     'status' => $employee->status === 'active' ? 'active' : 'inactive'
                 ]
             );
         } else {
             // If position changed from Loan Officer to something else, remove from loan_officers
-            LoanOfficer::where('name', $employee->name)->delete();
+            LoanOfficer::where('employee_id', $employee->id)->delete();
         }
     }
 
     public function handleDeletion(Employee $employee)
     {
-        LoanOfficer::where('name', $employee->name)->delete();
+        LoanOfficer::where('employee_id', $employee->id)->delete();
     }
 }

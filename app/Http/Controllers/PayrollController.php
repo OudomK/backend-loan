@@ -11,6 +11,11 @@ class PayrollController extends Controller
         return response()->json(\App\Models\Payroll::with('employee')->get());
     }
 
+    public function show($id)
+    {
+        return response()->json(\App\Models\Payroll::with('employee')->findOrFail($id));
+    }
+
     public function store(\Illuminate\Http\Request $request)
     {
         $validated = $request->validate([
