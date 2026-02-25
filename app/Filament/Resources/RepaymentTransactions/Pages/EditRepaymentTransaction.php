@@ -1,0 +1,19 @@
+<?php
+
+namespace App\Filament\Resources\RepaymentTransactions\Pages;
+
+use App\Filament\Resources\RepaymentTransactions\RepaymentTransactionResource;
+use Filament\Actions\DeleteAction;
+use Filament\Resources\Pages\EditRecord;
+
+class EditRepaymentTransaction extends EditRecord
+{
+    protected static string $resource = RepaymentTransactionResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            DeleteAction::make(),
+        ];
+    }
+}

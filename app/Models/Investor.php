@@ -6,6 +6,19 @@ use Illuminate\Database\Eloquent\Model;
 
 class Investor extends Model
 {
+    protected $table = 'investors';
+
+    protected static function booted()
+    {
+        static::addGlobalScope('investor', function ($builder) {
+            $builder->where('customer_type', 'Investor');
+        });
+
+        static::creating(function ($model) {
+            $model->customer_type = 'Investor';
+        });
+    }
+
     protected $fillable = [
         'customer_code',
         'first_name',

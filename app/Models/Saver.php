@@ -6,6 +6,19 @@ use Illuminate\Database\Eloquent\Model;
 
 class Saver extends Model
 {
+    protected $table = 'savers';
+
+    protected static function booted()
+    {
+        static::addGlobalScope('saver', function ($builder) {
+            $builder->where('customer_type', 'Saver');
+        });
+
+        static::creating(function ($model) {
+            $model->customer_type = 'Saver';
+        });
+    }
+
     protected $fillable = [
         'customer_code',
         'first_name',

@@ -6,6 +6,19 @@ use Illuminate\Database\Eloquent\Model;
 
 class Borrower extends Model
 {
+    protected $table = 'borrowers';
+
+    protected static function booted()
+    {
+        static::addGlobalScope('borrower', function ($builder) {
+            $builder->where('customer_type', 'Borrower');
+        });
+
+        static::creating(function ($model) {
+            $model->customer_type = 'Borrower';
+        });
+    }
+
     protected $fillable = [
         'customer_code',
         'first_name',
