@@ -21,7 +21,7 @@ class LoanOfficerResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-user-circle';
 
-    protected static ?int $navigationSort = 8;
+    protected static ?int $navigationSort = 11;
 
     protected static ?string $recordTitleAttribute = 'name';
 

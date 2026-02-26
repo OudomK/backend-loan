@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Borrowers\Schemas;
 
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -18,7 +20,7 @@ class BorrowerForm
                     ->description('Primary details about the borrower.')
                     ->icon('heroicon-o-user')
                     ->schema([
-                        Grid::make(3)
+                        Grid::make(4)
                             ->schema([
                                 TextInput::make('first_name')
                                     ->required()
@@ -31,6 +33,13 @@ class BorrowerForm
                                         'Male' => 'Male',
                                         'Female' => 'Female',
                                         'Other' => 'Other',
+                                    ]),
+                                Select::make('marital_status')
+                                    ->options([
+                                        'Single' => 'Single',
+                                        'Married' => 'Married',
+                                        'Divorced' => 'Divorced',
+                                        'Widowed' => 'Widowed',
                                     ]),
                             ]),
                         Grid::make(3)

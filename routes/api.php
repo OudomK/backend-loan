@@ -11,11 +11,17 @@ Route::post('/logout', [AuthController::class, 'logout'])->middleware('auth:sanc
 
 Route::get('/user', function (Request $request) {
     $user = $request->user();
+    $perms = $user->getAllPermissions()->pluck('name');
+    $roles = $user->roles->pluck('name');
+    \Illuminate\Support\Facades\Log::info("USER CHECK - ID: {$user->id}, Roles: " . json_encode($roles) . ", Perms Count: " . count($perms));
+    \Illuminate\Support\Facades\Log::info("USER PERMISSIONS: " . json_encode($perms));
     return response()->json([
         'id' => $user->id,
         'name' => $user->name,
         'email' => $user->email,
-        'role' => $user->role ?? 'Staff',
+        'role' => $roles->first() ?? $user->role ?? 'Staff',
+        'roles' => $roles,
+        'permissions' => $perms,
     ]);
 })->middleware('auth:sanctum');
 
@@ -181,4 +187,3 @@ use App\Http\Controllers\DashboardController;
 
 
 Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
-

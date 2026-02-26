@@ -20,7 +20,7 @@ class GuarantorForm
                     ->description('Primary details about the guarantor.')
                     ->icon('heroicon-o-user')
                     ->schema([
-                        Grid::make(3)
+                        Grid::make(4)
                             ->schema([
                                 TextInput::make('first_name')
                                     ->required()
@@ -33,6 +33,13 @@ class GuarantorForm
                                         'Male' => 'Male',
                                         'Female' => 'Female',
                                         'Other' => 'Other',
+                                    ]),
+                                Select::make('marital_status')
+                                    ->options([
+                                        'Single' => 'Single',
+                                        'Married' => 'Married',
+                                        'Divorced' => 'Divorced',
+                                        'Widowed' => 'Widowed',
                                     ]),
                             ]),
                         Grid::make(3)

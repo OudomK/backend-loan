@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SavingAccount extends Model
 {
+
     protected $fillable = [
         'borrower_id',
         'saver_id',

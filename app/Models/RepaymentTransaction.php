@@ -20,6 +20,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class RepaymentTransaction extends Model
 {
+
     protected $fillable = [
         'loan_id',
         'collector_id',

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Guarantor extends Model
 {
+
     protected $fillable = [
         'customer_code',
         'first_name',

@@ -1,34 +1,70 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Employee;
-use App\Models\User;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class EmployeePolicy
 {
-    public function viewAny(User $user): bool
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('ViewAny:Employee');
     }
 
-    public function view(User $user, Employee $employee): bool
+    public function view(AuthUser $authUser, Employee $employee): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('View:Employee');
     }
 
-    public function create(User $user): bool
+    public function create(AuthUser $authUser): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Create:Employee');
     }
 
-    public function update(User $user, Employee $employee): bool
+    public function update(AuthUser $authUser, Employee $employee): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Update:Employee');
     }
 
-    public function delete(User $user, Employee $employee): bool
+    public function delete(AuthUser $authUser, Employee $employee): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Delete:Employee');
     }
+
+    public function restore(AuthUser $authUser, Employee $employee): bool
+    {
+        return $authUser->can('Restore:Employee');
+    }
+
+    public function forceDelete(AuthUser $authUser, Employee $employee): bool
+    {
+        return $authUser->can('ForceDelete:Employee');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Employee');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Employee');
+    }
+
+    public function replicate(AuthUser $authUser, Employee $employee): bool
+    {
+        return $authUser->can('Replicate:Employee');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Employee');
+    }
+
 }

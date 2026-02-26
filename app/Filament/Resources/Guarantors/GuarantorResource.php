@@ -18,7 +18,7 @@ class GuarantorResource extends Resource
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 6;
 
     protected static ?string $recordTitleAttribute = 'customer_code';
 

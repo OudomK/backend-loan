@@ -31,14 +31,11 @@ class UserForm
                             ]),
                         Grid::make(2)
                             ->schema([
-                                Select::make('role')
-                                    ->options([
-                                        'admin' => 'Administrator',
-                                        'Staff' => 'Staff',
-                                        'Manager' => 'Manager',
-                                    ])
-                                    ->required()
-                                    ->default('Staff'),
+                                Select::make('roles')
+                                    ->relationship('roles', 'name')
+                                    ->multiple()
+                                    ->preload()
+                                    ->searchable(),
                                 TextInput::make('password')
                                     ->password()
                                     ->dehydrated(fn(?string $state): bool => filled($state))

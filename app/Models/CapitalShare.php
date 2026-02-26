@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class CapitalShare extends Model
 {
+
     protected $fillable = [
         'lender_id', // Investor
         'account_no',

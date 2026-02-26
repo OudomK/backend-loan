@@ -22,14 +22,10 @@ class UsersTable
                     ->label('Email Address')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('role')
+                TextColumn::make('roles.name')
+                    ->label('Roles')
                     ->badge()
-                    ->color(fn(string $state): string => match ($state) {
-                        'admin' => 'danger',
-                        'Manager' => 'warning',
-                        'Staff' => 'success',
-                        default => 'gray',
-                    })
+                    ->color('info')
                     ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()
@@ -37,12 +33,8 @@ class UsersTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                SelectFilter::make('role')
-                    ->options([
-                        'admin' => 'Administrator',
-                        'Staff' => 'Staff',
-                        'Manager' => 'Manager',
-                    ]),
+                SelectFilter::make('roles')
+                    ->relationship('roles', 'name'),
             ])
             ->recordActions([
                 EditAction::make(),

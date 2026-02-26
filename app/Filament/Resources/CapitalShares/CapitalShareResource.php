@@ -21,7 +21,7 @@ class CapitalShareResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-pie';
 
-    protected static ?int $navigationSort = 11;
+    protected static ?int $navigationSort = 8;
 
     protected static ?string $recordTitleAttribute = 'account_no';
 

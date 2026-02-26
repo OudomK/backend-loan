@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class LoanOfficer extends Model
 {
+
     protected $fillable = ['employee_id', 'name', 'phone', 'status'];
 
     public function employee()

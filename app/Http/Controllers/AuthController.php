@@ -19,7 +19,7 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        if (! Auth::attempt($request->only('email', 'password'))) {
+        if (!Auth::attempt($request->only('email', 'password'))) {
             throw ValidationException::withMessages([
                 'email' => [__('auth.failed')],
             ]);
@@ -35,7 +35,12 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => $user->role ?? 'Staff',
+                'role' => $user->roles->pluck('name')->first() ?? $user->role ?? 'Staff',
+                'roles' => $user->roles->pluck('name'),
+                'permissions' => $user->roles->flatMap(fn($role) => $role->permissions)->pluck('name')
+                    ->merge($user->permissions->pluck('name'))
+                    ->unique()
+                    ->values(),
             ],
         ]);
     }

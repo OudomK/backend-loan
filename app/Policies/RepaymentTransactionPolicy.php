@@ -1,34 +1,70 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\RepaymentTransaction;
-use App\Models\User;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class RepaymentTransactionPolicy
 {
-    public function viewAny(User $user): bool
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
     {
-        return true;
+        return $authUser->can('ViewAny:RepaymentTransaction');
     }
 
-    public function view(User $user, RepaymentTransaction $transaction): bool
+    public function view(AuthUser $authUser, RepaymentTransaction $repaymentTransaction): bool
     {
-        return true;
+        return $authUser->can('View:RepaymentTransaction');
     }
 
-    public function create(User $user): bool
+    public function create(AuthUser $authUser): bool
     {
-        return $user->role === 'admin' || $user->role === 'staff';
+        return $authUser->can('Create:RepaymentTransaction');
     }
 
-    public function update(User $user, RepaymentTransaction $transaction): bool
+    public function update(AuthUser $authUser, RepaymentTransaction $repaymentTransaction): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Update:RepaymentTransaction');
     }
 
-    public function delete(User $user, RepaymentTransaction $transaction): bool
+    public function delete(AuthUser $authUser, RepaymentTransaction $repaymentTransaction): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Delete:RepaymentTransaction');
     }
+
+    public function restore(AuthUser $authUser, RepaymentTransaction $repaymentTransaction): bool
+    {
+        return $authUser->can('Restore:RepaymentTransaction');
+    }
+
+    public function forceDelete(AuthUser $authUser, RepaymentTransaction $repaymentTransaction): bool
+    {
+        return $authUser->can('ForceDelete:RepaymentTransaction');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:RepaymentTransaction');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:RepaymentTransaction');
+    }
+
+    public function replicate(AuthUser $authUser, RepaymentTransaction $repaymentTransaction): bool
+    {
+        return $authUser->can('Replicate:RepaymentTransaction');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:RepaymentTransaction');
+    }
+
 }

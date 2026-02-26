@@ -21,7 +21,7 @@ class PayrollResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';
 
-    protected static ?int $navigationSort = 9;
+    protected static ?int $navigationSort = 12;
 
     protected static ?string $recordTitleAttribute = 'month_year';
 

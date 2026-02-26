@@ -1,34 +1,70 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\CapitalShare;
-use App\Models\User;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class CapitalSharePolicy
 {
-    public function viewAny(User $user): bool
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
     {
-        return $user->role === 'admin' || $user->role === 'staff';
+        return $authUser->can('ViewAny:CapitalShare');
     }
 
-    public function view(User $user, CapitalShare $share): bool
+    public function view(AuthUser $authUser, CapitalShare $capitalShare): bool
     {
-        return true;
+        return $authUser->can('View:CapitalShare');
     }
 
-    public function create(User $user): bool
+    public function create(AuthUser $authUser): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Create:CapitalShare');
     }
 
-    public function update(User $user, CapitalShare $share): bool
+    public function update(AuthUser $authUser, CapitalShare $capitalShare): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Update:CapitalShare');
     }
 
-    public function delete(User $user, CapitalShare $share): bool
+    public function delete(AuthUser $authUser, CapitalShare $capitalShare): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Delete:CapitalShare');
     }
+
+    public function restore(AuthUser $authUser, CapitalShare $capitalShare): bool
+    {
+        return $authUser->can('Restore:CapitalShare');
+    }
+
+    public function forceDelete(AuthUser $authUser, CapitalShare $capitalShare): bool
+    {
+        return $authUser->can('ForceDelete:CapitalShare');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:CapitalShare');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:CapitalShare');
+    }
+
+    public function replicate(AuthUser $authUser, CapitalShare $capitalShare): bool
+    {
+        return $authUser->can('Replicate:CapitalShare');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:CapitalShare');
+    }
+
 }

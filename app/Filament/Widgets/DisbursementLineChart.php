@@ -4,8 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Models\Loan;
 use Filament\Widgets\ChartWidget;
-use Flowframe\Trend\Trend;
-use Flowframe\Trend\TrendValue;
+use Illuminate\Support\Carbon;
 
 class DisbursementLineChart extends ChartWidget
 {
@@ -14,22 +13,33 @@ class DisbursementLineChart extends ChartWidget
 
     protected function getData(): array
     {
-        // Fallback if Trend is not installed, or use simple query
-        $data = Loan::selectRaw('SUM(amount) as total, MONTH(start_date) as month')
-            ->whereYear('start_date', date('Y'))
+        $months = [];
+        $labels = [];
+        for ($i = 11; $i >= 0; $i--) {
+            $months[] = now()->subMonths($i)->format('Y-m');
+            $labels[] = now()->subMonths($i)->format('M');
+        }
+
+        $data = Loan::where('status', 'active')
+            ->where('start_date', '>=', now()->subMonths(11)->startOfMonth())
+            ->selectRaw('DATE_FORMAT(start_date, "%Y-%m") as month, SUM(amount) as total')
             ->groupBy('month')
-            ->orderBy('month')
-            ->get();
+            ->get()
+            ->pluck('total', 'month');
+
+        $finalData = collect($months)->map(fn($m) => $data->get($m, 0))->toArray();
 
         return [
             'datasets' => [
                 [
                     'label' => 'Disbursements ($)',
-                    'data' => $data->map(fn($value) => $value->total),
+                    'data' => $finalData,
                     'borderColor' => '#f59e0b',
+                    'fill' => 'start',
+                    'backgroundColor' => 'rgba(245, 158, 11, 0.1)',
                 ],
             ],
-            'labels' => $data->map(fn($value) => date("M", mktime(0, 0, 0, $value->month, 10))),
+            'labels' => $labels,
         ];
     }
 

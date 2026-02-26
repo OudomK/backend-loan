@@ -1,34 +1,70 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Policies;
 
+use Illuminate\Foundation\Auth\User as AuthUser;
 use App\Models\Position;
-use App\Models\User;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class PositionPolicy
 {
-    public function viewAny(User $user): bool
+    use HandlesAuthorization;
+    
+    public function viewAny(AuthUser $authUser): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('ViewAny:Position');
     }
 
-    public function view(User $user, Position $position): bool
+    public function view(AuthUser $authUser, Position $position): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('View:Position');
     }
 
-    public function create(User $user): bool
+    public function create(AuthUser $authUser): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Create:Position');
     }
 
-    public function update(User $user, Position $position): bool
+    public function update(AuthUser $authUser, Position $position): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Update:Position');
     }
 
-    public function delete(User $user, Position $position): bool
+    public function delete(AuthUser $authUser, Position $position): bool
     {
-        return $user->role === 'admin';
+        return $authUser->can('Delete:Position');
     }
+
+    public function restore(AuthUser $authUser, Position $position): bool
+    {
+        return $authUser->can('Restore:Position');
+    }
+
+    public function forceDelete(AuthUser $authUser, Position $position): bool
+    {
+        return $authUser->can('ForceDelete:Position');
+    }
+
+    public function forceDeleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('ForceDeleteAny:Position');
+    }
+
+    public function restoreAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('RestoreAny:Position');
+    }
+
+    public function replicate(AuthUser $authUser, Position $position): bool
+    {
+        return $authUser->can('Replicate:Position');
+    }
+
+    public function reorder(AuthUser $authUser): bool
+    {
+        return $authUser->can('Reorder:Position');
+    }
+
 }
