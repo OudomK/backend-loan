@@ -14,7 +14,7 @@ class DashboardController extends Controller
     public function getStats(Request $request)
     {
         $referenceDate = Carbon::today();
-        $exchangeRate = 4000; // 1 USD = 4000 KHR
+        $exchangeRate = (int) (\App\Models\Setting::where('key', 'exchange_rate')->value('value') ?? 4000);
 
         // Customer Stats
         $totalCustomers = Borrower::count();

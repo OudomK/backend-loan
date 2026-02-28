@@ -108,6 +108,7 @@ Route::post('saving-accounts/{account}/close', [SavingAccountController::class, 
 Route::get('saving-accounts-report', [SavingAccountController::class, 'getSavingReport']);
 Route::post('capital-shares/preview-schedule', [CapitalShareController::class, 'previewSchedule']);
 Route::apiResource('capital-shares', CapitalShareController::class);
+Route::post('capital-shares/{share}/repay', [CapitalShareController::class, 'repay']);
 Route::post('capital-shares/{share}/add-capital', [CapitalShareController::class, 'addCapital']);
 Route::post('capital-shares/{share}/withdraw-capital', [CapitalShareController::class, 'withdrawCapital']);
 Route::get('capital-shares/{id}/transactions', [CapitalShareController::class, 'getTransactions']);

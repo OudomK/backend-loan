@@ -290,6 +290,74 @@ class CapitalShareController extends Controller
         return response()->json($transactions);
     }
 
+    public function repay(Request $request, $id)
+    {
+        $share = CapitalShare::findOrFail($id);
+        $validated = $request->validate([
+            'period' => 'required|integer',
+            'principal_paid' => 'required|numeric',
+            'interest_paid' => 'required|numeric',
+            'payment_method' => 'required|string',
+            'transaction_date' => 'required|date',
+            'description' => 'nullable|string',
+        ]);
+
+        return DB::transaction(function () use ($share, $validated) {
+            $schedule = $share->repayment_schedule ?? [];
+            $found = false;
+            foreach ($schedule as &$item) {
+                if ($item['period'] == $validated['period']) {
+                    $item['status'] = 'paid';
+                    $item['paid_date'] = $validated['transaction_date'];
+                    $found = true;
+                    break;
+                }
+            }
+
+            if (!$found) {
+                return response()->json(['message' => 'Period not found in schedule'], 400);
+            }
+
+            $share->repayment_schedule = $schedule;
+            
+            // Update balance if principal was paid
+            if ($validated['principal_paid'] > 0) {
+                $share->balance = max(0, $share->balance - $validated['principal_paid']);
+            }
+
+            // Check if all periods are paid to complete the account
+            $allPaid = true;
+            foreach ($schedule as $item) {
+                if (($item['status'] ?? '') !== 'paid') {
+                    $allPaid = false;
+                    break;
+                }
+            }
+            if ($allPaid) {
+                $share->status = 'Completed';
+            }
+
+            $share->save();
+
+            // Create transaction log
+            CapitalShareTransaction::create([
+                'capital_share_id' => $share->id,
+                'transaction_type' => 'Repayment',
+                'amount' => $validated['principal_paid'] + $validated['interest_paid'],
+                'share_qty' => 0,
+                'payment_method' => $validated['payment_method'],
+                'transaction_date' => $validated['transaction_date'],
+                'description' => $validated['description'] ?? "Repayment for Period " . $validated['period'],
+                'performed_by' => Auth::id(),
+            ]);
+
+            return response()->json([
+                'message' => 'Repayment successful',
+                'data' => $share->fresh(),
+            ]);
+        });
+    }
+
     public function previewSchedule(Request $request, LoanCalculator $calculator)
     {
         $validated = $request->validate([

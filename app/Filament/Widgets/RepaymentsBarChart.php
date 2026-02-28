@@ -20,13 +20,32 @@ class RepaymentsBarChart extends ChartWidget
             $labels[] = now()->subMonths($i)->format('M');
         }
 
-        $data = RepaymentTransaction::where('transaction_date', '>=', now()->subMonths(11)->startOfMonth())
-            ->selectRaw('DATE_FORMAT(transaction_date, "%Y-%m") as month, SUM(amount_paid) as total')
-            ->groupBy('month')
-            ->get()
-            ->pluck('total', 'month');
+        $exchangeRate = (int) (\App\Models\Setting::where('key', 'exchange_rate')->value('value') ?? 4000);
 
-        $finalData = collect($months)->map(fn($m) => $data->get($m, 0))->toArray();
+        $collectionsRaw = RepaymentTransaction::where('transaction_date', '>=', now()->subMonths(11)->startOfMonth())
+            ->with('loan')
+            ->get()
+            ->groupBy(function ($item) {
+                return Carbon::parse($item->transaction_date)->format('Y-m');
+            });
+
+        $collections = collect($months)->mapWithKeys(function ($m) {
+            return [$m => 0];
+        });
+
+        foreach ($collectionsRaw as $month => $transactions) {
+            $totalForMonth = 0;
+            foreach ($transactions as $t) {
+                $amount = $t->amount_paid;
+                if ($t->loan && str_starts_with($t->loan->currency, 'KHR')) {
+                    $amount = $amount / $exchangeRate;
+                }
+                $totalForMonth += $amount;
+            }
+            $collections[$month] = $totalForMonth;
+        }
+
+        $finalData = collect($months)->map(fn($m) => round($collections->get($m, 0), 2))->toArray();
 
         return [
             'datasets' => [

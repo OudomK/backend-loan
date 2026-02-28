@@ -101,6 +101,7 @@ class RoleResource extends Resource
             'create' => 'Create',
             'edit' => 'Edit',
             'delete' => 'Delete',
+            'export' => 'Export',
         ];
     }
 
@@ -193,9 +194,15 @@ class RoleResource extends Resource
                                             }),
                                         CheckboxList::make("ui_feature_{$key}_actions")
                                             ->label('Actions')
-                                            ->options(static::getUiActions())
+                                            ->options(function () use ($groupName) {
+                                                // Reports only get 'Export', others get full CRUD + Export
+                                                if ($groupName === 'Reports') {
+                                                    return ['export' => 'Export'];
+                                                }
+                                                return static::getUiActions();
+                                            })
                                             ->columns(2)
-                                            ->visible(fn($get) => $get("ui_feature_{$key}_show") && !in_array($groupName, ['Menu Visibility', 'Reports']))
+                                            ->visible(fn($get) => $get("ui_feature_{$key}_show") && $groupName !== 'Menu Visibility')
                                             ->afterStateHydrated(function (CheckboxList $component, $record) use ($key) {
                                                 if (!$record)
                                                     return;

@@ -20,14 +20,27 @@ class DisbursementLineChart extends ChartWidget
             $labels[] = now()->subMonths($i)->format('M');
         }
 
-        $data = Loan::where('status', 'active')
-            ->where('start_date', '>=', now()->subMonths(11)->startOfMonth())
-            ->selectRaw('DATE_FORMAT(start_date, "%Y-%m") as month, SUM(amount) as total')
-            ->groupBy('month')
-            ->get()
-            ->pluck('total', 'month');
+        $exchangeRate = (int) (\App\Models\Setting::where('key', 'exchange_rate')->value('value') ?? 4000);
 
-        $finalData = collect($months)->map(fn($m) => $data->get($m, 0))->toArray();
+        $disbursementsRaw = Loan::where('status', 'active')
+            ->where('start_date', '>=', now()->subMonths(11)->startOfMonth())
+            ->selectRaw('DATE_FORMAT(start_date, "%Y-%m") as month, currency, SUM(amount) as total_amount')
+            ->groupBy('month', 'currency')
+            ->get();
+
+        $disbursements = collect($months)->mapWithKeys(function ($m) {
+            return [$m => 0];
+        });
+
+        foreach ($disbursementsRaw as $d) {
+            $amount = $d->total_amount;
+            if (str_starts_with($d->currency, 'KHR')) {
+                $amount = $amount / $exchangeRate;
+            }
+            $disbursements[$d->month] += $amount;
+        }
+
+        $finalData = collect($months)->map(fn($m) => round($disbursements->get($m, 0), 2))->toArray();
 
         return [
             'datasets' => [
