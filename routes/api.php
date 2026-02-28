@@ -143,6 +143,7 @@ Route::put('borrowings/{id}', [BorrowingController::class, 'updateBorrowing']);
 Route::post('borrowings/repay', [BorrowingController::class, 'repayBorrowing']);
 
 // Reports
+use App\Http\Controllers\LoanOutstandingParReportController;
 Route::get('reports/repayment', [RepaymentReportController::class, 'index']);
 Route::get('reports/arrear-all', [ArrearReportController::class, 'index']);
 Route::get('reports/arrear-under-30', [ArrearReportController::class, 'index']);
@@ -154,6 +155,7 @@ Route::get('/reports/write-off', [WriteOffReportController::class, 'index']);
 Route::get('/reports/write-off-collection', [WriteOffCollectionReportController::class, 'index']);
 Route::get('/reports/loan-collection', [LoanCollectionReportController::class, 'index']);
 Route::get('/reports/interest-income', [InterestIncomeReportController::class, 'index']);
+Route::get('/reports/loan-outstanding-par', [LoanOutstandingParReportController::class, 'index']);
 Route::get('/test/check-data', [App\Http\Controllers\TestDataController::class, 'checkData']);
 
 use App\Http\Controllers\PositionController;

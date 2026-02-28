@@ -58,23 +58,37 @@ class RoleResource extends Resource
      * Get UI permission names with friendly labels for display.
      */
     /**
-     * Get UI feature names with friendly labels.
+     * Get UI feature names grouped for better organization.
      */
-    public static function getUiFeatures(): array
+    public static function getUiFeatureGroups(): array
     {
         return [
-            'customer_history' => 'Customer History',
-            'loan_application' => 'Loan Application',
-            'credit_menu' => 'Credit Menu',
-            'operation_menu' => 'Operation Menu',
-            'savings' => 'Savings',
-            'capital_share' => 'Capital & Share',
-            'dividend' => 'Dividend Declaration',
-            'hr_position' => 'Position (HR)',
-            'hr_employee' => 'Employee & Salary (HR)',
-            'hr_miscellaneous' => 'Miscellaneous Transactions (HR)',
-            'reports' => 'Reports',
-            'customer_management' => 'Customer Management',
+            'Fund Management' => [
+                'savings' => 'Savings',
+                'capital_share' => 'Capital & Share',
+                'dividend' => 'Dividend Declaration',
+            ],
+            'Credit & Operation' => [
+                'loan_application' => 'Loan Application',
+                'repayment' => 'Repayment (Operation)',
+                'loan_operation' => 'Loan Operation',
+                'reschedule_refinance' => 'Reschedule & Refinance',
+                'customer_management' => 'Customer Management',
+                'customer_history' => 'Customer History',
+            ],
+            'HR & Payroll' => [
+                'hr_position' => 'Position (HR)',
+                'hr_employee' => 'Employee & Salary (HR)',
+                'hr_miscellaneous' => 'Miscellaneous Transactions (HR)',
+            ],
+            'Reports' => [
+                'reports' => 'Reports Dashboard',
+                'income_statement' => 'Income Statement',
+            ],
+            'Menu Visibility' => [
+                'credit_menu' => 'Credit Menu',
+                'operation_menu' => 'Operation Menu',
+            ]
         ];
     }
 
@@ -84,7 +98,6 @@ class RoleResource extends Resource
     protected static function getUiActions(): array
     {
         return [
-            'view' => 'View',
             'create' => 'Create',
             'edit' => 'Edit',
             'delete' => 'Delete',
@@ -159,53 +172,56 @@ class RoleResource extends Resource
 
 
                 Section::make('System UI Permissions')
-                    ->description('Select which features to show in the Flutter app and what actions are allowed.')
-                    ->schema([
-                        Grid::make([
-                            'default' => 1,
-                            'sm' => 2,
-                            'lg' => 3,
-                        ])
-                            ->schema(function () {
-                                $items = [];
-                                foreach (static::getUiFeatures() as $key => $label) {
-                                    $items[] = Fieldset::make($label)
-                                        ->schema([
-                                            Toggle::make("ui_feature_{$key}_show")
-                                                ->label('Show Feature')
-                                                ->live()
-                                                ->afterStateHydrated(function (Toggle $component, $record) use ($key) {
-                                                    if (!$record)
-                                                        return;
-                                                    $exists = $record->permissions->pluck('name')
-                                                        ->filter(fn($p) => $p === "ui:{$key}" || $p === "ui:{$key}:view")
-                                                        ->isNotEmpty();
-                                                    $component->state($exists);
-                                                }),
-                                            CheckboxList::make("ui_feature_{$key}_actions")
-                                                ->label('Actions')
-                                                ->options([
-                                                    'create' => 'Create',
-                                                    'edit' => 'Edit',
-                                                    'delete' => 'Delete',
-                                                ])
-                                                ->columns(3)
-                                                ->visible(fn($get) => $get("ui_feature_{$key}_show"))
-                                                ->afterStateHydrated(function (CheckboxList $component, $record) use ($key) {
-                                                    if (!$record)
-                                                        return;
-                                                    $actions = $record->permissions->pluck('name')
-                                                        ->filter(fn($p) => str_starts_with($p, "ui:{$key}:") && !str_ends_with($p, ":view"))
-                                                        ->map(fn($p) => str_replace("ui:{$key}:", "", $p))
-                                                        ->toArray();
-                                                    $component->state($actions);
-                                                }),
-                                        ])
-                                        ->columnSpan(1);
-                                }
-                                return $items;
-                            }),
-                    ])
+                    ->description('Select which features to show in the Flutter app and what actions are allowed. Organized by feature groups.')
+                    ->schema(function () {
+                        $sections = [];
+                        foreach (static::getUiFeatureGroups() as $groupName => $features) {
+                            $featureFields = [];
+                            foreach ($features as $key => $label) {
+                                $featureFields[] = Fieldset::make($label)
+                                    ->schema([
+                                        Toggle::make("ui_feature_{$key}_show")
+                                            ->label('Show Feature')
+                                            ->live()
+                                            ->afterStateHydrated(function (Toggle $component, $record) use ($key) {
+                                                if (!$record)
+                                                    return;
+                                                $exists = $record->permissions->pluck('name')
+                                                    ->filter(fn($p) => $p === "ui:{$key}" || $p === "ui:{$key}:view")
+                                                    ->isNotEmpty();
+                                                $component->state($exists);
+                                            }),
+                                        CheckboxList::make("ui_feature_{$key}_actions")
+                                            ->label('Actions')
+                                            ->options(static::getUiActions())
+                                            ->columns(2)
+                                            ->visible(fn($get) => $get("ui_feature_{$key}_show") && !in_array($groupName, ['Menu Visibility', 'Reports']))
+                                            ->afterStateHydrated(function (CheckboxList $component, $record) use ($key) {
+                                                if (!$record)
+                                                    return;
+                                                $actions = $record->permissions->pluck('name')
+                                                    ->filter(fn($p) => str_starts_with($p, "ui:{$key}:") && !str_ends_with($p, ":view"))
+                                                    ->map(fn($p) => str_replace("ui:{$key}:", "", $p))
+                                                    ->toArray();
+                                                $component->state($actions);
+                                            }),
+                                    ])
+                                    ->columnSpan(1);
+                            }
+
+                            $sections[] = Section::make($groupName)
+                                ->schema([
+                                    Grid::make([
+                                        'default' => 1,
+                                        'sm' => 2,
+                                        'lg' => 3,
+                                    ])
+                                        ->schema($featureFields)
+                                ])
+                                ->collapsible();
+                        }
+                        return $sections;
+                    })
                     ->visible(fn($get) => ($get('category') ?? 'admin') === 'system_ui')
                     ->columnSpanFull(),
             ]);
