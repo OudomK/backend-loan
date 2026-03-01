@@ -55,8 +55,10 @@ class RescheduleRefinanceController extends Controller
         $validated = $request->validate([
             'loan_id' => 'required|exists:loans,id',
             'new_rate' => 'required|numeric',
-            'extend_months' => 'required|integer',
+            'remaining_term' => 'required|integer', // Changed from extend_months
             'reschedule_date' => 'required|date',
+            'first_payment_date' => 'nullable|date',
+            'repayment_method' => 'nullable|string',
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);
@@ -77,6 +79,7 @@ class RescheduleRefinanceController extends Controller
             'new_term' => 'required|integer',
             'start_date' => 'required|date',
             'refinance_fee' => 'nullable|numeric',
+            'repayment_method' => 'nullable|string',
         ]);
 
         $oldLoan = Loan::findOrFail($validated['old_loan_id']);
@@ -86,5 +89,23 @@ class RescheduleRefinanceController extends Controller
             'message' => 'Loan refinanced successfully',
             'new_loan_id' => $newLoan->id
         ]);
+    }
+
+    public function previewModification(Request $request)
+    {
+        $validated = $request->validate([
+            'type' => 'required|in:reschedule,refinance',
+            'loan_id' => 'required|exists:loans,id',
+            'new_rate' => 'required|numeric',
+            'term' => 'required|integer', // remaining_term for reschedule, new_term for refinance
+            'additional_amount' => 'nullable|numeric',
+            'start_date' => 'required|date',
+            'repayment_method' => 'nullable|string',
+        ]);
+
+        $loan = Loan::findOrFail($validated['loan_id']);
+        $schedule = $this->loanService->previewModification($loan, $validated);
+
+        return response()->json($schedule);
     }
 }

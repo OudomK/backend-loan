@@ -38,10 +38,13 @@ class LoanService
             $loan->payments()->where('total_paid', 0)->delete();
 
             // Update loan terms
-            $newTerm = $loan->payments()->count() + $data['extend_months'];
+            $paidCount = $loan->payments()->where('total_paid', '>', 0)->count();
+            $newTotalTerm = $paidCount + $data['remaining_term'];
+
             $loan->update([
                 'interest_rate' => $data['new_rate'],
-                'duration_months' => $newTerm,
+                'duration_months' => $newTotalTerm,
+                'repayment_method' => $data['repayment_method'] ?? $loan->repayment_method,
             ]);
 
             // Record transaction
@@ -59,13 +62,13 @@ class LoanService
 
             // Regenerate schedule
             $lastPaidDate = $loan->payments()->where('total_paid', '>', 0)->max('payment_date') ?? $loan->start_date;
-            $nextDate = date('Y-m-d', strtotime($lastPaidDate . ' +1 month'));
+            $nextDate = $data['first_payment_date'] ?? date('Y-m-d', strtotime($lastPaidDate . ' +1 month'));
 
             $newSchedule = $this->calculator->calculateLoanWithDates(
                 $remainingPrincipal,
                 $data['new_rate'],
-                $data['extend_months'],
-                $loan->repayment_method,
+                $data['remaining_term'],
+                $data['repayment_method'] ?? $loan->repayment_method,
                 $nextDate,
                 $loan->currency
             );
@@ -101,6 +104,7 @@ class LoanService
             $newLoan->amount = $newAmount;
             $newLoan->interest_rate = $data['new_rate'];
             $newLoan->duration_months = $data['new_term'];
+            $newLoan->repayment_method = $data['repayment_method'] ?? $oldLoan->repayment_method;
             $newLoan->start_date = $data['start_date'];
             $newLoan->status = 'active';
             $newLoan->refinanced_from_loan_id = $oldLoan->id;
@@ -137,7 +141,7 @@ class LoanService
                 $newAmount,
                 $data['new_rate'],
                 $data['new_term'],
-                $newLoan->repayment_method,
+                $data['repayment_method'] ?? $newLoan->repayment_method,
                 $data['start_date'],
                 $newLoan->currency
             );
@@ -156,5 +160,32 @@ class LoanService
 
             return $newLoan;
         });
+    }
+
+    public function previewModification(Loan $loan, array $data)
+    {
+        $type = $data['type'];
+        $amount = 0;
+        $term = $data['term']; // remaining_term or new_term
+        $rate = $data['new_rate'];
+        $method = $data['repayment_method'] ?? $loan->repayment_method;
+        $startDate = $data['start_date']; // first_payment_date or start_date
+
+        if ($type === 'reschedule') {
+            $amount = $this->calculateCurrentBalance($loan);
+        } else {
+            // Refinance
+            $oldBalance = $this->calculateCurrentBalance($loan);
+            $amount = $oldBalance + ($data['additional_amount'] ?? 0);
+        }
+
+        return $this->calculator->calculateLoanWithDates(
+            $amount,
+            $rate,
+            $term,
+            $method,
+            $startDate,
+            $loan->currency
+        );
     }
 }

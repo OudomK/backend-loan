@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CapitalShare;
+use App\Models\Investor;
 use App\Models\CapitalShareTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -10,19 +11,40 @@ use Illuminate\Support\Facades\DB;
 use App\Services\LoanCalculator;
 use App\Services\BalloonPaymentCalculator;
 
+/**
+ * Handles CRUD operations for Capital Shares.
+ * 
+ * Logic Note:
+ * - 'Real Capital' entries are linked to 'investors' via 'investor_id'.
+ * - 'Loan Capital' entries are linked to 'lenders' via 'lender_id'.
+ */
 class CapitalShareController extends Controller
 {
     public function index()
     {
-        $shares = CapitalShare::with('lender')->get();
+        $shares = CapitalShare::with(['lender', 'investor'])->get();
         return $shares->map(function ($s) {
+            $name = 'N/A';
+            $code = '-';
+            $type = 'Individual';
+
+            if ($s->investor) {
+                $name = $s->investor->first_name . ' ' . $s->investor->last_name;
+                $code = $s->investor->customer_code;
+                $type = $s->investor->customer_type ?? 'Individual';
+            } elseif ($s->lender) {
+                $name = $s->lender->name;
+                $code = $s->lender->lender_code ?? $s->lender->code ?? '-';
+                $type = $s->lender->lender_type ?? 'Individual';
+            }
+
             return [
                 'id' => $s->id,
-                'lender_id' => $s->lender_id,
-                'lender_name' => $s->lender ? $s->lender->name : 'N/A',
-                'lender_code' => $s->lender ? $s->lender->code : '-',
-                'investor_name' => $s->lender ? $s->lender->name : 'N/A',
-                'lender_type' => $s->lender ? ($s->lender->customer_type ?? 'Individual') : 'Individual',
+                'lender_id' => $s->investor_id ?? $s->lender_id, // For frontend compatibility
+                'lender_name' => $name,
+                'lender_code' => $code,
+                'investor_name' => $name,
+                'lender_type' => $type,
                 'category' => $s->category,
                 'share_qty' => $s->share_qty,
                 'par_value' => $s->par_value,
@@ -55,8 +77,13 @@ class CapitalShareController extends Controller
 
     public function store(Request $request)
     {
+        \Illuminate\Support\Facades\Log::info("Capital Share Store Request: " . json_encode($request->all()));
+
+        $category = $request->input('category');
+        $lenderTable = $category === 'Real Capital' ? 'investors' : 'lenders';
+
         $validated = $request->validate([
-            'lender_id' => 'required|exists:lenders,id',
+            'lender_id' => "required|exists:$lenderTable,id",
             'category' => 'required|string',
             'par_value' => 'nullable|numeric',
             'share_qty' => 'nullable|integer',
@@ -80,10 +107,19 @@ class CapitalShareController extends Controller
             'balance' => 'nullable|numeric',
             'dividends' => 'nullable|numeric',
             'repayment_schedule' => 'nullable|array',
+            'holder_id' => 'nullable|integer',
+            'certificate_no' => 'nullable|string',
+            'purchase_date' => 'nullable|date',
         ]);
 
         $share = new CapitalShare();
-        $share->lender_id = $validated['lender_id'];
+
+        if ($category === 'Real Capital') {
+            $share->investor_id = $validated['lender_id'];
+        } else {
+            $share->lender_id = $validated['lender_id'];
+        }
+
         $share->account_no = $validated['account_no'] ?? $this->generateAccountNo();
         $share->category = $validated['category'];
         $share->par_value = $validated['par_value'] ?? 1.0;
@@ -102,15 +138,17 @@ class CapitalShareController extends Controller
         $share->payment_method = $validated['payment_method'] ?? null;
         $share->first_pay_date = $validated['first_pay_date'] ?? null;
         $share->term_months = $validated['term_months'] ?? 0;
-        $share->amount = $validated['amount'] ?? 0;
         $share->interest_rate = $validated['interest_rate'] ?? 0;
         $share->int_pay_mode = $validated['int_pay_mode'] ?? null;
         $share->fee = $validated['fee'] ?? 0;
         $share->maturity_date = $validated['maturity_date'] ?? null;
         $share->sl_term = $validated['sl_term'] ?? null;
-        $share->balance = $validated['balance'] ?? 0;
         $share->dividends = $validated['dividends'] ?? 0;
         $share->repayment_schedule = $validated['repayment_schedule'] ?? null;
+
+        $share->holder_id = $validated['holder_id'] ?? null;
+        $share->certificate_no = $validated['certificate_no'] ?? null;
+        $share->purchase_date = $validated['purchase_date'] ?? null;
 
         $share->save();
 
@@ -132,8 +170,11 @@ class CapitalShareController extends Controller
     public function update(Request $request, $id)
     {
         $share = CapitalShare::findOrFail($id);
+        $category = $request->input('category', $share->category);
+        $lenderTable = $category === 'Real Capital' ? 'investors' : 'lenders';
+
         $validated = $request->validate([
-            'lender_id' => 'nullable|exists:lenders,id',
+            'lender_id' => "nullable|exists:$lenderTable,id",
             'category' => 'nullable|string',
             'status' => 'nullable|string',
             'share_qty' => 'nullable|integer',
@@ -158,18 +199,35 @@ class CapitalShareController extends Controller
             'balance' => 'nullable|numeric',
             'dividends' => 'nullable|numeric',
             'repayment_schedule' => 'nullable|array',
+            'holder_id' => 'nullable|integer',
+            'certificate_no' => 'nullable|string',
+            'purchase_date' => 'nullable|date',
         ]);
+
+        if (isset($validated['lender_id'])) {
+            if ($category === 'Real Capital') {
+                $share->investor_id = $validated['lender_id'];
+                $share->lender_id = null;
+            } else {
+                $share->lender_id = $validated['lender_id'];
+                $share->investor_id = null;
+            }
+            unset($validated['lender_id']);
+        }
 
         if (isset($validated['amount'])) {
             $share->total_capital = $validated['amount'];
             $share->balance = $validated['amount'];
         }
 
-        $share->update($validated);
+        $share->fill($validated);
+        $share->save();
+
         // Ensure balance is saved if it was updated above but not in $validated
         if ($share->isDirty('balance')) {
             $share->save();
         }
+
         return response()->json($share);
     }
 
@@ -302,7 +360,7 @@ class CapitalShareController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        return DB::transaction(function () use ($share, $validated) {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($share, $validated) {
             $schedule = $share->repayment_schedule ?? [];
             $found = false;
             foreach ($schedule as &$item) {
@@ -319,7 +377,7 @@ class CapitalShareController extends Controller
             }
 
             $share->repayment_schedule = $schedule;
-            
+
             // Update balance if principal was paid
             if ($validated['principal_paid'] > 0) {
                 $share->balance = max(0, $share->balance - $validated['principal_paid']);
@@ -348,7 +406,7 @@ class CapitalShareController extends Controller
                 'payment_method' => $validated['payment_method'],
                 'transaction_date' => $validated['transaction_date'],
                 'description' => $validated['description'] ?? "Repayment for Period " . $validated['period'],
-                'performed_by' => Auth::id(),
+                'performed_by' => \Illuminate\Support\Facades\Auth::id(),
             ]);
 
             return response()->json([
@@ -370,7 +428,16 @@ class CapitalShareController extends Controller
         ]);
 
         try {
-            if ($validated['payment_method'] === 'Balloon') {
+            \Illuminate\Support\Facades\Log::info("Capital Preview Request: " . json_encode($validated));
+
+            $method = $validated['payment_method'];
+            // Map frontend friendly names to backend keys
+            if ($method === 'Amortization')
+                $method = 'annuity_monthly';
+            if ($method === 'Interest Only')
+                $method = 'Balloon';
+
+            if ($method === 'Balloon') {
                 $loanData = [
                     'amount' => $validated['amount'],
                     'interest_rate' => $validated['interest_rate'],
@@ -395,7 +462,7 @@ class CapitalShareController extends Controller
                     $validated['amount'],
                     $validated['interest_rate'],
                     $validated['term_months'],
-                    $validated['payment_method'] === 'negotiable' ? 'fixed_monthly' : $validated['payment_method'],
+                    $method === 'negotiable' ? 'fixed_monthly' : $method,
                     $validated['borrowing_date'],
                     $validated['currency'] ?? 'USD'
                 );

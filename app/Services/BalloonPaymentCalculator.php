@@ -26,7 +26,7 @@ class BalloonPaymentCalculator
         string $startDate
     ): array {
         $schedule = [];
-        $monthlyInterestRate = $annualRate / 100 / 12;
+        $monthlyInterestRate = $annualRate / 100; // Treat as Monthly Rate (standard for this app)
         $monthlyInterest = round($principal * $monthlyInterestRate, 2);
 
         $startDateObj = Carbon::parse($startDate);
@@ -71,7 +71,7 @@ class BalloonPaymentCalculator
         float $monthlyPayment = null
     ): array {
         $schedule = [];
-        $monthlyInterestRate = $annualRate / 100 / 12;
+        $monthlyInterestRate = $annualRate / 100; // Treat as Monthly Rate
         $monthlyInterest = round($principal * $monthlyInterestRate, 2);
 
         // Default monthly payment = 110% of interest (covers interest + small principal)

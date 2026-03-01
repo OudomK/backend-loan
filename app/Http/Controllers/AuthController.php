@@ -50,7 +50,12 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $user = $request->user();
+
+        // Fire standard logout event for auditing
+        event(new \Illuminate\Auth\Events\Logout('sanctum', $user));
+
+        $user->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Logged out']);
     }

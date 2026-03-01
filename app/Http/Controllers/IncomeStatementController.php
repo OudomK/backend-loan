@@ -12,139 +12,161 @@ class IncomeStatementController extends Controller
     {
         $fromDate = $request->query('from_date');
         $toDate = $request->query('to_date');
-        $currency = $request->query('currency');
+        $currencyParam = $request->query('currency');
 
-        Log::info("Income Statement: from=$fromDate, to=$toDate, currency=$currency");
+        Log::info("Income Statement: from=$fromDate, to=$toDate, currency=$currencyParam");
 
         try {
-            // ── REVENUE ──────────────────────────────────────────────
+            $exchangeRate = (int) (\App\Models\Setting::where('key', 'exchange_rate')->value('value') ?? 4000);
 
-            // 1. Interest Income (from repayment transactions)
-            $interestQuery = DB::table('repayment_transactions')
-                ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id');
+            $currencies = [];
+            if ($currencyParam && $currencyParam !== 'all') {
+                $currencies = [$currencyParam];
+            } else {
+                $loanCurrs = DB::table('loans')->whereBetween('start_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
+                $miscCurrs = DB::table('miscellaneous_transactions')->whereBetween('transaction_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
+                $borrowingCurrs = DB::table('borrowings')->whereBetween('borrowing_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
 
-            if ($fromDate && $toDate) {
-                $interestQuery->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate]);
-            }
-            if ($currency && $currency !== 'all') {
-                $interestQuery->where('loans.currency', 'LIKE', $currency . '%');
-            }
-
-            $interestIncome = (double) $interestQuery->sum('repayment_transactions.interest_paid');
-
-            // 2. Penalty / Late-Fee Income
-            $penaltyQuery = DB::table('repayment_transactions')
-                ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id');
-
-            if ($fromDate && $toDate) {
-                $penaltyQuery->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate]);
-            }
-            if ($currency && $currency !== 'all') {
-                $penaltyQuery->where('loans.currency', 'LIKE', $currency . '%');
-            }
-
-            $penaltyIncome = (double) $penaltyQuery->sum('repayment_transactions.penalty_paid');
-
-            // 3. Admin Fee Income (from loans disbursed in the period)
-            $adminFeeQuery = DB::table('loans');
-
-            if ($fromDate && $toDate) {
-                $adminFeeQuery->whereBetween('loans.start_date', [$fromDate, $toDate]);
-            }
-            if ($currency && $currency !== 'all') {
-                $adminFeeQuery->where('loans.currency', 'LIKE', $currency . '%');
+                $rawCurrs = array_merge(['USD'], $loanCurrs, $miscCurrs, $borrowingCurrs);
+                $normalized = [];
+                foreach ($rawCurrs as $c) {
+                    if (empty($c))
+                        continue;
+                    $up = strtoupper($c);
+                    if (str_starts_with($up, 'USD')) {
+                        $normalized[] = 'USD';
+                    } elseif (str_starts_with($up, 'KHR')) {
+                        $normalized[] = 'KHR';
+                    } else {
+                        $normalized[] = $c;
+                    }
+                }
+                $currencies = array_values(array_unique($normalized));
             }
 
-            $adminFeeIncome = (double) $adminFeeQuery->sum('loans.admin_fee');
-
-            // 6. Other Revenue (Miscellaneous)
-            $otherRevenueQuery = DB::table('miscellaneous_transactions')
-                ->where('type', 'revenue');
-            if ($fromDate && $toDate) {
-                $otherRevenueQuery->whereBetween('transaction_date', [$fromDate, $toDate]);
-            }
-            if ($currency && $currency !== 'all') {
-                $otherRevenueQuery->where('currency', $currency);
-            }
-            $otherRevenue = (double) $otherRevenueQuery->sum('amount');
-
-            $totalRevenue = $interestIncome + $penaltyIncome + $adminFeeIncome + $otherRevenue;
-
-            // ── EXPENSES ─────────────────────────────────────────────
-
-            // 4. Salary & Payroll Expense
-            // ... (existing code remains same) ...
-            $payrollQuery = DB::table('payrolls');
-
-            if ($fromDate && $toDate) {
-                $payrollQuery->whereBetween('payrolls.payment_date', [$fromDate, $toDate]);
-            }
-
-            $salaryExpense = (double) $payrollQuery->sum('payrolls.salary');
-            $allowanceExpense = (double) (clone $payrollQuery)->sum('payrolls.allowance');
-            $bonusExpense = (double) (clone $payrollQuery)->sum('payrolls.bonus');
-
-            // Re-build for total_payable
-            $payrollTotalQuery = DB::table('payrolls');
-            if ($fromDate && $toDate) {
-                $payrollTotalQuery->whereBetween('payrolls.payment_date', [$fromDate, $toDate]);
-            }
-            $totalPayrollExpense = (double) $payrollTotalQuery->sum('payrolls.total_payable');
-
-            // 5. Borrowing Interest Expense
-            $borrowingIntQuery = DB::table('borrowing_repayments');
-
-            if ($fromDate && $toDate) {
-                $borrowingIntQuery->whereBetween('borrowing_repayments.payment_date', [$fromDate, $toDate]);
-            }
-
-            $borrowingInterestExpense = (double) $borrowingIntQuery->sum('borrowing_repayments.interest_paid');
-
-            // 7. Other Expenses (Miscellaneous)
-            $otherExpenseQuery = DB::table('miscellaneous_transactions')
-                ->where('type', 'expense');
-            if ($fromDate && $toDate) {
-                $otherExpenseQuery->whereBetween('transaction_date', [$fromDate, $toDate]);
-            }
-            if ($currency && $currency !== 'all') {
-                $otherExpenseQuery->where('currency', $currency);
-            }
-            $otherExpensesItem = (double) $otherExpenseQuery->sum('amount');
-
-            $totalExpenses = $totalPayrollExpense + $borrowingInterestExpense + $otherExpensesItem;
-
-            // ── NET INCOME ───────────────────────────────────────────
-            $netIncome = $totalRevenue - $totalExpenses;
-
-            // Build line-item response
-            $data = [
-                'period' => [
-                    'from_date' => $fromDate,
-                    'to_date' => $toDate,
-                    'currency' => $currency ?? 'all',
-                ],
-                'revenue' => [
-                    ['label' => 'Interest Income', 'amount' => $interestIncome],
-                    ['label' => 'Penalty / Late Fees', 'amount' => $penaltyIncome],
-                    ['label' => 'Admin / Service Fees', 'amount' => $adminFeeIncome],
-                    ['label' => 'Other Revenue', 'amount' => $otherRevenue],
-                ],
-                'total_revenue' => $totalRevenue,
-                'expenses' => [
-                    ['label' => 'Salary Expense', 'amount' => $salaryExpense],
-                    ['label' => 'Allowance Expense', 'amount' => $allowanceExpense],
-                    ['label' => 'Bonus Expense', 'amount' => $bonusExpense],
-                    ['label' => 'Total Payroll Expense', 'amount' => $totalPayrollExpense],
-                    ['label' => 'Borrowing Interest Expense', 'amount' => $borrowingInterestExpense],
-                    ['label' => 'Other Expenses', 'amount' => $otherExpensesItem],
-                ],
-                'total_expenses' => $totalExpenses,
-                'net_income' => $netIncome,
+            // helper structure to collect totals
+            $revenueItems = [
+                'interest_income' => ['label' => 'Interest Income', 'amounts' => [], 'total_usd' => 0],
+                'penalty_income' => ['label' => 'Penalty / Late Fees', 'amounts' => [], 'total_usd' => 0],
+                'admin_fee' => ['label' => 'Admin / Service Fees', 'amounts' => [], 'total_usd' => 0],
+                'other_revenue' => ['label' => 'Other Revenue', 'amounts' => [], 'total_usd' => 0],
             ];
+            $expenseItems = [
+                'salary' => ['label' => 'Salary Expense', 'amounts' => [], 'total_usd' => 0],
+                'allowance' => ['label' => 'Allowance Expense', 'amounts' => [], 'total_usd' => 0],
+                'bonus' => ['label' => 'Bonus Expense', 'amounts' => [], 'total_usd' => 0],
+                'total_payroll' => ['label' => 'Total Payroll Expense', 'amounts' => [], 'total_usd' => 0],
+                'borrowing_interest' => ['label' => 'Borrowing Interest Expense', 'amounts' => [], 'total_usd' => 0],
+                'other_expenses' => ['label' => 'Other Expenses', 'amounts' => [], 'total_usd' => 0],
+            ];
+
+            $totalRevenue = [];
+            $totalExpenses = [];
+            $netIncome = [];
+            $grandTotalRevenueUSD = 0;
+            $grandTotalExpensesUSD = 0;
+
+            foreach ($currencies as $curr) {
+                // Initialize totals
+                $totalRevenue[$curr] = 0;
+                $totalExpenses[$curr] = 0;
+
+                // ── REVENUE ──────────────────────────────────────────────
+                $interest = (double) DB::table('repayment_transactions')
+                    ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
+                    ->where('loans.currency', 'LIKE', $curr . '%')
+                    ->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate])
+                    ->sum('repayment_transactions.interest_paid');
+                $revenueItems['interest_income']['amounts'][$curr] = $interest;
+                $totalRevenue[$curr] += $interest;
+                $revenueItems['interest_income']['total_usd'] += ($curr === 'USD' ? $interest : $interest / $exchangeRate);
+
+                $penalty = (double) DB::table('repayment_transactions')
+                    ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
+                    ->where('loans.currency', 'LIKE', $curr . '%')
+                    ->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate])
+                    ->sum('repayment_transactions.penalty_paid');
+                $revenueItems['penalty_income']['amounts'][$curr] = $penalty;
+                $totalRevenue[$curr] += $penalty;
+                $revenueItems['penalty_income']['total_usd'] += ($curr === 'USD' ? $penalty : $penalty / $exchangeRate);
+
+                $admin = (double) DB::table('loans')
+                    ->where('loans.currency', 'LIKE', $curr . '%')
+                    ->whereBetween('loans.start_date', [$fromDate, $toDate])
+                    ->sum('loans.admin_fee');
+                $revenueItems['admin_fee']['amounts'][$curr] = $admin;
+                $totalRevenue[$curr] += $admin;
+                $revenueItems['admin_fee']['total_usd'] += ($curr === 'USD' ? $admin : $admin / $exchangeRate);
+
+                $otherRev = (double) DB::table('miscellaneous_transactions')
+                    ->where('type', 'revenue')
+                    ->where('currency', 'LIKE', $curr . '%')
+                    ->whereBetween('transaction_date', [$fromDate, $toDate])
+                    ->sum('amount');
+                $revenueItems['other_revenue']['amounts'][$curr] = $otherRev;
+                $totalRevenue[$curr] += $otherRev;
+                $revenueItems['other_revenue']['total_usd'] += ($curr === 'USD' ? $otherRev : $otherRev / $exchangeRate);
+
+                // ── EXPENSES ─────────────────────────────────────────────
+                if ($curr === 'USD') {
+                    $pQuery = DB::table('payrolls')->whereBetween('payment_date', [$fromDate, $toDate]);
+                    $expenseItems['salary']['amounts'][$curr] = (double) $pQuery->sum('salary');
+                    $expenseItems['allowance']['amounts'][$curr] = (double) (clone $pQuery)->sum('allowance');
+                    $expenseItems['bonus']['amounts'][$curr] = (double) (clone $pQuery)->sum('bonus');
+                    $tPayroll = (double) (clone $pQuery)->sum('total_payable');
+                    $expenseItems['total_payroll']['amounts'][$curr] = $tPayroll;
+                    $totalExpenses[$curr] += $tPayroll;
+
+                    $expenseItems['salary']['total_usd'] += $expenseItems['salary']['amounts'][$curr];
+                    $expenseItems['allowance']['total_usd'] += $expenseItems['allowance']['amounts'][$curr];
+                    $expenseItems['bonus']['total_usd'] += $expenseItems['bonus']['amounts'][$curr];
+                    $expenseItems['total_payroll']['total_usd'] += $tPayroll;
+                } else {
+                    $expenseItems['salary']['amounts'][$curr] = 0;
+                    $expenseItems['allowance']['amounts'][$curr] = 0;
+                    $expenseItems['bonus']['amounts'][$curr] = 0;
+                    $expenseItems['total_payroll']['amounts'][$curr] = 0;
+                }
+
+                $borrInt = (double) DB::table('borrowing_repayments')
+                    ->join('borrowings', 'borrowing_repayments.borrowing_id', '=', 'borrowings.id')
+                    ->where('borrowings.currency', 'LIKE', $curr . '%')
+                    ->whereBetween('borrowing_repayments.payment_date', [$fromDate, $toDate])
+                    ->sum('borrowing_repayments.interest_paid');
+                $expenseItems['borrowing_interest']['amounts'][$curr] = $borrInt;
+                $totalExpenses[$curr] += $borrInt;
+                $expenseItems['borrowing_interest']['total_usd'] += ($curr === 'USD' ? $borrInt : $borrInt / $exchangeRate);
+
+                $otherExp = (double) DB::table('miscellaneous_transactions')
+                    ->where('type', 'expense')
+                    ->where('currency', 'LIKE', $curr . '%')
+                    ->whereBetween('transaction_date', [$fromDate, $toDate])
+                    ->sum('amount');
+                $expenseItems['other_expenses']['amounts'][$curr] = $otherExp;
+                $totalExpenses[$curr] += $otherExp;
+                $expenseItems['other_expenses']['total_usd'] += ($curr === 'USD' ? $otherExp : $otherExp / $exchangeRate);
+
+                $netIncome[$curr] = $totalRevenue[$curr] - $totalExpenses[$curr];
+
+                $grandTotalRevenueUSD += ($curr === 'USD' ? $totalRevenue[$curr] : $totalRevenue[$curr] / $exchangeRate);
+                $grandTotalExpensesUSD += ($curr === 'USD' ? $totalExpenses[$curr] : $totalExpenses[$curr] / $exchangeRate);
+            }
 
             return response()->json([
                 'success' => true,
-                'data' => $data,
+                'data' => [
+                    'period' => ['from_date' => $fromDate, 'to_date' => $toDate],
+                    'currencies' => $currencies,
+                    'exchange_rate' => $exchangeRate,
+                    'revenue' => array_values($revenueItems),
+                    'total_revenue' => $totalRevenue,
+                    'grand_total_revenue_usd' => $grandTotalRevenueUSD,
+                    'expenses' => array_values($expenseItems),
+                    'total_expenses' => $totalExpenses,
+                    'grand_total_expenses_usd' => $grandTotalExpensesUSD,
+                    'net_income' => $netIncome,
+                    'grand_net_income_usd' => $grandTotalRevenueUSD - $grandTotalExpensesUSD,
+                ],
             ]);
 
         } catch (\Exception $e) {

@@ -134,26 +134,48 @@ class ExportController extends Controller
     public function exportCapitalReport()
     {
         // Fetch data
-        $shares = CapitalShare::with('borrower')
-            ->orderBy('purchase_date', 'desc')
+        $shares = CapitalShare::with(['lender', 'investor'])
+            ->orderBy('id', 'desc')
             ->get();
 
-        $reportData = $shares->map(function ($share) {
+        $reportData = $shares->map(function ($s) {
+            $name = 'N/A';
+            $code = '-';
+            $type = 'Individual';
+
+            if ($s->investor) {
+                $name = trim($s->investor->first_name . ' ' . $s->investor->last_name);
+                $code = $s->investor->customer_code;
+                $type = $s->investor->customer_type ?? 'Individual';
+            } elseif ($s->lender) {
+                $name = $s->lender->name;
+                $code = $s->lender->lender_code ?? $s->lender->code ?? '-';
+                $type = $s->lender->lender_type ?? 'Individual';
+            }
+
+            $isReal = $s->category === 'Real Capital';
+
             return [
-                'share_id' => $share->id,
-                'purchase_date' => $share->purchase_date,
-                'certificate_no' => $share->certificate_no,
-                'holder_id' => $share->holder_id,
-                'holder_name' => $share->borrower
-                    ? trim($share->borrower->first_name . ' ' . $share->borrower->last_name)
-                    : 'Unknown',
-                'share_qty' => $share->share_qty,
-                'par_value' => $share->par_value,
-                'total_capital' => $share->total_capital,
-                'currency' => $share->currency,
-                'dividends' => 0, // Placeholder - calculate from dividend transactions
-                'last_dividend_date' => '-', // Placeholder
-                'status' => $share->status,
+                'date' => $s->borrowing_date ?? $s->created_at->format('Y-m-d'),
+                'account_no' => $s->account_no,
+                'lender_code' => $code,
+                'name' => $name,
+                'lender_type' => $type,
+                'category' => $s->category,
+                'payment' => $isReal ? '—' : ($s->payment_method ?? '-'),
+                'first_pay_date' => $isReal ? '—' : ($s->first_pay_date ?? '-'),
+                'currency' => $s->currency,
+                'term' => $isReal ? '—' : ($s->term_months ?? '-'),
+                'share' => ($s->share_qty ?? 0) . '%',
+                'amount' => (float) $s->amount,
+                'rate' => $isReal ? '—' : ($s->interest_rate . '%'),
+                'fee' => $isReal ? '—' : (float) $s->fee,
+                'maturity' => $isReal ? '—' : ($s->maturity_date ?? '-'),
+                'sl_term' => $isReal ? '—' : ($s->sl_term ?? '-'),
+                'balance' => $isReal ? '—' : (float) $s->balance,
+                'late' => '-',
+                'dividends' => $isReal ? (float) $s->dividends : '—',
+                'status' => $s->status,
             ];
         });
 
@@ -161,19 +183,28 @@ class ExportController extends Controller
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
 
-        // Headers (No Principal/Interest, has Dividends)
+        // Headers
         $headers = [
             'No',
-            'Purchase Date',
-            'Certificate No',
-            'Holder ID',
-            'Holder Name',
-            'Share Quantity',
-            'Par Value',
-            'Total Capital',
-            'Currency',
+            'Date',
+            'Acc Code',
+            'Len Code',
+            'Name',
+            'Len Type',
+            'Category',
+            'Payment',
+            '1st Pay.',
+            'Ccy',
+            'Term',
+            'Share (%)',
+            'Amount',
+            'Rate',
+            'Fee',
+            'Maturity',
+            'S/L Term',
+            'Balance',
+            'Late',
             'Dividends',
-            'Last Dividend Date',
             'Status'
         ];
 
@@ -183,34 +214,53 @@ class ExportController extends Controller
         // Style headers
         $headerStyle = [
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '70AD47']],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '2E7D32']], // Dark Green
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN]],
         ];
-        $sheet->getStyle('A1:L1')->applyFromArray($headerStyle);
+        $sheet->getStyle('A1:U1')->applyFromArray($headerStyle);
 
         // Write data
         $row = 2;
         foreach ($reportData as $index => $data) {
             $sheet->fromArray([
                 $index + 1,
-                $data['purchase_date'],
-                $data['certificate_no'],
-                $data['holder_id'],
-                $data['holder_name'],
-                $data['share_qty'],
-                $data['par_value'],
-                $data['total_capital'],
+                $data['date'],
+                $data['account_no'],
+                $data['lender_code'],
+                $data['name'],
+                $data['lender_type'],
+                $data['category'],
+                $data['payment'],
+                $data['first_pay_date'],
                 $data['currency'],
+                $data['term'],
+                $data['share'],
+                $data['amount'],
+                $data['rate'],
+                $data['fee'],
+                $data['maturity'],
+                $data['sl_term'],
+                $data['balance'],
+                $data['late'],
                 $data['dividends'],
-                $data['last_dividend_date'],
-                $data['status'],
+                $data['status']
             ], null, "A{$row}");
+
+            // Set alignments
+            $sheet->getStyle("A{$row}:D{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("E{$row}:H{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_LEFT);
+            $sheet->getStyle("I{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("J{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $sheet->getStyle("K{$row}:L{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("M{$row}:N{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+            $sheet->getStyle("O{$row}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+
             $row++;
         }
 
         // Auto-size columns
-        foreach (range('A', 'L') as $col) {
+        foreach (range('A', 'O') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
 

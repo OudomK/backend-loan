@@ -45,7 +45,7 @@ class ActivityLogsTable
                     ->openUrlInNewTab(),
                 TextColumn::make('created_at')
                     ->label('Logged At')
-                    ->dateTime()
+                    ->dateTime('M j, Y g:i:s A')
                     ->sortable(),
             ])
             ->defaultSort('created_at', 'desc')

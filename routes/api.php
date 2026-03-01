@@ -93,6 +93,7 @@ Route::get('/loan-operation/activity', [LoanOperationController::class, 'getRece
 Route::get('/loan-modification/search', [RescheduleRefinanceController::class, 'searchActiveLoans']);
 Route::post('/loan-modification/reschedule', [RescheduleRefinanceController::class, 'reschedule']);
 Route::post('/loan-modification/refinance', [RescheduleRefinanceController::class, 'refinance']);
+Route::post('/loan-modification/preview', [RescheduleRefinanceController::class, 'previewModification']);
 
 // Customer History
 Route::get('customer-history/search', [CustomerHistoryController::class, 'search']);

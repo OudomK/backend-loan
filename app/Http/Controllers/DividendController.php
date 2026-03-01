@@ -30,9 +30,10 @@ class DividendController extends Controller
         }
 
         return DB::transaction(function () use ($validated) {
-            // Get all active shares for this currency
+            // Get only Real Capital shares (Loan Capital gets interest via repayment, not dividends)
             $shares = CapitalShare::where('currency', $validated['currency'])
                 ->where('status', 'Active')
+                ->where('category', 'Real Capital')
                 ->get();
 
             $totalSharesCount = $shares->sum('share_qty');
@@ -127,10 +128,11 @@ class DividendController extends Controller
             'type' => 'required|in:total,per_share',
         ]);
 
-        // Get all active shares for this currency
+        // Get only Real Capital shares for dividend preview
         $shares = CapitalShare::with('borrower')
             ->where('currency', $validated['currency'])
             ->where('status', 'Active')
+            ->where('category', 'Real Capital')
             ->get();
 
         $totalSharesCount = $shares->sum('share_qty');
@@ -177,7 +179,12 @@ class DividendController extends Controller
 
     public function getDividendReport()
     {
-        $dividends = Dividend::with(['transactions.share.borrower'])
+        $dividends = Dividend::with([
+            'transactions.share' => function ($q) {
+                $q->where('category', 'Real Capital');
+            },
+            'transactions.share.borrower'
+        ])
             ->orderBy('declared_date', 'desc')
             ->get();
 

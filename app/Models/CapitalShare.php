@@ -11,6 +11,7 @@ class CapitalShare extends Model
 
     protected $fillable = [
         'lender_id', // Investor
+        'investor_id',
         'account_no',
         'category', // Share Type (Regular, Premium)
         'share_qty',
@@ -48,6 +49,11 @@ class CapitalShare extends Model
     public function lender(): BelongsTo
     {
         return $this->belongsTo(Lender::class);
+    }
+
+    public function investor(): BelongsTo
+    {
+        return $this->belongsTo(Investor::class, 'investor_id');
     }
 
     public function borrower(): BelongsTo
