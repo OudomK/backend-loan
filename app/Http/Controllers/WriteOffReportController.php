@@ -19,7 +19,7 @@ class WriteOffReportController extends Controller
         $toDate = $toDateStr ? Carbon::parse($toDateStr) : Carbon::today();
         $fromDate = $fromDateStr ? Carbon::parse($fromDateStr) : $toDate->copy()->startOfMonth();
 
-        $query = Loan::with(['borrower', 'officer'])
+        $query = Loan::with(['borrower', 'officer', 'collaterals'])
             ->whereNotNull('written_off_at')
             ->whereBetween('written_off_at', [$fromDate->toDateString(), $toDate->toDateString()]);
 
@@ -42,7 +42,6 @@ class WriteOffReportController extends Controller
                     ->sum(DB::raw('total_paid - GREATEST(0, total_paid - interest_amount)'));
 
                 $reportData[] = [
-                    'branch_name' => 'Main Branch',
                     'written_off_date' => $loan->written_off_at,
                     'disbursement_date' => $loan->start_date,
                     'loan_code' => $loan->loan_code,
@@ -57,14 +56,13 @@ class WriteOffReportController extends Controller
                     'rate' => $loan->interest_rate,
                     'monthly_interest_rate' => $loan->interest_rate, // Assuming yearly, usually same label in excel
                     'term' => $loan->duration_months,
-                    'tenor' => 'Months',
+                    'tenor' => strtolower($loan->payment_frequency ?? '') === 'monthly' ? 'Months' : 'ដង',
                     'payment_method' => $loan->repayment_method ?? '',
                     'loan_cycle' => $loan->loan_cycle ?? 1,
                     'refinance_fee' => $loan->refinance_fee ?? 0,
                     'admin_fee' => $loan->admin_fee ?? 0,
                     'restructure_fee' => 0,
-                    'product_name' => 'Business Loan - ST', // Mock
-                    'collateral_type' => 'Hard Title', // Mock
+                    'collateral_type' => $loan->collaterals->isNotEmpty() ? $loan->collaterals->first()->type : '',
                     'co_disburse' => $loan->officer->name ?? '',
                     'co_repay' => $loan->officer->name ?? '',
                     'amount_write_off' => $loan->amount,

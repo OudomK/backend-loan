@@ -12,20 +12,32 @@ class ActiveLoanReportController extends Controller
     public function index(Request $request)
     {
         $officerId = $request->query('officer_id');
-        $reportDateStr = $request->query('report_date'); // or just 'date'
+        $fromDateStr = $request->query('from_date');
+        $toDateStr = $request->query('to_date') ?? $request->query('report_date');
 
-        // Use provided date or today as reference for calculations (e.g. aging, outstanding at that date)
-        $refDate = $reportDateStr ? Carbon::parse($reportDateStr) : Carbon::today();
+        // Use toDate or today as reference for calculations (e.g. aging, outstanding at that date)
+        $refDate = $toDateStr ? Carbon::parse($toDateStr) : Carbon::today();
         $refDateStr = $refDate->toDateString();
+
+        $fromDate = $fromDateStr ? Carbon::parse($fromDateStr) : null;
+        $fromDateStr = $fromDate ? $fromDate->toDateString() : null;
 
         // Query Active Loans
         $query = Loan::with([
-            'borrower', // Assumes Borrower model has address fields
+            'borrower',
             'officer',
             'disburseOfficer',
             'collaterals'
         ])
             ->where('status', 'active');
+
+        // Filter by Disbursement Date Range
+        if ($fromDateStr) {
+            $query->where('start_date', '>=', $fromDateStr);
+        }
+        if ($refDateStr) {
+            $query->where('start_date', '<=', $refDateStr);
+        }
 
         if ($officerId && $officerId !== 'all') {
             $query->where('loan_officer_id', $officerId);
@@ -108,14 +120,13 @@ class ActiveLoanReportController extends Controller
                 'processing_fee' => 0,
                 'monthly_interest_rate' => $loan->interest_rate / 12, // Approx
                 'term' => $loan->duration_months,
-                'tenor' => 'Month', // Hardcoded or from loan
+                'tenor' => strtolower($loan->payment_frequency ?? '') === 'monthly' ? 'Months' : 'ដង',
                 'payment_method' => $loan->repayment_method,
                 'loan_cycle' => $loan->loan_cycle,
                 'refinance_amount' => $loan->refinanced_amount ?? 0,
                 'restructure' => $loan->is_rescheduled > 0 ? 1 : 0,
                 'admin_fee' => $loan->admin_fee,
                 'refinance_fee' => $loan->refinance_fee,
-                'product_name' => 'General Loan', // Placeholder or relation
                 'collateral_type' => $collateralType,
                 'co_disburse' => $loan->disburseOfficer ? $loan->disburseOfficer->name : ($officer ? $officer->name : ''),
                 'co_repay' => $officer ? $officer->name : '',

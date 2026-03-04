@@ -8,4 +8,11 @@ use Filament\Resources\Pages\ListRecords;
 class ListInvestors extends ListRecords
 {
     protected static string $resource = InvestorResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            \Filament\Actions\CreateAction::make(),
+        ];
+    }
 }

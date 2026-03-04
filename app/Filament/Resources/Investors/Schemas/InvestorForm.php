@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Investors\Schemas;
 
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -36,8 +38,8 @@ class InvestorForm
                             ->schema([
                                 TextInput::make('customer_code')
                                     ->label('Investor Code')
-                                    ->disabled()
-                                    ->placeholder('Auto-generated'),
+                                    ->required()
+                                    ->unique(ignoreRecord: true),
                                 Select::make('status')
                                     ->options([
                                         'Active' => 'Active',

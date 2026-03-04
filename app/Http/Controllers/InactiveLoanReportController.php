@@ -73,7 +73,6 @@ class InactiveLoanReportController extends Controller
             $inactiveDate = $loan->last_payment_date;
 
             return [
-                'branch_name' => 'Head Office', // Placeholder
                 'disbursement_date' => $loan->start_date,
                 'loan_code' => $loan->loan_code,
                 'client_code' => $borrower->customer_code ?? '', // field might be id_number or code
@@ -88,7 +87,7 @@ class InactiveLoanReportController extends Controller
                 'interest_rate' => $loan->interest_rate,
                 'monthly_interest_rate' => $loan->interest_rate / 12,
                 'term' => $loan->duration_months,
-                'tenor' => 'Month',
+                'tenor' => strtolower($loan->payment_frequency ?? '') === 'monthly' ? 'Months' : 'ដង',
                 'payment_method' => $loan->repayment_method,
                 'loan_cycle' => $loan->loan_cycle,
                 'refinance_amount' => $loan->refinanced_amount ?? 0,
@@ -96,7 +95,6 @@ class InactiveLoanReportController extends Controller
                 'processing_fee' => 0,
                 'refinance_fee' => $loan->refinance_fee,
 
-                'product_name' => 'General Loan', // Match frontend key
                 'collateral_type' => $loan->collaterals->isNotEmpty() ? $loan->collaterals->first()->type : '',
                 'co_disburse' => $loan->disburseOfficer ? $loan->disburseOfficer->name : ($officer ? $officer->name : ''),
                 'co_repay' => $officer ? $officer->name : '',

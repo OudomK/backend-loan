@@ -38,6 +38,9 @@ class MiscellaneousTransactionForm
                                     ->numeric()
                                     ->required()
                                     ->prefix('$'),
+                                TextInput::make('currency')
+                                    ->default('USD')
+                                    ->required(),
                                 DatePicker::make('transaction_date')
                                     ->default(now())
                                     ->required()

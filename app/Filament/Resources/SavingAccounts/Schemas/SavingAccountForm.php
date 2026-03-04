@@ -53,6 +53,17 @@ class SavingAccountForm
                                     ->label('Transaction No'),
                                 TextInput::make('contract_no')
                                     ->label('Contract No'),
+                                Select::make('lender_id')
+                                    ->relationship('lender', 'id')
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->name}")
+                                    ->searchable(),
+                                TextInput::make('loan_account')
+                                    ->label('Loan Account'),
+                                TextInput::make('account_no')
+                                    ->label('Account No (Secondary)'),
+                                TextInput::make('currency')
+                                    ->default('USD')
+                                    ->required(),
                             ]),
                     ]),
 
@@ -115,6 +126,26 @@ class SavingAccountForm
                                 TextInput::make('interest_earned')
                                     ->numeric()
                                     ->prefix('$'),
+                                TextInput::make('payment_method'),
+                                DatePicker::make('first_pay_date')
+                                    ->native(false),
+                                TextInput::make('int_pay_mode')
+                                    ->label('Interest Pay Mode'),
+                                TextInput::make('fee')
+                                    ->numeric()
+                                    ->prefix('$')
+                                    ->default(0),
+                                TextInput::make('term'),
+                                TextInput::make('sl_term')
+                                    ->label('SL Term'),
+                                TextInput::make('late_principal')
+                                    ->numeric()
+                                    ->prefix('$')
+                                    ->default(0),
+                                TextInput::make('loan_interest')
+                                    ->numeric()
+                                    ->prefix('$')
+                                    ->default(0),
                             ]),
                     ]),
             ]);

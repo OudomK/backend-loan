@@ -48,7 +48,6 @@ class LoanReportResource extends JsonResource
             're_finance' => $loan->refinanced_amount,
             'admin_fee' => $loan->admin_fee,
             're_finance_fee' => $loan->refinance_fee,
-            'loan_product' => 'General Loan',
             'collateral_type' => $loan->collaterals->first()?->type,
             'co_disburse' => $loan->officer?->name,
             'co_repay' => $this->collector?->name ?? $loan->officer?->name,

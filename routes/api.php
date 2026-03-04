@@ -66,6 +66,13 @@ use App\Http\Controllers\WriteOffReportController;
 use App\Http\Controllers\WriteOffCollectionReportController;
 use App\Http\Controllers\LoanCollectionReportController;
 use App\Http\Controllers\InterestIncomeReportController;
+use App\Http\Controllers\CustomerImportController;
+use App\Http\Controllers\CustomerExportController;
+
+Route::post('/customers/import', [CustomerImportController::class, 'import']);
+Route::get('/customers/import/template', [CustomerImportController::class, 'downloadTemplate']);
+Route::get('/customers/export', [CustomerExportController::class, 'export']);
+
 Route::get('borrowers/next-code', [BorrowerController::class, 'getNextCode']);
 Route::apiResource('borrowers', BorrowerController::class);
 
@@ -127,6 +134,11 @@ Route::get('/dividends-report', [DividendController::class, 'getDividendReport']
 Route::apiResource('dividends', DividendController::class);
 Route::post('dividends/{dividend}/distribute', [DividendController::class, 'distribute']);
 Route::get('dividends/{dividend}/transactions', [DividendController::class, 'transactions']);
+
+// Dividend Schedule (Semi-Auto)
+Route::get('/dividend-schedules', [DividendController::class, 'scheduleIndex']);
+Route::post('/dividend-schedules', [DividendController::class, 'scheduleStore']);
+Route::patch('/dividend-schedules/{schedule}/toggle', [DividendController::class, 'scheduleToggle']);
 
 
 // Savers & Investors

@@ -27,6 +27,7 @@ class WriteOffCollectionReportController extends Controller
                 'loans.start_date',
                 'loans.maturity_date',
                 'loans.status',
+                'loans.recovery_amount',
                 'loans.borrower_id',
                 'loans.co_borrower_id',
                 'loans.guarantor_id',
@@ -44,7 +45,9 @@ class WriteOffCollectionReportController extends Controller
                 'guarantors.last_name as gua_last',
                 'loan_officers.name as officer_name',
                 'loans.start_date as disbursement_date',
-                DB::raw("DATEDIFF(NOW(), loans.start_date) as aging"), // Mock aging for now, will refine
+                DB::raw("(SELECT type FROM collaterals WHERE collaterals.loan_id = loans.id ORDER BY collaterals.id ASC LIMIT 1) as collateral_type"),
+                DB::raw("(SELECT SUM(GREATEST(0, total_paid - interest_amount)) FROM payments WHERE payments.loan_id = loans.id) as total_principal_paid"),
+                DB::raw("DATEDIFF(NOW(), loans.start_date) as aging"),
             ])
             ->leftJoin('borrowers', 'loans.borrower_id', '=', 'borrowers.id')
             ->leftJoin('co_borrowers', 'loans.co_borrower_id', '=', 'co_borrowers.id')
@@ -82,8 +85,11 @@ class WriteOffCollectionReportController extends Controller
             else if ($aging > 30)
                 $classification = "Special Mention Loan";
 
+            // Calculate outstanding and arrear dynamically
+            $principalPaid = $loan->total_principal_paid ?? 0;
+            $outstanding = max(0, $loan->amount - $principalPaid);
+
             return [
-                'branch_name' => 'ភ្នំពេញកណ្តាល', // Mock branch
                 'disb_date' => $loan->disbursement_date,
                 'loan_code' => $loan->loan_code,
                 'customer_code' => $loan->borrower_id,
@@ -95,15 +101,15 @@ class WriteOffCollectionReportController extends Controller
                 'commune' => $loan->commune,
                 'district' => $loan->district,
                 'province' => $loan->province,
-                'collateral_type' => 'N/A',
+                'collateral_type' => $loan->collateral_type ?? '',
                 'co_repay' => $loan->officer_name,
                 'maturity_date' => $loan->maturity_date,
                 'currency' => $loan->currency,
                 'term' => $loan->duration_months,
                 'amount' => $loan->amount,
-                'amount_default' => $loan->amount * 0.1, // Mock Arrears
-                'default_balance' => $loan->amount * 0.8, // Mock Balance
-                'recovery_amount' => 0,
+                'amount_default' => $outstanding,
+                'default_balance' => $outstanding,
+                'recovery_amount' => $loan->recovery_amount ?? 0,
                 'aging' => $aging,
                 'classification' => $classification,
             ];

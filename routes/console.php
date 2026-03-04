@@ -8,3 +8,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 \Illuminate\Support\Facades\Schedule::command('app:post-monthly-interest')->monthlyOn(1, '00:00');
+\Illuminate\Support\Facades\Schedule::command('app:auto-draft-dividends')->dailyAt('00:05');

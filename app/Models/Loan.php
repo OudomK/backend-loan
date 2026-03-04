@@ -53,7 +53,13 @@ class Loan extends Model
         'refinance_fee',
         'refinanced_amount',
         'loan_cycle',
-        'disbursed_by_officer_id'
+        'disbursed_by_officer_id',
+        'written_off_at',
+        'write_off_reason',
+        'classify_wo',
+        'write_off_balance',
+        'recovery_amount',
+        'maturity_date'
     ];
 
     public function borrower(): \Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -79,6 +85,11 @@ class Loan extends Model
     public function disburseOfficer(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(LoanOfficer::class, 'disbursed_by_officer_id');
+    }
+
+    public function refinancedFrom(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Loan::class, 'refinanced_from_loan_id');
     }
 
     public function collaterals(): \Illuminate\Database\Eloquent\Relations\HasMany

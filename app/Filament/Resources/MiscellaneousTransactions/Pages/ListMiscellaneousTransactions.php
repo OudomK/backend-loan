@@ -8,4 +8,11 @@ use Filament\Resources\Pages\ListRecords;
 class ListMiscellaneousTransactions extends ListRecords
 {
     protected static string $resource = MiscellaneousTransactionResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            \Filament\Actions\CreateAction::make(),
+        ];
+    }
 }

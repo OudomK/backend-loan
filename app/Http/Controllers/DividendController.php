@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CapitalShare;
 use App\Models\CapitalShareTransaction;
 use App\Models\Dividend;
+use App\Models\DividendSchedule;
 use App\Models\DividendTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -176,6 +177,41 @@ class DividendController extends Controller
             'recipients' => $recipients
         ]);
     }
+
+    // ─── Dividend Schedule (Semi-Auto) ───────────────────────────────────
+
+    public function scheduleIndex()
+    {
+        return response()->json(DividendSchedule::orderBy('id')->get());
+    }
+
+    public function scheduleStore(Request $request)
+    {
+        $validated = $request->validate([
+            'currency' => 'required|string|max:20',
+            'type' => 'required|in:per_share,total',
+            'amount' => 'required|numeric|min:0',
+            'frequency' => 'required|in:monthly,quarterly,yearly',
+            'day_of_month' => 'required|integer|min:1|max:28',
+            'is_active' => 'sometimes|boolean',
+        ]);
+
+        // Upsert by currency (one schedule per currency)
+        $schedule = DividendSchedule::updateOrCreate(
+            ['currency' => $validated['currency']],
+            $validated
+        );
+
+        return response()->json($schedule, 200);
+    }
+
+    public function scheduleToggle(DividendSchedule $schedule)
+    {
+        $schedule->update(['is_active' => !$schedule->is_active]);
+        return response()->json($schedule);
+    }
+
+    // ────────────────────────────────────────────────────────────────────
 
     public function getDividendReport()
     {

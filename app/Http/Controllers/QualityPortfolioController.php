@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Models\RepaymentTransaction;
 
 class QualityPortfolioController extends Controller
 {
@@ -75,16 +76,15 @@ class QualityPortfolioController extends Controller
                 }
 
                 // --- 3. Portfolio Mutation (This Period) ---
-                $collectedPrincipal = DB::table('payments')
-                    ->whereIn('loan_id', (clone $baseQuery)->pluck('id'))
-                    ->whereBetween('payment_date', [$fromDateStr, $toDateStr])
-                    ->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
+                $transactions = RepaymentTransaction::whereHas('loan', function ($q) use ($officer) {
+                    $q->where('loan_officer_id', $officer->id);
+                })->whereBetween('transaction_date', [$fromDateStr, $toDateStr])->get();
 
-                // Simpler collected interest:
-                $collectedInterest = DB::table('payments')
-                    ->whereIn('loan_id', (clone $baseQuery)->pluck('id'))
-                    ->whereBetween('payment_date', [$fromDateStr, $toDateStr])
-                    ->sum(DB::raw('total_paid - GREATEST(0, total_paid - interest_amount)')); // Correct: Part of total_paid that went to interest
+                $collectedPrincipal = $transactions->sum('principal_paid') ?? 0;
+                $collectedInterest = $transactions->sum('interest_paid') ?? 0;
+                $penaltyCollected = $transactions->sum('penalty_paid') ?? 0;
+                $paidOffCollected = $transactions->where('repayment_type', 'Pay Off')->sum('amount_paid') ?? 0;
+                $recovery = $transactions->where('repayment_type', 'Recovery')->sum('amount_paid') ?? 0;
 
                 $principalDue = DB::table('payments')
                     ->whereIn('loan_id', (clone $baseQuery)->pluck('id'))
@@ -95,6 +95,16 @@ class QualityPortfolioController extends Controller
                     ->whereIn('loan_id', (clone $baseQuery)->pluck('id'))
                     ->whereBetween('payment_date', [$fromDateStr, $toDateStr])
                     ->sum('interest_amount') ?? 0;
+
+                // --- Write-Offs ---
+                $woMonth = (clone $baseQuery)->whereNotNull('written_off_at')->whereBetween('written_off_at', [$fromDateStr, $toDateStr]);
+                $noWoMonth = $woMonth->count();
+                $principalWoMonth = $woMonth->sum('write_off_balance') ?? 0;
+
+                $startOfYear = Carbon::parse($toDateStr)->startOfYear()->toDateString();
+                $woYtd = (clone $baseQuery)->whereNotNull('written_off_at')->whereBetween('written_off_at', [$startOfYear, $toDateStr]);
+                $noWoYtd = $woYtd->count();
+                $principalWoYtd = $woYtd->sum('write_off_balance') ?? 0;
 
                 // --- 4. PAR ---
                 $par1Count = 0;
@@ -130,7 +140,6 @@ class QualityPortfolioController extends Controller
                 }
 
                 $reportData[] = [
-                    'branch_name' => 'Main Branch',
                     'co_code' => $officer->id,
                     'co_name' => $officer->name,
                     'no_disb_old' => $oldDisbCount,
@@ -148,9 +157,9 @@ class QualityPortfolioController extends Controller
                     'principal_collected' => $collectedPrincipal,
                     'interest_collected' => $collectedInterest,
                     'fee_collected' => 0,
-                    'penalty_collected' => 0,
-                    'paid_off_collected' => 0,
-                    'recovery' => 0,
+                    'penalty_collected' => $penaltyCollected,
+                    'paid_off_collected' => $paidOffCollected,
+                    'recovery' => $recovery,
                     'principal_due' => $principalDue,
                     'interest_due' => $interestDue,
                     'fee_due' => 0,
@@ -165,12 +174,12 @@ class QualityPortfolioController extends Controller
                     'no_par_30' => $par30Count,
                     'amount_par_30' => $par30Amount,
                     'percent_par_30' => $loanOS > 0 ? ($par30Amount / $loanOS * 100) : 0,
-                    'no_wo_month' => 0,
-                    'principal_wo_month' => 0,
-                    'interest_wo_month' => 0,
+                    'no_wo_month' => $noWoMonth,
+                    'principal_wo_month' => $principalWoMonth,
+                    'interest_wo_month' => 0, // No specific column available
                     'fee_wo_month' => 0,
-                    'no_wo_ytd' => 0,
-                    'principal_wo_ytd' => 0,
+                    'no_wo_ytd' => $noWoYtd,
+                    'principal_wo_ytd' => $principalWoYtd,
                     'interest_wo_ytd' => 0,
                     'fee_wo_ytd' => 0,
                 ];

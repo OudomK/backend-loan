@@ -29,8 +29,8 @@ class EmployeeForm
                                     ->maxLength(255),
                                 TextInput::make('employee_code')
                                     ->label('Code')
-                                    ->disabled()
-                                    ->placeholder('Auto-generated'),
+                                    ->required()
+                                    ->unique(ignoreRecord: true),
                             ]),
                         Grid::make(3)
                             ->schema([
@@ -51,6 +51,18 @@ class EmployeeForm
                                     ])
                                     ->default('Active')
                                     ->required(),
+                                Select::make('marital_status')
+                                    ->options([
+                                        'Single' => 'Single',
+                                        'Married' => 'Married',
+                                        'Divorced' => 'Divorced',
+                                        'Widowed' => 'Widowed',
+                                    ]),
+                                TextInput::make('number_of_children')
+                                    ->numeric()
+                                    ->default(0),
+                                TextInput::make('id_card_number')
+                                    ->label('ID Card Number'),
                             ]),
                     ]),
 
@@ -75,6 +87,11 @@ class EmployeeForm
                                     ->native(false),
                                 DatePicker::make('contract_end_date')
                                     ->native(false),
+                                TextInput::make('working_days_per_week')
+                                    ->numeric()
+                                    ->default(5),
+                                TextInput::make('nssf_id')
+                                    ->label('NSSF ID'),
                             ]),
                     ]),
 
@@ -92,6 +109,11 @@ class EmployeeForm
                             ->schema([
                                 TextInput::make('bank_name'),
                                 TextInput::make('bank_account_number'),
+                                TextInput::make('address')
+                                    ->columnSpanFull(),
+                                TextInput::make('emergency_contact_name'),
+                                TextInput::make('emergency_contact_phone')
+                                    ->tel(),
                             ]),
                     ]),
 

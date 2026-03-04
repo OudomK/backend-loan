@@ -38,6 +38,11 @@ class InterestIncomeReportController extends Controller
                     'borrowers.last_name',
                 ]);
 
+            // Add collateral type subquery (first collateral's type)
+            $query->addSelect([
+                DB::raw("(SELECT type FROM collaterals WHERE collaterals.loan_id = loans.id ORDER BY collaterals.id ASC LIMIT 1) as collateral_type"),
+            ]);
+
             // Add date filters if provided
             if ($fromDate && $toDate) {
                 $query->whereBetween('loans.start_date', [$fromDate, $toDate]);
@@ -76,8 +81,12 @@ class InterestIncomeReportController extends Controller
                 $totalFee = $penaltyCollected + ($includeAdminFee ? $adminFee : 0);
                 $totalCollected = $interestCollected + $totalFee;
 
+                // Dynamic collateral type from DB
+                $collateralType = $loan->collateral_type ?? '';
+
+                // Product name based on repayment method (no loan_products table exists)
+
                 return [
-                    'branch_name' => 'Head Office',
                     'disb_date' => $loan->disb_date,
                     'loan_code' => $loan->loan_code ?? 'N/A',
                     'customer_code' => $loan->customer_code ?? 'N/A',
@@ -88,9 +97,8 @@ class InterestIncomeReportController extends Controller
                     'term' => $loan->term ?? 0,
                     'payment_frequency' => $loan->payment_frequency ?? 'Monthly',
                     'repayment_method' => $loan->repayment_method ?? 'N/A',
-                    'collateral_type' => 'N/A',
+                    'collateral_type' => $collateralType,
                     'loan_cycle' => $loan->loan_cycle ?? 1,
-                    'product_name' => 'General Loan',
                     'interest_paid' => $interestCollected,
                     'fee_paid' => $totalFee,
                     'total' => $totalCollected,

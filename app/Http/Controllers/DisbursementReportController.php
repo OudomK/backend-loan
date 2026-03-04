@@ -124,7 +124,6 @@ class DisbursementReportController extends Controller
             }
 
             $reportData[] = [
-                'branch_name' => 'Main Office',
                 'co_code' => str_pad($officer->id, 4, '0', STR_PAD_LEFT),
                 'co_name' => $officer->name,
 

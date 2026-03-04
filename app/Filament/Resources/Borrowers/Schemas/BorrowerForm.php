@@ -66,8 +66,8 @@ class BorrowerForm
                             ->schema([
                                 TextInput::make('customer_code')
                                     ->label('Customer Code')
-                                    ->disabled()
-                                    ->placeholder('Auto-generated'),
+                                    ->required()
+                                    ->unique(ignoreRecord: true),
                                 Select::make('customer_type')
                                     ->options([
                                         'Borrower' => 'Borrower',

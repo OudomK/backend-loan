@@ -31,7 +31,6 @@ class ArrearReportResource extends JsonResource
             'name' => $borrower->first_name . ' ' . $borrower->last_name,
             'coborrower' => $this->coBorrower ? $this->coBorrower->first_name . ' ' . $this->coBorrower->last_name : '-',
             'guarantor' => $this->guarantor ? $this->guarantor->first_name . ' ' . $this->guarantor->last_name : '-',
-            'loan_product' => 'General Loan',
             'gender' => $borrower->gender,
             'phone' => $borrower->phone,
             'coborrower_phone' => $this->coBorrower?->phone ?? '-',

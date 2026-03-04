@@ -8,4 +8,11 @@ use Filament\Resources\Pages\ListRecords;
 class ListCapitalShares extends ListRecords
 {
     protected static string $resource = CapitalShareResource::class;
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            \Filament\Actions\CreateAction::make(),
+        ];
+    }
 }

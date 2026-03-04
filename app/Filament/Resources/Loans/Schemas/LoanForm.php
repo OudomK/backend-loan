@@ -39,6 +39,15 @@ class LoanForm
                                     ])
                                     ->default('pending')
                                     ->required(),
+                                Select::make('loan_officer_id')
+                                    ->relationship('officer', 'id')
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->name}")
+                                    ->searchable()
+                                    ->required(),
+                                TextInput::make('loan_cycle')
+                                    ->numeric()
+                                    ->default(1)
+                                    ->required(),
                             ]),
                     ]),
 
@@ -60,6 +69,10 @@ class LoanForm
                                     ->numeric()
                                     ->suffix('%')
                                     ->required(),
+                                TextInput::make('admin_fee')
+                                    ->numeric()
+                                    ->prefix('$')
+                                    ->default(0),
                             ]),
                         Grid::make(3)
                             ->schema([
@@ -123,6 +136,34 @@ class LoanForm
                                     ->default(0),
                                 TextInput::make('recovery_amount')
                                     ->numeric()
+                                    ->default(0),
+                                Select::make('disbursed_by_officer_id')
+                                    ->relationship('disburseOfficer', 'id')
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->name}")
+                                    ->searchable(),
+                                TextInput::make('classify_wo')
+                                    ->label('WO Classification'),
+                            ]),
+                    ]),
+
+                Section::make('Refinancing')
+                    ->description('Details for refinanced loans.')
+                    ->icon('heroicon-o-arrow-path')
+                    ->collapsible()
+                    ->collapsed()
+                    ->schema([
+                        Grid::make(3)
+                            ->schema([
+                                Select::make('refinanced_from_loan_id')
+                                    ->relationship('refinancedFrom', 'loan_code')
+                                    ->searchable(),
+                                TextInput::make('refinance_fee')
+                                    ->numeric()
+                                    ->prefix('$')
+                                    ->default(0),
+                                TextInput::make('refinanced_amount')
+                                    ->numeric()
+                                    ->prefix('$')
                                     ->default(0),
                             ]),
                     ]),
