@@ -17,7 +17,10 @@ class RecentActivityTable extends BaseWidget
     {
         return $table
             ->query(
-                RepaymentTransaction::query()->latest('transaction_date')->limit(5)
+                RepaymentTransaction::query()
+                    ->with(['loan.borrower'])
+                    ->latest('transaction_date')
+                    ->limit(5)
             )
             ->columns([
                 Tables\Columns\TextColumn::make('transaction_date')

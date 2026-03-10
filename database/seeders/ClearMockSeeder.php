@@ -34,7 +34,6 @@ class ClearMockSeeder extends Seeder
             'borrowings',
             'borrowing_repayments',
             'payrolls',
-            'leave_requests',
             'miscellaneous_transactions',
             'customers',
             'employees',

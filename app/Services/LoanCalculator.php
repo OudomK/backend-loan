@@ -57,37 +57,21 @@ class LoanCalculator
 
             $remainingBalance = $principal;
             $allPayments = [];
-
-            $currentDate = clone $startDateObj;
             $loanStartDate = clone $startDateObj;
-            $year = (int) $currentDate->format('Y');
-            $month = (int) $currentDate->format('m');
-            $startDay = (int) $loanStartDate->format('d');
 
-            if ($startDay >= 1 && $startDay <= 15) {
-                $paymentDate = new DateTime("$year-$month-26");
-            } else {
-                $nextMonth = clone $loanStartDate;
-                $nextMonth->modify('first day of next month');
-                $paymentDate = new DateTime($nextMonth->format('Y-m-11'));
-            }
-
+            // Exactly 15 days between each payment: period i = start_date + (15 * i) days
             for ($i = 1; $i <= $totalPayments; $i++) {
-                $currentPaymentDate = clone $paymentDate;
-                $isFirst = $currentPaymentDate->format('d') == '11';
+                $currentPaymentDate = clone $loanStartDate;
+                $currentPaymentDate->add(new DateInterval('P' . (15 * $i) . 'D'));
+                $isFirst = ($i % 2 === 1); // odd period = first half (70%), even = second half (30%)
 
                 if ($i == 1) {
-                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days;
-                    $paymentDay = (int) $currentPaymentDate->format('d');
-                    $isFirstPayment = ($paymentDay == 11);
-
-                    // User's logic: Full month + additional days interest
+                    $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days;
                     $fullMonthInterest = $monthlyInterest;
                     $additionalDaysInterest = $principal * $dailyInterestRate * $daysFromStart;
                     $totalFirstInterest = $fullMonthInterest + $additionalDaysInterest;
-
-                    $firstPaymentInterest = $applyRounding($totalFirstInterest * ($isFirstPayment ? $firstPayPercent : $secondPayPercent) / 100, $currency);
-                    $principalPay = $isFirstPayment ? $firstPaymentPrincipal : $secondPaymentPrincipal;
+                    $firstPaymentInterest = $applyRounding($totalFirstInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
+                    $principalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
 
                     $allPayments[] = [
                         'period' => $i,
@@ -96,15 +80,12 @@ class LoanCalculator
                         'interest' => $firstPaymentInterest,
                         'payment' => $applyRounding($principalPay + $firstPaymentInterest, $currency),
                         'balance' => null,
-                        'order' => strtotime($currentPaymentDate->format('Y-m-d')),
+                        'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
-
                     $remainingBalance -= $principalPay;
-
                 } elseif ($i == $totalPayments) {
                     $finalInterestPercent = $isFirst ? $firstPayPercent : $secondPayPercent;
                     $finalInterest = $applyRounding($monthlyInterest * ($finalInterestPercent / 100), $currency);
-
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
@@ -112,13 +93,12 @@ class LoanCalculator
                         'interest' => $finalInterest,
                         'payment' => $applyRounding($remainingBalance + $finalInterest, $currency),
                         'balance' => 0,
-                        'order' => strtotime($currentPaymentDate->format('Y-m-d')),
+                        'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
                     break;
                 } else {
                     $principalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
                     $interestPay = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
-
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
@@ -126,28 +106,14 @@ class LoanCalculator
                         'interest' => $interestPay,
                         'payment' => $applyRounding($principalPay + $interestPay, $currency),
                         'balance' => null,
-                        'order' => strtotime($currentPaymentDate->format('Y-m-d')),
+                        'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
-
                     $remainingBalance -= $principalPay;
-                }
-
-                if ($currentPaymentDate->format('d') == '11') {
-                    $nextYear = (int) $currentPaymentDate->format('Y');
-                    $nextMonth = (int) $currentPaymentDate->format('m');
-                    $paymentDate = new DateTime("$nextYear-$nextMonth-26");
-                } else {
-                    $nextMonth = clone $currentPaymentDate;
-                    $nextMonth->modify('first day of next month');
-                    $nextYear = (int) $nextMonth->format('Y');
-                    $nextMonthNum = (int) $nextMonth->format('m');
-                    $paymentDate = new DateTime("$nextYear-$nextMonthNum-11");
                 }
             }
 
             usort($allPayments, fn($a, $b) => $a['order'] <=> $b['order']);
             $runningBalance = $principal;
-
             foreach ($allPayments as $idx => &$pay) {
                 if ($idx === count($allPayments) - 1) {
                     $pay['balance'] = 0;
@@ -158,7 +124,6 @@ class LoanCalculator
                 $pay['date'] = date('d/m/Y', strtotime($pay['date']));
             }
             unset($pay);
-
             $results = $allPayments;
         } elseif ($option === 'fixed_15days_50_50') {
             $firstPayPercent = 50;
@@ -173,24 +138,13 @@ class LoanCalculator
 
             $remainingBalance = $principal;
             $allPayments = [];
-
-            $currentDate = clone $startDateObj;
             $loanStartDate = clone $startDateObj;
-            $year = (int) $currentDate->format('Y');
-            $month = (int) $currentDate->format('m');
-            $startDay = (int) $loanStartDate->format('d');
 
-            if ($startDay >= 1 && $startDay <= 15) {
-                $paymentDate = new DateTime("$year-$month-26");
-            } else {
-                $nextMonth = clone $loanStartDate;
-                $nextMonth->modify('first day of next month');
-                $paymentDate = new DateTime($nextMonth->format('Y-m-11'));
-            }
-
+            // Exactly 15 days between each payment: period i = start_date + (15 * i) days
             for ($i = 1; $i <= $totalPayments; $i++) {
-                $currentPaymentDate = clone $paymentDate;
-                $isFirst = $currentPaymentDate->format('d') == '11';
+                $currentPaymentDate = clone $loanStartDate;
+                $currentPaymentDate->add(new DateInterval('P' . (15 * $i) . 'D'));
+                $isFirst = ($i % 2 === 1);
 
                 if ($i == 1) {
                     $days = $loanStartDate->diff($currentPaymentDate)->days;
@@ -201,7 +155,6 @@ class LoanCalculator
 
                 if ($i == $totalPayments) {
                     $principalPay = $applyRounding($remainingBalance, $currency);
-
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
@@ -209,13 +162,12 @@ class LoanCalculator
                         'interest' => $interestPay,
                         'payment' => $applyRounding($principalPay + $interestPay, $currency),
                         'balance' => 0,
-                        'order' => strtotime($currentPaymentDate->format('Y-m-d')),
+                        'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
                     break;
                 } else {
                     $rawPrincipalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
                     $principalPay = $applyRounding($rawPrincipalPay, $currency);
-
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
@@ -223,24 +175,14 @@ class LoanCalculator
                         'interest' => $interestPay,
                         'payment' => $applyRounding($principalPay + $interestPay, $currency),
                         'balance' => null,
-                        'order' => strtotime($currentPaymentDate->format('Y-m-d')),
+                        'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
-
                     $remainingBalance -= $principalPay;
-                }
-
-                if ($currentPaymentDate->format('d') == '11') {
-                    $paymentDate = new DateTime($currentPaymentDate->format('Y-m-26'));
-                } else {
-                    $nextMonth = clone $currentPaymentDate;
-                    $nextMonth->modify('first day of next month');
-                    $paymentDate = new DateTime($nextMonth->format('Y-m-11'));
                 }
             }
 
             usort($allPayments, fn($a, $b) => $a['order'] <=> $b['order']);
             $runningBalance = $principal;
-
             foreach ($allPayments as $idx => &$pay) {
                 if ($idx === count($allPayments) - 1) {
                     $pay['balance'] = 0;
@@ -251,7 +193,6 @@ class LoanCalculator
                 $pay['date'] = date('d/m/Y', strtotime($pay['date']));
             }
             unset($pay);
-
             $results = $allPayments;
         } elseif ($option === 'annuity_monthly') {
             if ($principal <= 0 || $rate <= 0 || $duration <= 0) {

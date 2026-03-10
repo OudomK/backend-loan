@@ -20,6 +20,7 @@ class BorrowerController extends Controller
                     ->orWhere('phone', 'like', "%{$search}%")
                     ->orWhere('customer_code', 'like', "%{$search}%");
             });
+            $query->limit(25);
         }
 
         if ($request->has('customer_type')) {

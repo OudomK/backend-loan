@@ -19,7 +19,7 @@ class WriteOffReportController extends Controller
         $toDate = $toDateStr ? Carbon::parse($toDateStr) : Carbon::today();
         $fromDate = $fromDateStr ? Carbon::parse($fromDateStr) : $toDate->copy()->startOfMonth();
 
-        $query = Loan::with(['borrower', 'officer', 'collaterals'])
+        $query = Loan::with(['borrower', 'officer', 'collaterals', 'product'])
             ->whereNotNull('written_off_at')
             ->whereBetween('written_off_at', [$fromDate->toDateString(), $toDate->toDateString()]);
 
@@ -45,6 +45,7 @@ class WriteOffReportController extends Controller
                     'written_off_date' => $loan->written_off_at,
                     'disbursement_date' => $loan->start_date,
                     'loan_code' => $loan->loan_code,
+                    'product_name' => $loan->product->name ?? 'General Loan',
                     'customer_code' => $loan->borrower->customer_code ?? '',
                     'customer_name' => ($loan->borrower->first_name ?? '') . ' ' . ($loan->borrower->last_name ?? ''),
                     'village' => $loan->borrower->village ?? '',

@@ -24,19 +24,34 @@ class QualityPortfolioController extends Controller
         $fromDateStr = $fromDate->toDateString();
         $toDateStr = $toDate->toDateString();
 
-        // 1. Get all Loan Officers (or just those with active loans)
-        $officers = LoanOfficer::all(); // Assuming users are COs or filter by role if needed
+        // 1. Get all combinations of Loan Officer and Product from existing loans
+        $combinations = Loan::with(['officer', 'product'])
+            ->select('loan_officer_id', 'product_id')
+            ->whereNotNull('loan_officer_id')
+            ->groupBy('loan_officer_id', 'product_id')
+            ->get();
 
         $reportData = [];
 
-        foreach ($officers as $officer) {
+        foreach ($combinations as $combo) {
+            $officer = $combo->officer;
+            $product = $combo->product;
+
+            if (!$officer)
+                continue;
+
             try {
-                // Get loans for this officer
-                $baseQuery = Loan::where('loan_officer_id', $officer->id);
+                // Get loans for this officer and product
+                $baseQuery = Loan::where('loan_officer_id', $officer->id)
+                    ->where('product_id', $combo->product_id);
 
                 if ($currency !== 'all') {
                     $baseQuery->where('currency', $currency);
                 }
+
+                // --- Skip if no loans exist for this combo in the selected currency ---
+                if ((clone $baseQuery)->count() === 0)
+                    continue;
 
                 // --- 1. No. Disb & Disb. Amount ---
                 $oldDisb = (clone $baseQuery)->where('start_date', '<', $fromDateStr)->where('status', '!=', 'pending');
@@ -76,8 +91,9 @@ class QualityPortfolioController extends Controller
                 }
 
                 // --- 3. Portfolio Mutation (This Period) ---
-                $transactions = RepaymentTransaction::whereHas('loan', function ($q) use ($officer) {
-                    $q->where('loan_officer_id', $officer->id);
+                $transactions = RepaymentTransaction::whereHas('loan', function ($q) use ($officer, $combo) {
+                    $q->where('loan_officer_id', $officer->id)
+                        ->where('product_id', $combo->product_id);
                 })->whereBetween('transaction_date', [$fromDateStr, $toDateStr])->get();
 
                 $collectedPrincipal = $transactions->sum('principal_paid') ?? 0;
@@ -142,6 +158,7 @@ class QualityPortfolioController extends Controller
                 $reportData[] = [
                     'co_code' => $officer->id,
                     'co_name' => $officer->name,
+                    'product_name' => $product ? $product->name : 'General Loan',
                     'no_disb_old' => $oldDisbCount,
                     'no_disb_new' => $newDisbCount,
                     'no_disb_total' => $oldDisbCount + $newDisbCount,
@@ -176,7 +193,7 @@ class QualityPortfolioController extends Controller
                     'percent_par_30' => $loanOS > 0 ? ($par30Amount / $loanOS * 100) : 0,
                     'no_wo_month' => $noWoMonth,
                     'principal_wo_month' => $principalWoMonth,
-                    'interest_wo_month' => 0, // No specific column available
+                    'interest_wo_month' => 0,
                     'fee_wo_month' => 0,
                     'no_wo_ytd' => $noWoYtd,
                     'principal_wo_ytd' => $principalWoYtd,
@@ -184,7 +201,7 @@ class QualityPortfolioController extends Controller
                     'fee_wo_ytd' => 0,
                 ];
             } catch (\Exception $e) {
-                Log::error("QualityPortfolio Error for CO {$officer->id}: " . $e->getMessage());
+                Log::error("QualityPortfolio Error for CO {$officer->id} Product {$combo->product_id}: " . $e->getMessage());
             }
         }
 

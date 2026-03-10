@@ -24,7 +24,15 @@ class DatabaseSeeder extends Seeder
             'role' => 'admin',
         ]);
 
-        // 2. Run Other Seeders
+        // 2. Create Super Admin User (full access)
+        User::create([
+            'name' => 'Super Admin',
+            'email' => 'superadmin@gmail.com',
+            'password' => Hash::make('password'),
+            'role' => 'super_admin',
+        ]);
+
+        // 3. Run Other Seeders
         $this->call([
             SystemUiPermissionSeeder::class,
             LoanOfficerSeeder::class,

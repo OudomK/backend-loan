@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Borrower;
 use App\Models\Loan;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Services\BalloonPaymentCalculator;
@@ -16,9 +18,40 @@ class LoanController extends Controller
         $this->calculator = $calculator;
     }
 
+    /** Normalize schedule date (d/m/Y or Y-m-d) to Y-m-d for DB. */
+    private function normalizeScheduleDate(string $date): string
+    {
+        if (preg_match('#^\d{1,2}/\d{1,2}/\d{4}$#', $date)) {
+            $parsed = Carbon::createFromFormat('d/m/Y', $date);
+            return $parsed ? $parsed->format('Y-m-d') : $date;
+        }
+        return $date;
+    }
+
     public function index()
     {
-        return response()->json(Loan::with(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals'])->get());
+        return response()->json(Loan::with(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'product'])->get());
+    }
+
+    /**
+     * Suggest loan code + cycle for a borrower (e.g. QF-001-C1, QF-001-C2).
+     * GET /loans/suggest-code?borrower_id=1
+     */
+    public function suggestCode(Request $request)
+    {
+        $request->validate(['borrower_id' => 'required|exists:borrowers,id']);
+        $borrowerId = $request->input('borrower_id');
+        $borrower = Borrower::withoutGlobalScopes()->find($borrowerId);
+        $customerCode = $borrower ? trim($borrower->customer_code ?? '') : '';
+        if ($customerCode === '') {
+            $customerCode = 'L' . str_pad((string) $borrowerId, 3, '0', STR_PAD_LEFT);
+        }
+        $cycle = Loan::where('borrower_id', $borrowerId)->count() + 1;
+        $suggestedLoanCode = $customerCode . '-C' . $cycle;
+        return response()->json([
+            'cycle' => $cycle,
+            'suggested_loan_code' => $suggestedLoanCode,
+        ]);
     }
 
     public function store(Request $request)
@@ -38,8 +71,9 @@ class LoanController extends Controller
             'admin_fee' => 'nullable|numeric',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
-            'guarantor_id' => 'nullable|exists:guarantors,id',
+            'guarantor_id' => 'nullable|exists:co_borrowers,id', // Note: borrower relationship table
             'guarantor_relationship' => 'nullable|string',
+            'product_id' => 'nullable|exists:loan_products,id',
             'collaterals' => 'nullable|array',
             'collaterals.*.type' => 'nullable|string',
             'collaterals.*.value' => 'nullable|numeric',
@@ -91,7 +125,7 @@ class LoanController extends Controller
                             'interest_amount' => $item['interest'],
                             'penalty_amount' => 0,
                             'total_paid' => $item['payment'],
-                            'payment_date' => $item['date'],
+                            'payment_date' => $this->normalizeScheduleDate($item['date']),
                             'payment_method' => 'Cash',
                         ]);
                     }
@@ -148,7 +182,7 @@ class LoanController extends Controller
                                 'interest_amount' => $item['interest'],
                                 'penalty_amount' => 0,
                                 'total_paid' => 0,
-                                'payment_date' => $item['date'],
+                                'payment_date' => $this->normalizeScheduleDate($item['date']),
                                 'payment_method' => 'Cash',
                             ]);
                         }
@@ -160,7 +194,7 @@ class LoanController extends Controller
             }
         }
 
-        return response()->json($loan->load(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'payments']), 201);
+        return response()->json($loan->load(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'payments', 'product']), 201);
     }
 
     public function previewSchedule(Request $request)
@@ -217,7 +251,10 @@ class LoanController extends Controller
 
     public function show(Loan $loan)
     {
-        return response()->json($loan->load(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'payments']));
+        return response()->json($loan->load([
+            'borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals',
+            'payments', 'paymentSchedules.payments', 'product'
+        ]));
     }
 
     public function update(Request $request, Loan $loan)
@@ -234,6 +271,7 @@ class LoanController extends Controller
             'co_borrower_relationship' => 'nullable|string',
             'guarantor_id' => 'nullable|exists:guarantors,id',
             'guarantor_relationship' => 'nullable|string',
+            'product_id' => 'nullable|exists:loan_products,id',
         ]);
 
         $loan->update($validated);

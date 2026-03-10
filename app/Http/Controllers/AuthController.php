@@ -19,7 +19,10 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        if (!Auth::attempt($request->only('email', 'password'))) {
+        $email = trim((string) $request->input('email'));
+        $password = $request->input('password');
+
+        if (!Auth::attempt(['email' => $email, 'password' => $password])) {
             throw ValidationException::withMessages([
                 'email' => [__('auth.failed')],
             ]);

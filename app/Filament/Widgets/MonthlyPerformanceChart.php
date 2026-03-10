@@ -10,7 +10,7 @@ use Illuminate\Support\Carbon;
 class MonthlyPerformanceChart extends ChartWidget
 {
     protected ?string $heading = 'Performance: Disbursements vs Collections';
-    protected static ?int $sort = 1;
+    protected static ?int $sort = 4;
     protected int|string|array $columnSpan = 'full';
     protected ?string $maxHeight = '250px';
 

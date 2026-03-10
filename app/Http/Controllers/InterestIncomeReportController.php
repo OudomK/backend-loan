@@ -36,7 +36,10 @@ class InterestIncomeReportController extends Controller
                     'borrowers.customer_code',
                     'borrowers.first_name',
                     'borrowers.last_name',
+                    'loan_products.name as product_name',
                 ]);
+
+            $query->leftJoin('loan_products', 'loans.product_id', '=', 'loan_products.id');
 
             // Add collateral type subquery (first collateral's type)
             $query->addSelect([
@@ -84,7 +87,8 @@ class InterestIncomeReportController extends Controller
                 // Dynamic collateral type from DB
                 $collateralType = $loan->collateral_type ?? '';
 
-                // Product name based on repayment method (no loan_products table exists)
+                // Product name from DB
+                $productName = $loan->product_name ?? 'General Loan';
 
                 return [
                     'disb_date' => $loan->disb_date,
@@ -97,6 +101,7 @@ class InterestIncomeReportController extends Controller
                     'term' => $loan->term ?? 0,
                     'payment_frequency' => $loan->payment_frequency ?? 'Monthly',
                     'repayment_method' => $loan->repayment_method ?? 'N/A',
+                    'product_name' => $productName,
                     'collateral_type' => $collateralType,
                     'loan_cycle' => $loan->loan_cycle ?? 1,
                     'interest_paid' => $interestCollected,

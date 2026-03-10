@@ -26,7 +26,39 @@ class RepaymentController extends Controller
             })
             ->get();
 
-        $overdue = Loan::with('borrower')
+        // Due Today: one row per loan (installment due today)
+        $formatDueToday = function ($loans) use ($today) {
+            return $loans->map(function ($loan) use ($today) {
+                $nextPayment = $loan->payments()
+                    ->whereRaw('total_paid < (principal_amount + interest_amount)')
+                    ->where('payment_date', $today->toDateString())
+                    ->orderBy('payment_date', 'asc')
+                    ->first();
+                if (!$nextPayment) {
+                    $nextPayment = $loan->payments()
+                        ->whereRaw('total_paid < (principal_amount + interest_amount)')
+                        ->orderBy('payment_date', 'asc')
+                        ->first();
+                }
+                $dueAmount = ($nextPayment->principal_amount + $nextPayment->interest_amount) - $nextPayment->total_paid;
+                $symbol = (strpos($loan->currency, 'KHR') !== false) ? '៛' : '$';
+                return [
+                    'id' => (string) $loan->id,
+                    'name' => $loan->borrower->first_name . ' ' . $loan->borrower->last_name,
+                    'code' => $loan->loan_code ?? ('L-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT)),
+                    'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
+                    'amount' => $symbol . number_format($dueAmount, 2),
+                    'principal' => (string) number_format($nextPayment->principal_amount, 2),
+                    'interest' => (string) number_format($nextPayment->interest_amount, 2),
+                    'dpd' => '0',
+                    'symbol' => $symbol,
+                ];
+            });
+        };
+
+        // Overdue: one row per overdue installment (so "3 late" = 3 rows)
+        $overdueRows = collect();
+        $overdueLoans = Loan::with('borrower')
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('payment_date', '<', $today)
@@ -34,37 +66,34 @@ class RepaymentController extends Controller
             })
             ->get();
 
-        $format = function ($loans, $isOverdue) use ($today) {
-            return $loans->map(function ($loan) use ($isOverdue, $today) {
-                $nextPayment = $loan->payments()
-                    ->whereRaw('total_paid < (principal_amount + interest_amount)')
-                    ->orderBy('payment_date', 'asc')
-                    ->first();
+        foreach ($overdueLoans as $loan) {
+            $overduePayments = $loan->payments()
+                ->where('payment_date', '<', $today->toDateString())
+                ->whereRaw('total_paid < (principal_amount + interest_amount)')
+                ->orderBy('payment_date', 'asc')
+                ->get();
 
-                $dueAmount = ($nextPayment->principal_amount + $nextPayment->interest_amount) - $nextPayment->total_paid;
-                $dpd = 0;
-                if ($isOverdue && $nextPayment->payment_date < $today->toDateString()) {
-                    $dpd = $today->diffInDays(Carbon::parse($nextPayment->payment_date));
-                }
-
-                $symbol = (strpos($loan->currency, 'KHR') !== false) ? '៛' : '$';
-
-                return [
+            $symbol = (strpos($loan->currency, 'KHR') !== false) ? '៛' : '$';
+            foreach ($overduePayments as $payment) {
+                $dueAmount = ($payment->principal_amount + $payment->interest_amount) - $payment->total_paid;
+                $dpd = (int) $today->diffInDays(Carbon::parse($payment->payment_date));
+                $overdueRows->push([
                     'id' => (string) $loan->id,
                     'name' => $loan->borrower->first_name . ' ' . $loan->borrower->last_name,
                     'code' => $loan->loan_code ?? ('L-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT)),
+                    'payment_date' => Carbon::parse($payment->payment_date)->format('Y-m-d'),
                     'amount' => $symbol . number_format($dueAmount, 2),
-                    'principal' => (string) number_format($nextPayment->principal_amount, 2),
-                    'interest' => (string) number_format($nextPayment->interest_amount, 2),
-                    'dpd' => (string) abs($dpd),
+                    'principal' => (string) number_format($payment->principal_amount, 2),
+                    'interest' => (string) number_format($payment->interest_amount, 2),
+                    'dpd' => (string) $dpd,
                     'symbol' => $symbol,
-                ];
-            });
-        };
+                ]);
+            }
+        }
 
         return response()->json([
-            'due_today' => $format($dueToday, false),
-            'overdue' => $format($overdue, true),
+            'due_today' => $formatDueToday($dueToday),
+            'overdue' => $overdueRows->values()->all(),
         ]);
     }
 
@@ -139,6 +168,13 @@ class RepaymentController extends Controller
 
             if ($installments->isEmpty()) {
                 throw new \Exception("No unpaid installments found for this loan.");
+            }
+
+            // Keep installment-level penalty in sync so customer history can display it.
+            if ($penaltyPaid > 0) {
+                $firstInstallment = $installments->first();
+                $firstInstallment->penalty_amount = round(($firstInstallment->penalty_amount ?? 0) + $penaltyPaid, 2);
+                $firstInstallment->save();
             }
 
             // Normal mode validation: must pay exactly the current installment's due (excluding penalty)

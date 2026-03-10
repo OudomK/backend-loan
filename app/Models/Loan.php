@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $loan_cycle
  * @property-read \App\Models\Borrower $borrower
  * @property-read \Illuminate\Database\Eloquent\Collection|\App\Models\Payment[] $payments
+ * @property-read \Illuminate\Database\Eloquent\Collection|\App\Models\PaymentSchedule[] $paymentSchedules
  */
 class Loan extends Model
 {
@@ -59,8 +60,14 @@ class Loan extends Model
         'classify_wo',
         'write_off_balance',
         'recovery_amount',
-        'maturity_date'
+        'maturity_date',
+        'product_id'
     ];
+
+    public function product(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(LoanProduct::class, 'product_id');
+    }
 
     public function borrower(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
@@ -105,5 +112,10 @@ class Loan extends Model
     public function payments(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function paymentSchedules(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PaymentSchedule::class);
     }
 }

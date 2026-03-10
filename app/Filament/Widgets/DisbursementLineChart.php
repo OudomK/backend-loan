@@ -20,7 +20,7 @@ class DisbursementLineChart extends ChartWidget
             $labels[] = now()->subMonths($i)->format('M');
         }
 
-        $exchangeRate = (int) (\App\Models\Setting::where('key', 'exchange_rate')->value('value') ?? 4000);
+        $exchangeRate = (int) (cache()->remember('setting.exchange_rate', 3600, fn () => \App\Models\Setting::where('key', 'exchange_rate')->value('value')) ?? 4000);
 
         $disbursementsRaw = Loan::where('status', 'active')
             ->where('start_date', '>=', now()->subMonths(11)->startOfMonth())

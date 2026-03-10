@@ -19,6 +19,7 @@ class Payment extends Model
 {
     protected $fillable = [
         'loan_id',
+        'payment_schedule_id',
         'payment_number',
         'principal_amount',
         'interest_amount',
@@ -31,5 +32,10 @@ class Payment extends Model
     public function loan(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Loan::class);
+    }
+
+    public function paymentSchedule(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(PaymentSchedule::class);
     }
 }

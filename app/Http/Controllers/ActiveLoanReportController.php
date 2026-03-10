@@ -27,7 +27,8 @@ class ActiveLoanReportController extends Controller
             'borrower',
             'officer',
             'disburseOfficer',
-            'collaterals'
+            'collaterals',
+            'product'
         ])
             ->where('status', 'active');
 
@@ -88,6 +89,8 @@ class ActiveLoanReportController extends Controller
             $borrower = $loan->borrower;
             $officer = $loan->officer;
 
+            $product = $loan->product;
+
             // Calculations
             $principalPaid = $loan->total_principal_paid ?? 0;
             $outstanding = $loan->amount - $principalPaid;
@@ -130,6 +133,9 @@ class ActiveLoanReportController extends Controller
                 'collateral_type' => $collateralType,
                 'co_disburse' => $loan->disburseOfficer ? $loan->disburseOfficer->name : ($officer ? $officer->name : ''),
                 'co_repay' => $officer ? $officer->name : '',
+                'officer_name' => $officer ? $officer->name : 'N/A',
+                'product_name' => $product ? $product->name : 'General Loan',
+                'customer_code' => $borrower ? $borrower->customer_code : 'N/A',
 
                 'outstanding_amount' => $outstanding,
                 'principal_paid' => $principalPaid,

@@ -55,7 +55,6 @@ class IncomeStatementController extends Controller
                 'salary' => ['label' => 'Salary Expense', 'amounts' => [], 'total_usd' => 0],
                 'allowance' => ['label' => 'Allowance Expense', 'amounts' => [], 'total_usd' => 0],
                 'bonus' => ['label' => 'Bonus Expense', 'amounts' => [], 'total_usd' => 0],
-                'total_payroll' => ['label' => 'Total Payroll Expense', 'amounts' => [], 'total_usd' => 0],
                 'borrowing_interest' => ['label' => 'Borrowing Interest Expense', 'amounts' => [], 'total_usd' => 0],
                 'other_expenses' => ['label' => 'Other Expenses', 'amounts' => [], 'total_usd' => 0],
             ];
@@ -114,18 +113,15 @@ class IncomeStatementController extends Controller
                     $expenseItems['allowance']['amounts'][$curr] = (double) (clone $pQuery)->sum('allowance');
                     $expenseItems['bonus']['amounts'][$curr] = (double) (clone $pQuery)->sum('bonus');
                     $tPayroll = (double) (clone $pQuery)->sum('total_payable');
-                    $expenseItems['total_payroll']['amounts'][$curr] = $tPayroll;
                     $totalExpenses[$curr] += $tPayroll;
 
                     $expenseItems['salary']['total_usd'] += $expenseItems['salary']['amounts'][$curr];
                     $expenseItems['allowance']['total_usd'] += $expenseItems['allowance']['amounts'][$curr];
                     $expenseItems['bonus']['total_usd'] += $expenseItems['bonus']['amounts'][$curr];
-                    $expenseItems['total_payroll']['total_usd'] += $tPayroll;
                 } else {
                     $expenseItems['salary']['amounts'][$curr] = 0;
                     $expenseItems['allowance']['amounts'][$curr] = 0;
                     $expenseItems['bonus']['amounts'][$curr] = 0;
-                    $expenseItems['total_payroll']['amounts'][$curr] = 0;
                 }
 
                 $borrInt = (double) DB::table('borrowing_repayments')

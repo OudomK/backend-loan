@@ -23,14 +23,18 @@ class BorrowingController extends Controller
 
             return [
                 'id' => $b->id,
+                'lender_id' => $b->lender_id,
                 'lender_code' => $b->lender->lender_code,
                 'lender_name' => $b->lender->name,
                 'lender_type' => $b->lender->lender_type,
                 'borrowing_date' => $b->borrowing_date,
+                'transaction_no' => $b->transaction_no,
+                'loan_account' => $b->loan_account,
                 'account_no' => $b->account_no,
                 'category' => $b->category,
                 'contract_no' => $b->contract_no,
                 'payment_method' => $b->payment_method,
+                'int_pay_mode' => $b->int_pay_mode,
                 'first_pay_date' => $b->first_pay_date,
                 'currency' => $b->currency,
                 'term_months' => $b->term_months,
@@ -64,6 +68,20 @@ class BorrowingController extends Controller
         ]);
 
         $lender = Lender::create($validated);
+        return response()->json($lender);
+    }
+
+    public function updateLender(Request $request, $id)
+    {
+        $lender = Lender::findOrFail($id);
+        $validated = $request->validate([
+            'lender_code' => 'required|unique:lenders,lender_code,' . $id,
+            'name' => 'required',
+            'lender_type' => 'required',
+            'phone' => 'nullable',
+            'address' => 'nullable'
+        ]);
+        $lender->update($validated);
         return response()->json($lender);
     }
 

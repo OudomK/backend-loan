@@ -21,6 +21,7 @@ class GuarantorController extends Controller
                     ->orWhere('age', 'like', "%{$search}%")
                     ->orWhere('customer_code', 'like', "%{$search}%");
             });
+            $query->limit(25);
         }
 
         $query->where('status', '!=', 'Deleted');
