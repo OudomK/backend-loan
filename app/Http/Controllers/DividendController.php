@@ -98,6 +98,8 @@ class DividendController extends Controller
                 $share = CapitalShare::find($transaction->capital_share_id);
                 if ($share) {
                     $share->increment('dividends', $transaction->amount);
+                    $share->increment('total_dividend_paid', $transaction->amount);
+                    $share->update(['last_dividend_date' => now()]);
 
                     // Also record in CapitalShareTransaction
                     CapitalShareTransaction::create([

@@ -31,7 +31,10 @@ class EmployeeController extends Controller
 
         $this->employeeService->syncWithLoanOfficer($employee);
 
-        return (new EmployeeResource($employee->load('position')))->resolve();
+        return response()->json(
+            (new EmployeeResource($employee->load('position')))->resolve(),
+            201
+        );
     }
 
     public function show(Employee $employee)
@@ -55,5 +58,20 @@ class EmployeeController extends Controller
         $employee->delete();
 
         return response()->json(['message' => 'Employee deleted successfully']);
+    }
+
+    public function uploadPhoto(Request $request)
+    {
+        $request->validate([
+            'photo' => 'required|image|max:5120', // Max 5MB
+        ]);
+
+        if ($request->hasFile('photo')) {
+            $path = $request->file('photo')->store('employees', 'public');
+            $url = asset('storage/' . $path);
+            return response()->json(['url' => $url]);
+        }
+
+        return response()->json(['message' => 'Upload failed'], 400);
     }
 }

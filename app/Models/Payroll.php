@@ -16,7 +16,8 @@ class Payroll extends Model
         'deduction',
         'total_payable',
         'status',
-        'payment_date'
+        'payment_date',
+        'payment_method',
     ];
 
     public function employee()

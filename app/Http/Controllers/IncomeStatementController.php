@@ -109,11 +109,18 @@ class IncomeStatementController extends Controller
                 // ── EXPENSES ─────────────────────────────────────────────
                 if ($curr === 'USD') {
                     $pQuery = DB::table('payrolls')->whereBetween('payment_date', [$fromDate, $toDate]);
-                    $expenseItems['salary']['amounts'][$curr] = (double) $pQuery->sum('salary');
-                    $expenseItems['allowance']['amounts'][$curr] = (double) (clone $pQuery)->sum('allowance');
-                    $expenseItems['bonus']['amounts'][$curr] = (double) (clone $pQuery)->sum('bonus');
-                    $tPayroll = (double) (clone $pQuery)->sum('total_payable');
-                    $totalExpenses[$curr] += $tPayroll;
+                    
+                    // Salary Expense = Base Salary - Deduction
+                    $salary = (double) (clone $pQuery)->sum('salary') - (double) (clone $pQuery)->sum('deduction');
+                    $allowance = (double) (clone $pQuery)->sum('allowance');
+                    $bonus = (double) (clone $pQuery)->sum('bonus');
+
+                    $expenseItems['salary']['amounts'][$curr] = $salary;
+                    $expenseItems['allowance']['amounts'][$curr] = $allowance;
+                    $expenseItems['bonus']['amounts'][$curr] = $bonus;
+                    
+                    // Add explicitly to total expenses so it perfectly matches the UI items
+                    $totalExpenses[$curr] += ($salary + $allowance + $bonus);
 
                     $expenseItems['salary']['total_usd'] += $expenseItems['salary']['amounts'][$curr];
                     $expenseItems['allowance']['total_usd'] += $expenseItems['allowance']['amounts'][$curr];

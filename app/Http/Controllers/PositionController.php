@@ -2,16 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Position;
 use Illuminate\Http\Request;
 
 class PositionController extends Controller
 {
     public function index()
     {
-        return response()->json(\App\Models\Position::all());
+        $positions = Position::with(['reportingTo'])
+            ->withCount('employees')
+            ->get()
+            ->map(function (Position $p) {
+                $arr = $p->toArray();
+                $arr['current_headcount'] = $p->employees_count;
+                return $arr;
+            });
+        return response()->json($positions);
     }
 
-    public function store(\Illuminate\Http\Request $request)
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'code' => 'nullable|string|unique:positions',
@@ -22,15 +31,21 @@ class PositionController extends Controller
             'description' => 'nullable|string',
             'requirements' => 'nullable|string',
             'status' => 'required|string',
+            'reporting_to_id' => 'nullable|exists:positions,id',
+            'min_headcount' => 'nullable|integer|min:0',
+            'max_headcount' => 'nullable|integer|min:0',
         ]);
 
-        $position = \App\Models\Position::create($validated);
-        return response()->json($position, 201);
+        $position = Position::create($validated);
+        $position->load('reportingTo');
+        $arr = $position->toArray();
+        $arr['current_headcount'] = 0;
+        return response()->json($arr, 201);
     }
 
-    public function update(\Illuminate\Http\Request $request, $id)
+    public function update(Request $request, $id)
     {
-        $position = \App\Models\Position::findOrFail($id);
+        $position = Position::findOrFail($id);
         $validated = $request->validate([
             'code' => 'nullable|string|unique:positions,code,' . $id,
             'name' => 'sometimes|string',
@@ -40,15 +55,21 @@ class PositionController extends Controller
             'description' => 'nullable|string',
             'requirements' => 'nullable|string',
             'status' => 'sometimes|string',
+            'reporting_to_id' => 'nullable|exists:positions,id',
+            'min_headcount' => 'nullable|integer|min:0',
+            'max_headcount' => 'nullable|integer|min:0',
         ]);
 
         $position->update($validated);
-        return response()->json($position);
+        $position->load('reportingTo');
+        $arr = $position->toArray();
+        $arr['current_headcount'] = $position->employees()->count();
+        return response()->json($arr);
     }
 
     public function destroy($id)
     {
-        \App\Models\Position::findOrFail($id)->delete();
+        Position::findOrFail($id)->delete();
         return response()->json(null, 204);
     }
 }

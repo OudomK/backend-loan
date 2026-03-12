@@ -59,17 +59,12 @@ class CapitalShareController extends Controller
                 'borrowing_date' => $s->borrowing_date,
                 'account_no' => $s->account_no,
                 'contract_no' => $s->contract_no,
-                'payment_method' => $s->payment_method,
-                'first_pay_date' => $s->first_pay_date,
-                'term_months' => $s->term_months,
                 'amount' => $s->amount,
-                'interest_rate' => $s->interest_rate,
                 'int_pay_mode' => $s->int_pay_mode,
-                'fee' => $s->fee,
-                'maturity_date' => $s->maturity_date,
-                'sl_term' => $s->sl_term,
                 'balance' => $s->balance,
                 'dividends' => $s->dividends,
+                'total_dividend_paid' => $s->total_dividend_paid,
+                'last_dividend_date' => $s->last_dividend_date,
                 'repayment_schedule' => $s->repayment_schedule,
             ];
         });
@@ -88,7 +83,6 @@ class CapitalShareController extends Controller
             'par_value' => 'nullable|numeric',
             'share_qty' => 'nullable|integer',
             'currency' => 'required|string',
-            'payment_method' => 'nullable|string',
 
             // New Borrowing/Share Fields
             'transaction_no' => 'nullable|string',
@@ -96,16 +90,12 @@ class CapitalShareController extends Controller
             'borrowing_date' => 'nullable|date',
             'account_no' => 'nullable|string',
             'contract_no' => 'nullable|string',
-            'first_pay_date' => 'nullable|date',
-            'term_months' => 'nullable|integer',
             'amount' => 'nullable|numeric',
-            'interest_rate' => 'nullable|numeric',
             'int_pay_mode' => 'nullable|string',
-            'fee' => 'nullable|numeric',
-            'maturity_date' => 'nullable|date',
-            'sl_term' => 'nullable|string',
             'balance' => 'nullable|numeric',
             'dividends' => 'nullable|numeric',
+            'total_dividend_paid' => 'nullable|numeric',
+            'last_dividend_date' => 'nullable|date',
             'repayment_schedule' => 'nullable|array',
             'holder_id' => 'nullable|integer',
             'certificate_no' => 'nullable|string',
@@ -135,15 +125,10 @@ class CapitalShareController extends Controller
         $share->loan_account = $validated['loan_account'] ?? null;
         $share->borrowing_date = $validated['borrowing_date'] ?? null;
         $share->contract_no = $validated['contract_no'] ?? null;
-        $share->payment_method = $validated['payment_method'] ?? null;
-        $share->first_pay_date = $validated['first_pay_date'] ?? null;
-        $share->term_months = $validated['term_months'] ?? 0;
-        $share->interest_rate = $validated['interest_rate'] ?? 0;
         $share->int_pay_mode = $validated['int_pay_mode'] ?? null;
-        $share->fee = $validated['fee'] ?? 0;
-        $share->maturity_date = $validated['maturity_date'] ?? null;
-        $share->sl_term = $validated['sl_term'] ?? null;
         $share->dividends = $validated['dividends'] ?? 0;
+        $share->total_dividend_paid = $validated['total_dividend_paid'] ?? 0;
+        $share->last_dividend_date = $validated['last_dividend_date'] ?? null;
         $share->repayment_schedule = $validated['repayment_schedule'] ?? null;
 
         $share->holder_id = $validated['holder_id'] ?? null;
@@ -180,7 +165,6 @@ class CapitalShareController extends Controller
             'share_qty' => 'nullable|integer',
             'par_value' => 'nullable|numeric',
             'currency' => 'nullable|string',
-            'payment_method' => 'nullable|string',
 
             // New Borrowing/Share Fields
             'transaction_no' => 'nullable|string',
@@ -188,16 +172,12 @@ class CapitalShareController extends Controller
             'borrowing_date' => 'nullable|date',
             'account_no' => 'nullable|string',
             'contract_no' => 'nullable|string',
-            'first_pay_date' => 'nullable|date',
-            'term_months' => 'nullable|integer',
             'amount' => 'nullable|numeric',
-            'interest_rate' => 'nullable|numeric',
             'int_pay_mode' => 'nullable|string',
-            'fee' => 'nullable|numeric',
-            'maturity_date' => 'nullable|date',
-            'sl_term' => 'nullable|string',
             'balance' => 'nullable|numeric',
             'dividends' => 'nullable|numeric',
+            'total_dividend_paid' => 'nullable|numeric',
+            'last_dividend_date' => 'nullable|date',
             'repayment_schedule' => 'nullable|array',
             'holder_id' => 'nullable|integer',
             'certificate_no' => 'nullable|string',

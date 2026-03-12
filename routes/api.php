@@ -176,6 +176,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('payments', PaymentController::class);
 
     Route::apiResource('positions', PositionController::class);
+    Route::post('employees/upload-photo', [EmployeeController::class, 'uploadPhoto']);
     Route::apiResource('employees', EmployeeController::class);
     Route::apiResource('payrolls', PayrollController::class);
     Route::get('/reports/income-statement', [IncomeStatementController::class, 'index']);

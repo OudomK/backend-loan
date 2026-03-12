@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int|null $guarantor_id
  * @property string $currency
  * @property string $repayment_method
+ * @property string|null $purpose
  * @property string $loan_code
  * @property string $payment_frequency
  * @property int|null $loan_officer_id
@@ -46,6 +47,7 @@ class Loan extends Model
         'guarantor_relationship',
         'currency',
         'repayment_method',
+        'purpose',
         'loan_code',
         'payment_frequency',
         'loan_officer_id',

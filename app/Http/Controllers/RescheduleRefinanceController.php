@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 use App\Models\Loan;
 use App\Services\LoanService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class RescheduleRefinanceController extends Controller
 {
@@ -33,6 +32,11 @@ class RescheduleRefinanceController extends Controller
 
         return response()->json($loans->map(function (Loan $loan) {
             $currentBalance = $this->loanService->calculateCurrentBalance($loan);
+            // Count installments not yet fully paid (per-row comparison).
+            $remainingTerm = $loan->payments->filter(function ($p) {
+                $due = (float) $p->principal_amount + (float) $p->interest_amount;
+                return (float) $p->total_paid < $due - 0.01;
+            })->count();
 
             return [
                 'id' => $loan->id,
@@ -42,7 +46,7 @@ class RescheduleRefinanceController extends Controller
                 'balance' => $currentBalance,
                 'rate' => $loan->interest_rate,
                 'term' => $loan->duration_months,
-                'remainingTerm' => $loan->payments->where('total_paid', '<', DB::raw('principal_amount + interest_amount'))->count(),
+                'remainingTerm' => $remainingTerm,
                 'start_date' => $loan->start_date,
                 'repayment_method' => $loan->repayment_method,
                 'currency' => $loan->currency,
@@ -54,8 +58,8 @@ class RescheduleRefinanceController extends Controller
     {
         $validated = $request->validate([
             'loan_id' => 'required|exists:loans,id',
-            'new_rate' => 'required|numeric',
-            'remaining_term' => 'required|integer', // Changed from extend_months
+            'new_rate' => 'required|numeric|min:0',
+            'remaining_term' => 'required|integer|min:1',
             'reschedule_date' => 'required|date',
             'first_payment_date' => 'nullable|date',
             'repayment_method' => 'nullable|string',

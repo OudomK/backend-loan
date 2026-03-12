@@ -8,12 +8,12 @@ class PayrollController extends Controller
 {
     public function index()
     {
-        return response()->json(\App\Models\Payroll::with('employee')->get());
+        return response()->json(\App\Models\Payroll::with('employee.position')->orderByDesc('month_year')->get());
     }
 
     public function show($id)
     {
-        return response()->json(\App\Models\Payroll::with('employee')->findOrFail($id));
+        return response()->json(\App\Models\Payroll::with('employee.position')->findOrFail($id));
     }
 
     public function store(\Illuminate\Http\Request $request)
@@ -25,13 +25,18 @@ class PayrollController extends Controller
             'allowance' => 'nullable|numeric',
             'bonus' => 'nullable|numeric',
             'deduction' => 'nullable|numeric',
-            'total_payable' => 'required|numeric',
             'status' => 'required|string',
             'payment_date' => 'nullable|date',
+            'payment_method' => 'nullable|string',
         ]);
 
+        $validated['total_payable'] = ($validated['salary'] ?? 0)
+            + ($validated['allowance'] ?? 0)
+            + ($validated['bonus'] ?? 0)
+            - ($validated['deduction'] ?? 0);
+
         $payroll = \App\Models\Payroll::create($validated);
-        return response()->json($payroll, 201);
+        return response()->json($payroll->load('employee.position'), 201);
     }
 
     public function update(\Illuminate\Http\Request $request, $id)
@@ -44,13 +49,19 @@ class PayrollController extends Controller
             'allowance' => 'nullable|numeric',
             'bonus' => 'nullable|numeric',
             'deduction' => 'nullable|numeric',
-            'total_payable' => 'sometimes|numeric',
             'status' => 'sometimes|string',
             'payment_date' => 'nullable|date',
+            'payment_method' => 'nullable|string',
         ]);
 
+        $salary = $validated['salary'] ?? $payroll->salary;
+        $allowance = $validated['allowance'] ?? $payroll->allowance;
+        $bonus = $validated['bonus'] ?? $payroll->bonus;
+        $deduction = $validated['deduction'] ?? $payroll->deduction;
+        $validated['total_payable'] = $salary + $allowance + $bonus - $deduction;
+
         $payroll->update($validated);
-        return response()->json($payroll);
+        return response()->json($payroll->load('employee.position'));
     }
 
     public function destroy($id)
