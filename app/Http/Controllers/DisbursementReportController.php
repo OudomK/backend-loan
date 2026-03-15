@@ -24,10 +24,12 @@ class DisbursementReportController extends Controller
         $fromDateStr = $fromDate->toDateString();
 
         // 1. Get Officers
-        $officerQuery = LoanOfficer::query();
+        $officerQuery = LoanOfficer::with('employee');
         if ($officerId && $officerId !== 'all') {
             $officerQuery->where('id', $officerId);
         }
+        // Only include officers that actually have loans
+        $officerQuery->whereHas('loans');
         $officers = $officerQuery->get();
 
         $reportData = [];
@@ -55,7 +57,13 @@ class DisbursementReportController extends Controller
             $totalClient = $activeLoans->unique('borrower_id')->count();
             $loanOS = 0;
             $interestOS = 0;
-            $feeOS = 0; // Admin fee or similar
+            // Fee OS = per loan: total_fee (amount * admin_fee%) - fee already collected; then sum
+            $feeOS = 0;
+            foreach ($activeLoans as $loan) {
+                $totalFee = $loan->amount * ((float) ($loan->admin_fee ?? 0) / 100);
+                $feeCollectedForLoan = RepaymentTransaction::where('loan_id', $loan->id)->sum('fee_paid');
+                $feeOS += max(0, $totalFee - $feeCollectedForLoan);
+            }
 
             foreach ($activeLoans as $loan) {
                 foreach ($loan->payments as $p) {
@@ -76,10 +84,11 @@ class DisbursementReportController extends Controller
 
             $principalCollected = $transactions->sum('principal_paid');
             $interestCollected = $transactions->sum('interest_paid');
-            $feeCollected = 0; // Placeholder
+            $feeCollected = $transactions->sum('fee_paid');
             $penaltyCollected = $transactions->sum('penalty_paid');
             $recovery = $transactions->where('repayment_type', 'Recovery')->sum('amount_paid');
-            $paidOffCollected = $transactions->where('repayment_type', 'Pay Off')->sum('amount_paid');
+            // Paid-off Coll. = principal collected on Pay Off (not full amount_paid)
+            $paidOffCollected = $transactions->where('repayment_type', 'Pay Off')->sum('principal_paid');
 
             // --- PAR Section ---
             $par1Count = 0;
@@ -99,7 +108,7 @@ class DisbursementReportController extends Controller
                     ->first();
 
                 if ($earliestOverdue) {
-                    $aging = $toDate->diffInDays(Carbon::parse($earliestOverdue->payment_date));
+                    $aging = abs($toDate->diffInDays(Carbon::parse($earliestOverdue->payment_date)));
 
                     // Calc current loan OS for PAR amount
                     $currentLoanOS = 0;
@@ -125,7 +134,7 @@ class DisbursementReportController extends Controller
 
             $reportData[] = [
                 'co_code' => str_pad($officer->id, 4, '0', STR_PAD_LEFT),
-                'co_name' => $officer->name,
+                'co_name' => $officer->employee ? $officer->employee->name : $officer->name,
 
                 // No. Disb
                 'no_disb_old' => $noDisbOld,

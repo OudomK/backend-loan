@@ -21,7 +21,7 @@ class RepaymentTransactionsTable
                     ->sortable(),
                 TextColumn::make('loan.borrower.id')
                     ->label('Borrower')
-                    ->getStateUsing(fn($record) => "{$record->loan?->borrower?->first_name} {$record->loan?->borrower?->last_name}")
+                    ->getStateUsing(fn($record) => "{$record->loan?->borrower?->last_name} {$record->loan?->borrower?->first_name}")
                     ->searchable(['loan.borrower.first_name', 'loan.borrower.last_name'])
                     ->sortable(),
                 TextColumn::make('amount_paid')

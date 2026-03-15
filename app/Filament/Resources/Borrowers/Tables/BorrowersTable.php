@@ -20,7 +20,7 @@ class BorrowersTable
                     ->circular(),
                 TextColumn::make('full_name')
                     ->label('Name')
-                    ->getStateUsing(fn($record) => "{$record->first_name} {$record->last_name}")
+                    ->getStateUsing(fn($record) => "{$record->last_name} {$record->first_name}")
                     ->searchable(['first_name', 'last_name'])
                     ->sortable(),
                 TextColumn::make('customer_code')

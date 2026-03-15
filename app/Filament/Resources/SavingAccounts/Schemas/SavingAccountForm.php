@@ -75,11 +75,11 @@ class SavingAccountForm
                             ->schema([
                                 Select::make('saver_id')
                                     ->relationship('saver', 'id')
-                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->first_name} {$record->last_name}")
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
                                     ->searchable(),
                                 Select::make('borrower_id')
                                     ->relationship('borrower', 'id')
-                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->first_name} {$record->last_name}")
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
                                     ->searchable(),
                             ]),
                     ]),

@@ -1,0 +1,1 @@
+<?php echo e($livewireKey); ?>.display-text<?php /**PATH D:\Real Project\backend\storage\framework\views/56dd8f189d00a159cae8f632745ff332.blade.php ENDPATH**/ ?>

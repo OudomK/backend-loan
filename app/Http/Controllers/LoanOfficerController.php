@@ -9,7 +9,9 @@ class LoanOfficerController extends Controller
 {
     public function index()
     {
-        return response()->json(LoanOfficer::all());
+        return response()->json(LoanOfficer::with('employee')->withCount(['loans as total_active_loans' => function($query) {
+            $query->where('status', 'active');
+        }])->get());
     }
 
     public function store(Request $request)
@@ -18,6 +20,10 @@ class LoanOfficerController extends Controller
             'name' => 'required|string',
             'phone' => 'nullable|string',
             'status' => 'required|in:active,inactive',
+            'employee_id' => 'nullable|integer|exists:employees,id',
+            'start_date' => 'nullable|date',
+            'max_loan_amount' => 'nullable|numeric',
+            'gender' => 'nullable|string',
         ]);
 
         $officer = LoanOfficer::create($validated);
@@ -35,6 +41,10 @@ class LoanOfficerController extends Controller
             'name' => 'sometimes|required|string',
             'phone' => 'nullable|string',
             'status' => 'sometimes|required|in:active,inactive',
+            'employee_id' => 'nullable|integer|exists:employees,id',
+            'start_date' => 'nullable|date',
+            'max_loan_amount' => 'nullable|numeric',
+            'gender' => 'nullable|string',
         ]);
 
         $loanOfficer->update($validated);

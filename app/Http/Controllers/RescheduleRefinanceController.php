@@ -16,7 +16,7 @@ class RescheduleRefinanceController extends Controller
 
     public function searchActiveLoans(Request $request)
     {
-        $query = $request->get('query');
+        $query = $request->input('query');
 
         $loans = Loan::with(['borrower', 'payments'])
             ->where('status', 'active')
@@ -41,7 +41,7 @@ class RescheduleRefinanceController extends Controller
             return [
                 'id' => $loan->id,
                 'code' => $loan->loan_code,
-                'name' => $loan->borrower->first_name . ' ' . $loan->borrower->last_name,
+                'name' => $loan->borrower->last_name . ' ' . $loan->borrower->first_name,
                 'amount' => $loan->amount,
                 'balance' => $currentBalance,
                 'rate' => $loan->interest_rate,

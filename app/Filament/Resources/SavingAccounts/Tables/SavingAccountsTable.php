@@ -21,7 +21,7 @@ class SavingAccountsTable
                     ->sortable(),
                 TextColumn::make('saver.id')
                     ->label('Saver')
-                    ->getStateUsing(fn($record) => "{$record->saver?->first_name} {$record->saver?->last_name}")
+                    ->getStateUsing(fn($record) => "{$record->saver?->last_name} {$record->saver?->first_name}")
                     ->searchable(['saver.first_name', 'saver.last_name'])
                     ->sortable(),
                 TextColumn::make('account_type')

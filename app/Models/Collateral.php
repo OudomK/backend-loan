@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Collateral extends Model
 {
-    protected $fillable = ['loan_id', 'type', 'value', 'currency', 'description'];
+    protected $fillable = ['loan_id', 'type', 'owner_name', 'value', 'currency', 'description'];
 
     public function loan()
     {

@@ -21,16 +21,16 @@ class ArrearReportResource extends JsonResource
         $referenceDate = $reportDateStr ? Carbon::parse($reportDateStr) : Carbon::today();
 
         $arrearDate = $this->earliest_arrear_date;
-        $aging = $arrearDate ? $referenceDate->diffInDays(Carbon::parse($arrearDate)) : 0;
+        $aging = $arrearDate ? abs($referenceDate->diffInDays(Carbon::parse($arrearDate))) : 0;
 
         return [
             'branches' => 'Main Office',
             'arrear_date' => $arrearDate,
             'loan_no' => $this->loan_code,
             'cid' => $borrower->customer_code,
-            'name' => $borrower->first_name . ' ' . $borrower->last_name,
-            'coborrower' => $this->coBorrower ? $this->coBorrower->first_name . ' ' . $this->coBorrower->last_name : '-',
-            'guarantor' => $this->guarantor ? $this->guarantor->first_name . ' ' . $this->guarantor->last_name : '-',
+            'name' => $borrower->last_name . ' ' . $borrower->first_name,
+            'coborrower' => $this->coBorrower ? $this->coBorrower->last_name . ' ' . $this->coBorrower->first_name : '-',
+            'guarantor' => $this->guarantor ? $this->guarantor->last_name . ' ' . $this->guarantor->first_name : '-',
             'gender' => $borrower->gender,
             'phone' => $borrower->phone,
             'coborrower_phone' => $this->coBorrower?->phone ?? '-',
@@ -40,7 +40,7 @@ class ArrearReportResource extends JsonResource
             'commune' => $borrower->commune,
             'last_payment_date' => $this->last_transaction_date ?? '-',
             'aging' => $aging,
-            'types_of_collateral' => $this->collaterals->first()?->type ?? '-',
+            'types_of_collateral' => $this->getCollateralTypeLabel(),
             'number' => $this->collaterals->count(),
             'date_disbursement' => $this->start_date,
             'disb_amount' => $this->amount,
@@ -53,5 +53,25 @@ class ArrearReportResource extends JsonResource
             'status' => $this->status,
             'currency' => $this->currency,
         ];
+    }
+
+    /**
+     * Collateral type label. If type is numeric (e.g. value stored by mistake), use description or '-'.
+     */
+    private function getCollateralTypeLabel(): string
+    {
+        $first = $this->collaterals->first();
+        if (!$first) {
+            return '-';
+        }
+        $type = trim((string) $first->type);
+        if ($type === '') {
+            return '-';
+        }
+        if (is_numeric($type)) {
+            $desc = !empty(trim((string) ($first->description ?? ''))) ? trim($first->description) : null;
+            return $desc ?? '-';
+        }
+        return $type;
     }
 }

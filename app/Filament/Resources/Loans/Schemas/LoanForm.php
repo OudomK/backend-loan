@@ -27,7 +27,7 @@ class LoanForm
                                     ->unique(ignoreRecord: true),
                                 Select::make('borrower_id')
                                     ->relationship('borrower', 'id')
-                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->first_name} {$record->last_name} ({$record->customer_code})")
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name} ({$record->customer_code})")
                                     ->searchable()
                                     ->required(),
                                 Select::make('status')
@@ -109,12 +109,12 @@ class LoanForm
                             ->schema([
                                 Select::make('co_borrower_id')
                                     ->relationship('coBorrower', 'id')
-                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->first_name} {$record->last_name}")
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
                                     ->searchable(),
                                 TextInput::make('co_borrower_relationship'),
                                 Select::make('guarantor_id')
                                     ->relationship('guarantor', 'id')
-                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->first_name} {$record->last_name}")
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
                                     ->searchable(),
                                 TextInput::make('guarantor_relationship'),
                             ]),

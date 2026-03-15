@@ -24,7 +24,7 @@ class ArrearReportController extends Controller
             'coBorrower:id,first_name,last_name,phone',
             'guarantor:id,first_name,last_name,phone',
             'officer:id,name',
-            'collaterals:id,loan_id,type'
+            'collaterals:id,loan_id,type,description'
         ])
             ->select([
                 'id',
@@ -94,15 +94,17 @@ class ArrearReportController extends Controller
 
         // 2. Filter by Aging in PHP (if necessary)
         $filtered = $loans->filter(function ($loan) use ($referenceDate, $reportType) {
-            if (!$loan->earliest_arrear_date)
+            if (!$loan->earliest_arrear_date) {
                 return false;
+            }
 
             if ($reportType === 'all')
                 return true;
 
-            $aging = $referenceDate->diffInDays(Carbon::parse($loan->earliest_arrear_date));
-            return $aging >= 1 && $aging < 30;
-        });
+            $aging = abs($referenceDate->diffInDays(Carbon::parse($loan->earliest_arrear_date)));
+
+            return $aging >= 1 && $aging <= 30;
+        })->values();
 
         return ArrearReportResource::collection($filtered)->resolve();
     }

@@ -44,7 +44,7 @@ class RepaymentController extends Controller
                 $symbol = (strpos($loan->currency, 'KHR') !== false) ? '៛' : '$';
                 return [
                     'id' => (string) $loan->id,
-                    'name' => $loan->borrower->first_name . ' ' . $loan->borrower->last_name,
+                    'name' => $loan->borrower->last_name . ' ' . $loan->borrower->first_name,
                     'code' => $loan->loan_code ?? ('L-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT)),
                     'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
                     'amount' => $symbol . number_format($dueAmount, 2),
@@ -66,6 +66,7 @@ class RepaymentController extends Controller
             })
             ->get();
 
+        /** @var \App\Models\Loan $loan */
         foreach ($overdueLoans as $loan) {
             $overduePayments = $loan->payments()
                 ->where('payment_date', '<', $today->toDateString())
@@ -79,7 +80,7 @@ class RepaymentController extends Controller
                 $dpd = (int) $today->diffInDays(Carbon::parse($payment->payment_date));
                 $overdueRows->push([
                     'id' => (string) $loan->id,
-                    'name' => $loan->borrower->first_name . ' ' . $loan->borrower->last_name,
+                    'name' => $loan->borrower->last_name . ' ' . $loan->borrower->first_name,
                     'code' => $loan->loan_code ?? ('L-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT)),
                     'payment_date' => Carbon::parse($payment->payment_date)->format('Y-m-d'),
                     'amount' => $symbol . number_format($dueAmount, 2),
@@ -102,7 +103,7 @@ class RepaymentController extends Controller
      */
     public function search(Request $request)
     {
-        $query = $request->get('query');
+        $query = $request->input('query');
 
         $loans = Loan::with('borrower')
             ->where('status', 'active')
@@ -119,7 +120,7 @@ class RepaymentController extends Controller
         return response()->json($loans->map(function ($loan) {
             return [
                 'id' => (string) $loan->id,
-                'name' => $loan->borrower->first_name . ' ' . $loan->borrower->last_name,
+                'name' => $loan->borrower->last_name . ' ' . $loan->borrower->first_name,
                 'code' => $loan->loan_code ?? ('L-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT)),
                 'principal' => (string) $loan->amount,
                 'interest' => (string) $loan->interest_rate, // Simple mapping for search
@@ -128,16 +129,26 @@ class RepaymentController extends Controller
     }
 
     /**
-     * Get unpaid installments for a specific loan.
+     * Get unpaid installments for a specific loan and fee status (for one-time fee display).
      */
     public function getInstallments($loan_id)
     {
+        $loan = Loan::find($loan_id);
         $installments = Payment::where('loan_id', $loan_id)
             ->whereRaw('total_paid < (principal_amount + interest_amount)')
             ->orderBy('payment_date', 'asc')
             ->get();
 
-        return response()->json($installments);
+        $feeType = $loan ? (trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time') : 'one_time';
+        $totalFee = $loan ? ($loan->amount * ((float) ($loan->admin_fee ?? 0) / 100)) : 0;
+        $feePaidSoFar = (float) RepaymentTransaction::where('loan_id', $loan_id)->sum('fee_paid');
+
+        return response()->json([
+            'installments' => $installments,
+            'fee_type' => $feeType,
+            'total_fee' => round($totalFee, 2),
+            'fee_paid_so_far' => round($feePaidSoFar, 2),
+        ]);
     }
 
     /**
@@ -153,12 +164,14 @@ class RepaymentController extends Controller
             'repayment_type' => 'required|string|in:Normal,Prepayment,Partial,Pay Off,Refinance,Reschedule,Recovery',
             'transaction_date' => 'required|date',
             'penalty_amount' => 'nullable|numeric|min:0',
+            'fee_amount' => 'nullable|numeric|min:0',
         ]);
 
         return DB::transaction(function () use ($validated) {
             $loan = Loan::findOrFail($validated['loan_id']);
             $penaltyPaid = $validated['penalty_amount'] ?? 0;
-            $remainingPaid = $validated['amount_paid'] - $penaltyPaid;
+            $feePaid = $validated['fee_amount'] ?? 0;
+            $remainingPaid = $validated['amount_paid'] - $penaltyPaid - $feePaid;
 
             // Fetch unpaid installments
             $installments = Payment::where('loan_id', $loan->id)
@@ -195,6 +208,7 @@ class RepaymentController extends Controller
                 'principal_paid' => 0, // Will update after distribution
                 'interest_paid' => 0,
                 'penalty_paid' => $penaltyPaid,
+                'fee_paid' => $feePaid,
                 'payment_method' => $validated['payment_method'],
                 'repayment_type' => $validated['repayment_type'],
                 'transaction_date' => $validated['transaction_date'],
@@ -203,36 +217,43 @@ class RepaymentController extends Controller
             $totalPrincipalPaid = 0;
             $totalInterestPaid = 0;
             $totalPenaltyPaid = $penaltyPaid;
+            $lastUpdatedInst = null;
 
             /** @var \App\Models\Payment $inst */
             foreach ($installments as $inst) {
                 if ($remainingPaid <= 0)
                     break;
 
-                $dueInterest = $inst->interest_amount - ($inst->total_paid >= $inst->interest_amount ? $inst->interest_amount : $inst->total_paid);
-                // Simple logic: total_paid tracks progress towards (princ + interest). 
-                // Let's refine: assume total_paid first covers interest, then principal.
-
-                // 1. Penalty (not handled yet in schedule, but could be added here)
-                // For now, let's skip penalty distribution unless we have a penalty field in installments that is actually used.
-
-                // 2. Interest
+                // Interest first, then principal (standard allocation)
+                $dueInterest = $inst->interest_amount - min($inst->interest_amount, $inst->total_paid);
                 $interestToPay = round(min($remainingPaid, $dueInterest), 2);
                 $totalInterestPaid += $interestToPay;
                 $remainingPaid -= $interestToPay;
 
-                // 3. Principal
+                $principalToPay = 0;
                 if ($remainingPaid > 0.001) {
-                    $duePrincipal = $inst->principal_amount - max(0, $inst->total_paid + $interestToPay - $inst->interest_amount);
+                    $principalPaidSoFar = max(0, $inst->total_paid - $inst->interest_amount);
+                    $duePrincipal = $inst->principal_amount - $principalPaidSoFar;
                     $principalToPay = round(min($remainingPaid, $duePrincipal), 2);
                     $totalPrincipalPaid += $principalToPay;
                     $remainingPaid -= $principalToPay;
-                } else {
-                    $principalToPay = 0;
                 }
 
                 $inst->total_paid = round($inst->total_paid + $interestToPay + $principalToPay, 2);
                 $inst->save();
+                $lastUpdatedInst = $inst;
+            }
+
+            // Avoid losing cents from rounding: apply any tiny remainder to last touched installment
+            if ($lastUpdatedInst && $remainingPaid > 0.001 && $remainingPaid < 1) {
+                $cap = ($lastUpdatedInst->principal_amount + $lastUpdatedInst->interest_amount) - $lastUpdatedInst->total_paid;
+                $add = round(min($remainingPaid, $cap), 2);
+                if ($add > 0) {
+                    $lastUpdatedInst->total_paid = round($lastUpdatedInst->total_paid + $add, 2);
+                    $lastUpdatedInst->save();
+                    $totalPrincipalPaid += $add;
+                    $remainingPaid -= $add;
+                }
             }
 
             // Update transaction details
@@ -245,13 +266,13 @@ class RepaymentController extends Controller
             // Special handling for Pay Off: If all principal is settled, mark loan as completed
             if ($validated['repayment_type'] === 'Pay Off') {
                 $unpaidPrincipalCount = Payment::where('loan_id', $loan->id)
-                    ->whereRaw('total_paid < principal_amount')
+                    ->whereRaw('total_paid < COALESCE(principal_amount, 0)')
                     ->count();
 
                 if ($unpaidPrincipalCount === 0) {
                     // All principal is paid. Force all installments to 'fully paid' state by setting total_paid = principal+interest
                     // This effectively waives any remaining interest.
-                    Payment::where('loan_id', $loan->id)->each(function (\App\Models\Payment $p) {
+                    Payment::where('loan_id', $loan->id)->each(function (Payment $p) {
                         $p->update(['total_paid' => $p->principal_amount + $p->interest_amount]);
                     });
                 }
@@ -259,12 +280,15 @@ class RepaymentController extends Controller
 
             // Check if loan is completed
             $unpaidCount = Payment::where('loan_id', $loan->id)
-                ->whereRaw('total_paid < (principal_amount + interest_amount)')
+                ->whereRaw('total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0))')
                 ->count();
 
             if ($unpaidCount === 0) {
                 $loan->update(['status' => 'completed']);
             }
+
+            // Keep loans.total_paid in sync with sum of payments
+            $loan->update(['total_paid' => $loan->payments()->sum('total_paid')]);
 
             return response()->json([
                 'message' => 'Repayment processed successfully',

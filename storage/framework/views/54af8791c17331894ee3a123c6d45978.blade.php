@@ -1,0 +1,1 @@
+{{ $attributes->get('wire:key') }}.panel

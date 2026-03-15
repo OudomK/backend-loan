@@ -23,7 +23,7 @@ class RepaymentTransactionForm
                             ->schema([
                                 Select::make('loan_id')
                                     ->relationship('loan', 'id')
-                                    ->getOptionLabelFromRecordUsing(fn($record) => "Loan: {$record->loan_code} - {$record->borrower?->first_name} {$record->borrower?->last_name}")
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "Loan: {$record->loan_code} - {$record->borrower?->last_name} {$record->borrower?->first_name}")
                                     ->searchable()
                                     ->required(),
                                 Select::make('collector_id')

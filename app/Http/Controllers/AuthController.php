@@ -32,18 +32,34 @@ class AuthController extends Controller
         $user->tokens()->where('name', 'app')->delete(); // one token per device
         $token = $user->createToken('app')->plainTextToken;
 
+        $role = $user->role ?? 'Staff';
+        $roles = collect();
+        $permissions = collect();
+        try {
+            if (method_exists($user, 'roles') && $user->relationLoaded('roles') === false) {
+                $user->load('roles');
+            }
+            $roles = $user->roles?->pluck('name') ?? collect();
+            if ($roles->isNotEmpty()) {
+                $role = $roles->first();
+            }
+            $permissions = $user->roles?->flatMap(fn ($r) => $r->permissions ?? collect())->pluck('name')
+                ->merge($user->permissions?->pluck('name') ?? collect())
+                ->unique()
+                ->values() ?? collect();
+        } catch (\Throwable $e) {
+            // Spatie not set up or no roles: use $user->role only
+        }
+
         return response()->json([
             'token' => $token,
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'role' => $user->roles->pluck('name')->first() ?? $user->role ?? 'Staff',
-                'roles' => $user->roles->pluck('name'),
-                'permissions' => $user->roles->flatMap(fn($role) => $role->permissions)->pluck('name')
-                    ->merge($user->permissions->pluck('name'))
-                    ->unique()
-                    ->values(),
+                'role' => $role,
+                'roles' => $roles,
+                'permissions' => $permissions,
             ],
         ]);
     }

@@ -6,57 +6,26 @@ use App\Models\Borrower;
 use App\Models\CoBorrower;
 use App\Models\Guarantor;
 use App\Models\Loan;
-use App\Models\PaymentSchedule;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 
 class CustomerHistoryController extends Controller
 {
-    /**
-     * Build "payments" array for frontend from payment_schedules (same shape as before).
-     */
-    private function scheduleToPaymentsShape(Collection $schedules): array
-    {
-        return $schedules->sortBy('installment_number')->values()->map(function (PaymentSchedule $schedule) {
-            $paid = $schedule->payments->sum('total_paid');
-            $paidPenalty = $schedule->payments->sum('penalty_amount');
-            $firstPayment = $schedule->payments->first();
-            return [
-                'id' => $schedule->id,
-                'payment_number' => $schedule->installment_number,
-                'principal_amount' => (float) $schedule->principal_due,
-                'interest_amount' => (float) $schedule->interest_due,
-                // Fee column is separated from paid penalty.
-                'fee_amount' => (float) $schedule->penalty_due,
-                'penalty_amount' => (float) $paidPenalty,
-                'total_paid' => (float) $paid,
-                'payment_date' => \Carbon\Carbon::parse($schedule->due_date)->format('Y-m-d'),
-                'payment_method' => $firstPayment?->payment_method,
-                'updated_at' => $firstPayment
-                    ? $firstPayment->updated_at?->toIso8601String()
-                    : $schedule->updated_at->toIso8601String(),
-            ];
-        })->all();
-    }
-
+    /** Build payments array for frontend from payments table (schedule + total_paid per installment). */
     private function loanToHistoryArray(Loan $loan): array
     {
         $arr = $loan->toArray();
-        $arr['payments'] = $loan->paymentSchedules->isNotEmpty()
-            ? $this->scheduleToPaymentsShape($loan->paymentSchedules)
-            : $loan->payments->map(fn ($p) => [
-                'id' => $p->id,
-                'payment_number' => $p->payment_number,
-                'principal_amount' => (float) $p->principal_amount,
-                'interest_amount' => (float) $p->interest_amount,
-                // Legacy payments table has no separate fee column.
-                'fee_amount' => 0.0,
-                'penalty_amount' => (float) $p->penalty_amount,
-                'total_paid' => (float) $p->total_paid,
-                'payment_date' => $p->payment_date,
-                'payment_method' => $p->payment_method,
-                'updated_at' => $p->updated_at?->toIso8601String() ?? '',
-            ])->values()->all();
+        $arr['payments'] = $loan->payments->sortBy('payment_number')->values()->map(fn ($p) => [
+            'id' => $p->id,
+            'payment_number' => $p->payment_number,
+            'principal_amount' => (float) $p->principal_amount,
+            'interest_amount' => (float) $p->interest_amount,
+            'fee_amount' => 0.0,
+            'penalty_amount' => (float) $p->penalty_amount,
+            'total_paid' => (float) $p->total_paid,
+            'payment_date' => $p->payment_date,
+            'payment_method' => $p->payment_method,
+            'updated_at' => $p->updated_at?->toIso8601String() ?? '',
+        ])->all();
         return $arr;
     }
     /**
@@ -97,7 +66,7 @@ class CustomerHistoryController extends Controller
     {
         return [
             'id' => $item->id,
-            'name' => $item->first_name . ' ' . $item->last_name,
+            'name' => $item->last_name . ' ' . $item->first_name,
             'code' => $item->customer_code,
             'phone' => $item->phone,
             'role' => $role,
@@ -124,19 +93,19 @@ class CustomerHistoryController extends Controller
             case 'borrower':
                 $customer = Borrower::find($id);
                 $loans = Loan::where('borrower_id', $id)
-                    ->with(['paymentSchedules.payments', 'payments', 'collaterals', 'coBorrower', 'guarantor', 'officer'])
+                    ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer'])
                     ->get();
                 break;
             case 'coborrower':
                 $customer = CoBorrower::find($id);
                 $loans = Loan::where('co_borrower_id', $id)
-                    ->with(['paymentSchedules.payments', 'payments', 'collaterals', 'borrower', 'guarantor', 'officer'])
+                    ->with(['payments', 'collaterals', 'borrower', 'guarantor', 'officer'])
                     ->get();
                 break;
             case 'guarantor':
                 $customer = Guarantor::find($id);
                 $loans = Loan::where('guarantor_id', $id)
-                    ->with(['paymentSchedules.payments', 'payments', 'collaterals', 'borrower', 'coBorrower', 'officer'])
+                    ->with(['payments', 'collaterals', 'borrower', 'coBorrower', 'officer'])
                     ->get();
                 break;
         }
@@ -165,7 +134,7 @@ class CustomerHistoryController extends Controller
 
         $contractNo = trim($contractNo);
         $loan = Loan::where('loan_code', $contractNo)
-            ->with(['paymentSchedules.payments', 'payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'borrower'])
+            ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'borrower'])
             ->first();
 
         if (!$loan) {
@@ -179,7 +148,7 @@ class CustomerHistoryController extends Controller
         }
 
         $loans = Loan::where('borrower_id', $borrowerId)
-            ->with(['paymentSchedules.payments', 'payments', 'collaterals', 'coBorrower', 'guarantor', 'officer'])
+            ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer'])
             ->get();
 
         $loansPayload = $loans->map(fn (Loan $l) => $this->loanToHistoryArray($l))->values()->all();

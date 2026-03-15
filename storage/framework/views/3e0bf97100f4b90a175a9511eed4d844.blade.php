@@ -1,0 +1,1 @@
+{{ $this->getId() }}.table.records.{{ $recordKey }}

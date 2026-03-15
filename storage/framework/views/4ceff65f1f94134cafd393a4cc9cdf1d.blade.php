@@ -1,0 +1,1 @@
+global-search.field.input

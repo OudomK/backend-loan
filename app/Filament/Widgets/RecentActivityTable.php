@@ -16,12 +16,12 @@ class RecentActivityTable extends BaseWidget
     public function table(Table $table): Table
     {
         return $table
-            ->query(
-                RepaymentTransaction::query()
+            ->query(function () {
+                return RepaymentTransaction::query()
                     ->with(['loan.borrower'])
                     ->latest('transaction_date')
-                    ->limit(5)
-            )
+                    ->limit(5);
+            })
             ->columns([
                 Tables\Columns\TextColumn::make('transaction_date')
                     ->label('Date')
@@ -29,7 +29,7 @@ class RecentActivityTable extends BaseWidget
                     ->sortable(),
                 Tables\Columns\TextColumn::make('loan.borrower.full_name')
                     ->label('Borrower')
-                    ->getStateUsing(fn($record) => ($record->loan->borrower->first_name ?? '') . ' ' . ($record->loan->borrower->last_name ?? '')),
+                    ->getStateUsing(fn($record) => ($record->loan->borrower->last_name ?? '') . ' ' . ($record->loan->borrower->first_name ?? '')),
                 Tables\Columns\TextColumn::make('amount_paid')
                     ->label('Amount')
                     ->money('USD')

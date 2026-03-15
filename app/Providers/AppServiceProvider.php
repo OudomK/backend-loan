@@ -4,7 +4,9 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use App\Listeners\AuthEventSubscriber;
+use App\Models\User;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,5 +24,14 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Event::subscribe(AuthEventSubscriber::class);
+
+        // Let super_admin (users.role column) bypass all Filament/Shield authorization
+        // so the Admin Panel shows all resources/pages instead of only 4.
+        Gate::before(function (?object $user, string $ability): ?bool {
+            if ($user instanceof User && strtolower((string) ($user->role ?? '')) === 'super_admin') {
+                return true;
+            }
+            return null;
+        });
     }
 }

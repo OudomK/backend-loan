@@ -14,7 +14,7 @@ class SavingAccountController extends Controller
     {
         $savings = SavingAccount::with('saver')->get();
         return $savings->map(function ($a) {
-            $saverName = $a->saver ? trim($a->saver->first_name . ' ' . $a->saver->last_name) : 'N/A';
+            $saverName = $a->saver ? trim($a->saver->last_name . ' ' . $a->saver->first_name) : 'N/A';
             return [
                 'id' => $a->id,
                 'account_number' => $a->account_number,

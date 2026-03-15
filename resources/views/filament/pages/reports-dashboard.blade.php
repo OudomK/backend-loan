@@ -1,6 +1,7 @@
 <x-filament-panels::page>
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         @foreach($this->getReportGroups() as $key => $group)
+            @php /** @var array{label:string, description:string, reports:array} $group */ @endphp
             <div class="space-y-3">
                 {{-- Category Header --}}
                 <div class="px-1">

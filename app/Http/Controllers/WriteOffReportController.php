@@ -47,7 +47,7 @@ class WriteOffReportController extends Controller
                     'loan_code' => $loan->loan_code,
                     'product_name' => $loan->product->name ?? 'General Loan',
                     'customer_code' => $loan->borrower->customer_code ?? '',
-                    'customer_name' => ($loan->borrower->first_name ?? '') . ' ' . ($loan->borrower->last_name ?? ''),
+                    'customer_name' => ($loan->borrower->last_name ?? '') . ' ' . ($loan->borrower->first_name ?? ''),
                     'village' => $loan->borrower->village ?? '',
                     'commune' => $loan->borrower->commune ?? '',
                     'district' => $loan->borrower->district ?? '',

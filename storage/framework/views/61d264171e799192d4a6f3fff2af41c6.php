@@ -1,0 +1,1 @@
+{{ isset($this) ? <?php /**PATH D:\Real Project\backend\storage\framework\views/040e7633ea7a2abe503fd832b914c616.blade.php ENDPATH**/ ?>

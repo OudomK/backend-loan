@@ -95,7 +95,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('guarantors', GuarantorController::class);
 
     Route::apiResource('loan-products', LoanProductController::class);
-    Route::get('/loan-officers', [LoanOfficerController::class, 'index']);
+    Route::apiResource('loan-officers', LoanOfficerController::class);
     Route::post('loans/preview-schedule', [LoanController::class, 'previewSchedule']);
     Route::get('loans/suggest-code', [LoanController::class, 'suggestCode']);
     Route::apiResource('loans', LoanController::class);

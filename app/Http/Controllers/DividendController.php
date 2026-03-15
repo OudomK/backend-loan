@@ -164,7 +164,7 @@ class DividendController extends Controller
             return [
                 'holder_id' => $share->holder_id,
                 'holder_name' => $share->borrower
-                    ? $share->borrower->first_name . ' ' . $share->borrower->last_name
+                    ? $share->borrower->last_name . ' ' . $share->borrower->first_name
                     : 'Unknown',
                 'share_qty' => $share->share_qty,
                 'amount' => $share->share_qty * $perShare,
@@ -245,7 +245,7 @@ class DividendController extends Controller
                     // Shareholder Info
                     'holder_id' => $share->holder_id,
                     'holder_name' => $borrower
-                        ? trim($borrower->first_name . ' ' . $borrower->last_name)
+                        ? trim($borrower->last_name . ' ' . $borrower->first_name)
                         : 'Unknown',
                     'certificate_no' => $share->certificate_no,
 

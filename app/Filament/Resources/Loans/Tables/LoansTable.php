@@ -21,7 +21,7 @@ class LoansTable
                     ->sortable(),
                 TextColumn::make('borrower.id')
                     ->label('Borrower')
-                    ->getStateUsing(fn($record) => "{$record->borrower?->first_name} {$record->borrower?->last_name}")
+                    ->getStateUsing(fn($record) => "{$record->borrower?->last_name} {$record->borrower?->first_name}")
                     ->searchable(['borrower.first_name', 'borrower.last_name'])
                     ->sortable(),
                 TextColumn::make('amount')

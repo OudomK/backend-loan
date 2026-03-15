@@ -29,7 +29,7 @@ class CapitalShareController extends Controller
             $type = 'Individual';
 
             if ($s->investor) {
-                $name = $s->investor->first_name . ' ' . $s->investor->last_name;
+                $name = $s->investor->last_name . ' ' . $s->investor->first_name;
                 $code = $s->investor->customer_code;
                 $type = $s->investor->customer_type ?? 'Individual';
             } elseif ($s->lender) {
@@ -340,7 +340,7 @@ class CapitalShareController extends Controller
             'description' => 'nullable|string',
         ]);
 
-        return \Illuminate\Support\Facades\DB::transaction(function () use ($share, $validated) {
+        return DB::transaction(function () use ($share, $validated) {
             $schedule = $share->repayment_schedule ?? [];
             $found = false;
             foreach ($schedule as &$item) {
@@ -386,7 +386,7 @@ class CapitalShareController extends Controller
                 'payment_method' => $validated['payment_method'],
                 'transaction_date' => $validated['transaction_date'],
                 'description' => $validated['description'] ?? "Repayment for Period " . $validated['period'],
-                'performed_by' => \Illuminate\Support\Facades\Auth::id(),
+                'performed_by' => Auth::id(),
             ]);
 
             return response()->json([

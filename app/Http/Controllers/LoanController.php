@@ -70,6 +70,7 @@ class LoanController extends Controller
             'payment_frequency' => 'nullable|string',
             'loan_officer_id' => 'nullable|exists:loan_officers,id',
             'admin_fee' => 'nullable|numeric',
+            'admin_fee_type' => 'nullable|string|in:one_time,monthly',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
             'guarantor_id' => 'nullable|exists:co_borrowers,id', // Note: borrower relationship table
@@ -77,11 +78,16 @@ class LoanController extends Controller
             'product_id' => 'nullable|exists:loan_products,id',
             'collaterals' => 'nullable|array',
             'collaterals.*.type' => 'nullable|string',
+            'collaterals.*.owner_name' => 'nullable|string',
             'collaterals.*.value' => 'nullable|numeric',
             'collaterals.*.currency' => 'nullable|string',
             'collaterals.*.description' => 'nullable|string',
             'custom_schedule' => 'nullable|array', // For negotiable loans
         ]);
+
+        // Ensure admin_fee is always set from request (fee %)
+        $validated['admin_fee'] = (float) ($request->input('admin_fee') ?? $validated['admin_fee'] ?? 0);
+        $validated['admin_fee_type'] = $request->input('admin_fee_type') ?: ($validated['admin_fee_type'] ?? 'one_time');
 
         // Calculate Cycle
         $cycle = Loan::where('borrower_id', $validated['borrower_id'])->count() + 1;
@@ -254,7 +260,7 @@ class LoanController extends Controller
     {
         return response()->json($loan->load([
             'borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals',
-            'payments', 'paymentSchedules.payments', 'product'
+            'payments', 'product'
         ]));
     }
 
@@ -270,6 +276,7 @@ class LoanController extends Controller
             'status' => 'sometimes|required|in:pending,active,completed,paid_off',
             'purpose' => 'nullable|string|max:255',
             'admin_fee' => 'nullable|numeric',
+            'admin_fee_type' => 'nullable|string|in:one_time,monthly',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
             'guarantor_id' => 'nullable|exists:guarantors,id',

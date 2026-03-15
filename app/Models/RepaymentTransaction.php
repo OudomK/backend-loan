@@ -12,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property float $principal_paid
  * @property float $interest_paid
  * @property float $penalty_paid
+ * @property float $fee_paid
  * @property string $payment_method
  * @property string $repayment_type
  * @property string $transaction_date
@@ -28,6 +29,7 @@ class RepaymentTransaction extends Model
         'principal_paid',
         'interest_paid',
         'penalty_paid',
+        'fee_paid',
         'payment_method',
         'repayment_type',
         'transaction_date'

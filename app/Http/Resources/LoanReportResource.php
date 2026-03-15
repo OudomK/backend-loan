@@ -24,15 +24,15 @@ class LoanReportResource extends JsonResource
             'disb_date' => $loan->start_date,
             'loan_no' => $loan->loan_code,
             'cid' => $borrower->customer_code,
-            'name' => $borrower->first_name . ' ' . $borrower->last_name,
+            'name' => $borrower->last_name . ' ' . $borrower->first_name,
             'village' => $borrower->village,
             'commune' => $borrower->commune,
             'district' => $borrower->district,
             'province' => $borrower->province,
 
-            'coborrower_name' => $loan->coBorrower ? $loan->coBorrower->first_name . ' ' . $loan->coBorrower->last_name : null,
+            'coborrower_name' => $loan->coBorrower ? $loan->coBorrower->last_name . ' ' . $loan->coBorrower->first_name : null,
             'coborrower_tel' => $loan->coBorrower?->phone,
-            'guarantor_name' => $loan->guarantor ? $loan->guarantor->first_name . ' ' . $loan->guarantor->last_name : null,
+            'guarantor_name' => $loan->guarantor ? $loan->guarantor->last_name . ' ' . $loan->guarantor->first_name : null,
             'guarantor_tel' => $loan->guarantor?->phone,
 
             'disb_amount' => $loan->amount,
@@ -48,7 +48,7 @@ class LoanReportResource extends JsonResource
             're_finance' => $loan->refinanced_amount,
             'admin_fee' => $loan->admin_fee,
             're_finance_fee' => $loan->refinance_fee,
-            'collateral_type' => $loan->collaterals->first()?->type,
+            'collateral_type' => $this->getCollateralTypeLabel($loan),
             'co_disburse' => $loan->officer?->name,
             'co_repay' => $this->collector?->name ?? $loan->officer?->name,
 
@@ -59,10 +59,30 @@ class LoanReportResource extends JsonResource
             'recovery' => $this->repayment_type === 'Recovery' ? $this->amount_paid : 0,
             'prepayment' => $this->repayment_type === 'Prepayment' ? $this->amount_paid : 0,
             'withd_prepayment' => 0,
-            'total_paid' => $this->amount_paid,
+            // Total Paid = principal + interest only; penalty is shown in penalty_paid column
+            'total_paid' => (float) $this->principal_paid + (float) $this->interest_paid,
             'type_of_payment' => $this->repayment_type,
             'payment_status' => $loan->status,
             'fee_paid' => 0,
         ];
+    }
+
+    /**
+     * Show collateral type (text). If type looks like a number (e.g. value stored in type by mistake), use description or null.
+     */
+    private function getCollateralTypeLabel($loan): ?string
+    {
+        $first = $loan->collaterals->first();
+        if (!$first) {
+            return null;
+        }
+        $type = trim((string) $first->type);
+        if ($type === '') {
+            return null;
+        }
+        if (is_numeric($type)) {
+            return !empty(trim((string) ($first->description ?? ''))) ? trim($first->description) : null;
+        }
+        return $type;
     }
 }

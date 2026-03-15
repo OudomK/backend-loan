@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $id
  * @property int $borrower_id
  * @property float $amount
+ * @property float $total_paid
  * @property float $interest_rate
  * @property int $duration_months
  * @property float $monthly_payment
@@ -22,20 +23,21 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $payment_frequency
  * @property int|null $loan_officer_id
  * @property float $admin_fee
+ * @property string $admin_fee_type one_time|monthly
  * @property int|null $refinanced_from_loan_id
  * @property float $refinance_fee
  * @property float $refinanced_amount
  * @property int $loan_cycle
  * @property-read \App\Models\Borrower $borrower
  * @property-read \Illuminate\Database\Eloquent\Collection|\App\Models\Payment[] $payments
- * @property-read \Illuminate\Database\Eloquent\Collection|\App\Models\PaymentSchedule[] $paymentSchedules
- */
+  */
 class Loan extends Model
 {
 
     protected $fillable = [
         'borrower_id',
         'amount',
+        'total_paid',
         'interest_rate',
         'duration_months',
         'monthly_payment',
@@ -52,6 +54,7 @@ class Loan extends Model
         'payment_frequency',
         'loan_officer_id',
         'admin_fee',
+        'admin_fee_type',
         'refinanced_from_loan_id',
         'refinance_fee',
         'refinanced_amount',
@@ -116,8 +119,4 @@ class Loan extends Model
         return $this->hasMany(Payment::class);
     }
 
-    public function paymentSchedules(): \Illuminate\Database\Eloquent\Relations\HasMany
-    {
-        return $this->hasMany(PaymentSchedule::class);
     }
-}
