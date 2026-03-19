@@ -12,102 +12,140 @@ class WriteOffCollectionReportController extends Controller
     public function index(Request $request)
     {
         $fromDate = $request->query('from_date');
-        $toDate = $request->query('to_date');
         $currency = $request->query('currency');
+        $toDateStr = $request->query('to_date');
+        $referenceDate = $toDateStr ? Carbon::parse($toDateStr) : Carbon::today();
+        $refDateStr = $referenceDate->toDateString();
+        $toDateStr = $refDateStr; // Use standardized YYYY-MM-DD for mapping too
 
         // Main Query
-        $query = Loan::query()
+        $query = Loan::with([
+            'borrower',
+            'coBorrower',
+            'guarantor',
+            'officer',
+            'collaterals'
+        ])
             ->select([
-                'loans.id',
-                'loans.loan_code',
-                'loans.amount',
-                'loans.currency',
-                'loans.interest_rate',
-                'loans.duration_months',
-                'loans.start_date',
-                'loans.maturity_date',
-                'loans.status',
-                'loans.recovery_amount',
-                'loans.borrower_id',
-                'loans.co_borrower_id',
-                'loans.guarantor_id',
-                'loans.loan_officer_id',
-                'borrowers.first_name as borrower_first',
-                'borrowers.last_name as borrower_last',
-                'borrowers.phone as borrower_phone',
-                'borrowers.village',
-                'borrowers.commune',
-                'borrowers.district',
-                'borrowers.province',
-                'co_borrowers.first_name as co_first',
-                'co_borrowers.last_name as co_last',
-                'guarantors.first_name as gua_first',
-                'guarantors.last_name as gua_last',
-                'loan_officers.name as officer_name',
-                'loans.start_date as disbursement_date',
-                DB::raw("(SELECT type FROM collaterals WHERE collaterals.loan_id = loans.id ORDER BY collaterals.id ASC LIMIT 1) as collateral_type"),
-                DB::raw("(SELECT SUM(GREATEST(0, total_paid - interest_amount)) FROM payments WHERE payments.loan_id = loans.id) as total_principal_paid"),
-                DB::raw("DATEDIFF(NOW(), loans.start_date) as aging"),
-            ])
-            ->leftJoin('borrowers', 'loans.borrower_id', '=', 'borrowers.id')
-            ->leftJoin('co_borrowers', 'loans.co_borrower_id', '=', 'co_borrowers.id')
-            ->leftJoin('guarantors', 'loans.guarantor_id', '=', 'guarantors.id')
-            ->leftJoin('loan_officers', 'loans.loan_officer_id', '=', 'loan_officers.id');
+                'id',
+                'loan_code',
+                'amount',
+                'currency',
+                'interest_rate',
+                'duration_months',
+                'start_date',
+                'maturity_date',
+                'status',
+                'recovery_amount',
+                'written_off_at',
+                'borrower_id',
+                'co_borrower_id',
+                'guarantor_id',
+                'loan_officer_id',
+                'aging',
+            ]);
 
-        if ($fromDate && $toDate) {
-            $query->whereBetween('loans.start_date', [$fromDate, $toDate]);
+        if ($toDateStr) {
+            $query->where('start_date', '<=', $toDateStr);
         }
 
-        if ($currency) {
-            $query->where('loans.currency', $currency);
+        // Only include loans that were not closed/canceled before the report date
+        $query->whereIn('status', ['active', 'written_off']);
+
+        if ($currency && $currency !== 'all') {
+            $query->where('currency', $currency);
         }
 
-        $loans = $query->get()->map(function ($loan) {
-            // Calculate Aging (Days Overdue)
-            // In a real system, this would look at the last unpaid installment
-            // For this report, we'll mock it based on start_date for demonstration
-            // unless we have an installments table to check.
+        // Add Eloquent Subqueries (Now safer without joins)
+        $query->addSelect([
+            'earliest_arrear_date' => \App\Models\Payment::select('payment_date')
+                ->whereColumn('loan_id', 'loans.id')
+                ->where('payment_date', '<', $refDateStr)
+                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
+                ->orderBy('payment_date', 'asc')
+                ->limit(1),
 
-            $borrowerName = $loan->borrower_last . ' ' . $loan->borrower_first;
-            $coName = $loan->co_last ? ($loan->co_last . ' ' . $loan->co_first) : '';
-            $guaName = $loan->gua_last ? ($loan->gua_last . ' ' . $loan->gua_first) : '';
+            'arrear_principal' => \App\Models\Payment::selectRaw('SUM(principal_amount - GREATEST(0, total_paid - interest_amount))')
+                ->whereColumn('loan_id', 'loans.id')
+                ->where('payment_date', '<', $refDateStr)
+                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)'),
 
-            $aging = $loan->aging ?? 0;
+            'total_principal_paid' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, total_paid - interest_amount))')
+                ->whereColumn('loan_id', 'loans.id'),
+        ]);
 
-            // Classification Logic (Standard, SM, Sub, Doubtful, Loss)
+        $loans = $query->get()->map(function ($loan) use ($toDateStr) {
+            $borrower = $loan->borrower;
+            $borrowerName = $borrower ? ($borrower->last_name . ' ' . $borrower->first_name) : '';
+            
+            $co = $loan->coBorrower;
+            $coName = $co ? ($co->last_name . ' ' . $co->first_name) : '';
+            
+            $gua = $loan->guarantor;
+            $guaName = $gua ? ($gua->last_name . ' ' . $gua->first_name) : '';
+
+            // Calculate DPD (Days Past Due)
+            $aging = 0;
+            $isToday = Carbon::parse($toDateStr)->isToday();
+
+            if ($isToday) {
+                // Use the persistent field for today's report
+                $aging = (int) ($loan->aging ?? 0);
+            } else {
+                // Fallback to dynamic calculation for historical reports
+                $refDate = Carbon::parse($toDateStr)->startOfDay();
+                if ($loan->earliest_arrear_date) {
+                    $earliest = Carbon::parse($loan->earliest_arrear_date)->startOfDay();
+                    $aging = (int) abs($refDate->diffInDays($earliest, false));
+                }
+            }
+
+            // Secondary fallback: If there is arrear principal, aging MUST be at least 1
+            if ($aging <= 0 && ($loan->arrear_principal ?? 0) > 0) {
+                $aging = 1; 
+            }
+
+            // Classification Logic (NBC Standard: 30, 90, 180, 360)
             $classification = "Standard Loan";
-            if ($aging > 360)
+            if ($loan->written_off_at) {
                 $classification = "Loss Loan";
-            else if ($aging > 180)
+            } else if ($aging >= 360) {
+                $classification = "Loss Loan";
+            } else if ($aging >= 180) {
                 $classification = "Doubtful Loan";
-            else if ($aging > 90)
+            } else if ($aging >= 90) {
                 $classification = "Substandard Loan";
-            else if ($aging > 30)
+            } else if ($aging >= 30) {
                 $classification = "Special Mention Loan";
+            }
 
-            // Calculate outstanding and arrear dynamically
+            // Outstanding balance vs Arrear amount
             $principalPaid = $loan->total_principal_paid ?? 0;
             $outstanding = max(0, $loan->amount - $principalPaid);
+            $arrearPrincipal = $loan->arrear_principal ?? 0;
+
+            // First collateral type
+            $collateralType = $loan->collaterals->first()?->type ?? '';
 
             return [
-                'disb_date' => $loan->disbursement_date,
+                'disb_date' => $loan->start_date,
                 'loan_code' => $loan->loan_code,
                 'customer_code' => $loan->borrower_id,
                 'borrower_name' => $borrowerName,
-                'phone_number' => $loan->borrower_phone,
+                'phone_number' => $borrower->phone ?? '',
                 'co_borrower' => $coName,
                 'guarantor' => $guaName,
-                'village' => $loan->village,
-                'commune' => $loan->commune,
-                'district' => $loan->district,
-                'province' => $loan->province,
-                'collateral_type' => $loan->collateral_type ?? '',
-                'co_repay' => $loan->officer_name,
+                'village' => $borrower->village ?? '',
+                'commune' => $borrower->commune ?? '',
+                'district' => $borrower->district ?? '',
+                'province' => $borrower->province ?? '',
+                'collateral_type' => $collateralType,
+                'co_repay' => $loan->officer->name ?? '',
                 'maturity_date' => $loan->maturity_date,
                 'currency' => $loan->currency,
                 'term' => $loan->duration_months,
                 'amount' => $loan->amount,
-                'amount_default' => $outstanding,
+                'amount_default' => $arrearPrincipal,
                 'default_balance' => $outstanding,
                 'recovery_amount' => $loan->recovery_amount ?? 0,
                 'aging' => $aging,
@@ -116,10 +154,10 @@ class WriteOffCollectionReportController extends Controller
         });
 
 
-        // Group by classification (Excel export expects this format!)
+        // Group by classification
         $grouped = $loans->groupBy('classification');
 
-        // Ensure all categories exist (even if empty)
+        // Ensure all categories exist
         $categories = [
             'Standard Loan' => [],
             'Special Mention Loan' => [],

@@ -50,6 +50,7 @@ class Loan extends Model
         'currency',
         'repayment_method',
         'purpose',
+        'sector',
         'loan_code',
         'payment_frequency',
         'loan_officer_id',
@@ -66,7 +67,11 @@ class Loan extends Model
         'write_off_balance',
         'recovery_amount',
         'maturity_date',
-        'product_id'
+        'product_id',
+        'aging',
+        'monthly_interest',
+        'reschedule_fee',
+        'rescheduled_at'
     ];
 
     public function product(): \Illuminate\Database\Eloquent\Relations\BelongsTo

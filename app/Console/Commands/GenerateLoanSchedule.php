@@ -53,6 +53,7 @@ class GenerateLoanSchedule extends Command
             return Command::SUCCESS;
         }
 
+        /** @var \App\Models\Loan $loan */
         foreach ($loans as $loan) {
             $this->info("Generating schedule for Loan ID {$loan->id} ({$loan->loan_code})");
 
@@ -93,6 +94,8 @@ class GenerateLoanSchedule extends Command
                             'payment_number' => $row['payment_number'],
                             'principal_amount' => $row['principal_amount'],
                             'interest_amount' => $row['interest_amount'],
+                            'fee_amount' => $row['fee_amount'] ?? 0,
+                            'total_due' => round(($row['principal_amount'] ?? 0) + ($row['interest_amount'] ?? 0) + ($row['fee_amount'] ?? 0), 2),
                             'penalty_amount' => $row['penalty_amount'] ?? 0,
                             'total_paid' => 0,
                             'payment_date' => $paymentDate,
@@ -127,6 +130,8 @@ class GenerateLoanSchedule extends Command
                             'payment_number' => $row['period'],
                             'principal_amount' => $row['principal'],
                             'interest_amount' => $row['interest'],
+                            'fee_amount' => $row['fee'] ?? 0,
+                            'total_due' => round(($row['principal'] ?? 0) + ($row['interest'] ?? 0) + ($row['fee'] ?? 0), 2),
                             'penalty_amount' => 0,
                             'total_paid' => 0,
                             'payment_date' => $paymentDate,

@@ -35,7 +35,6 @@ class DatabaseSeeder extends Seeder
         // 3. Run Other Seeders
         $this->call([
             SystemUiPermissionSeeder::class,
-            LoanOfficerSeeder::class,
         ]);
     }
 }

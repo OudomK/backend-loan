@@ -63,6 +63,7 @@ class RescheduleRefinanceController extends Controller
             'reschedule_date' => 'required|date',
             'first_payment_date' => 'nullable|date',
             'repayment_method' => 'nullable|string',
+            'reschedule_fee' => 'nullable|numeric|min:0',
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);

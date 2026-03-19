@@ -50,6 +50,7 @@ class RepaymentController extends Controller
                     'amount' => $symbol . number_format($dueAmount, 2),
                     'principal' => (string) number_format($nextPayment->principal_amount, 2),
                     'interest' => (string) number_format($nextPayment->interest_amount, 2),
+                    'installment_no' => (string) $nextPayment->payment_number,
                     'dpd' => '0',
                     'symbol' => $symbol,
                 ];
@@ -86,6 +87,7 @@ class RepaymentController extends Controller
                     'amount' => $symbol . number_format($dueAmount, 2),
                     'principal' => (string) number_format($payment->principal_amount, 2),
                     'interest' => (string) number_format($payment->interest_amount, 2),
+                    'installment_no' => (string) $payment->payment_number,
                     'dpd' => (string) $dpd,
                     'symbol' => $symbol,
                 ]);
@@ -161,17 +163,51 @@ class RepaymentController extends Controller
             'collector_id' => 'required|exists:loan_officers,id',
             'amount_paid' => 'required|numeric|min:0.01',
             'payment_method' => 'required|string',
-            'repayment_type' => 'required|string|in:Normal,Prepayment,Partial,Pay Off,Refinance,Reschedule,Recovery',
+            'repayment_type' => 'required|string|in:Normal,Prepayment,Partial,Pay Off,Refinance,Reschedule,Recovery,Withdraw',
             'transaction_date' => 'required|date',
             'penalty_amount' => 'nullable|numeric|min:0',
             'fee_amount' => 'nullable|numeric|min:0',
+            'waived_amount' => 'nullable|numeric|min:0',
         ]);
 
         return DB::transaction(function () use ($validated) {
             $loan = Loan::findOrFail($validated['loan_id']);
-            $penaltyPaid = $validated['penalty_amount'] ?? 0;
+            $waivedAmount = $validated['waived_amount'] ?? 0;
+            $penaltyAmountTotal = $validated['penalty_amount'] ?? 0;
             $feePaid = $validated['fee_amount'] ?? 0;
-            $remainingPaid = $validated['amount_paid'] - $penaltyPaid - $feePaid;
+
+            // Validation: Prevent withdrawing more than current prepayment balance
+            if ($validated['repayment_type'] === 'Withdraw') {
+                $totalPrepaid = RepaymentTransaction::where('loan_id', $loan->id)
+                    ->where('repayment_type', 'Prepayment')
+                    ->sum('amount_paid');
+
+                $totalWithdrawn = RepaymentTransaction::where('loan_id', $loan->id)
+                    ->where('repayment_type', 'Withdraw')
+                    ->sum('amount_paid');
+
+                $balance = round($totalPrepaid - $totalWithdrawn, 2);
+
+                if ($validated['amount_paid'] > $balance + 0.001) {
+                    return response()->json([
+                        'message' => "Withdrawal amount ({$validated['amount_paid']}) exceeds prepayment balance (" . number_format($balance, 2) . ")"
+                    ], 422);
+                }
+            }
+
+            // Per user rule: Waiver cannot exceed Penalty Due
+            if ($waivedAmount > $penaltyAmountTotal) {
+                $waivedAmount = $penaltyAmountTotal;
+            }
+
+            // Calculate how much penalty is paid in cash vs waived
+            $cashPenaltyPaid = max(0, $penaltyAmountTotal - $waivedAmount);
+
+            // The total amount to settle for Principal and Interest (CASH ONLY)
+            $totalToDistribute = $validated['amount_paid'] - $cashPenaltyPaid - $feePaid;
+
+            // Penalty is covered by both Cash and Waiver (Total settlement)
+            $totalPenaltySettled = $penaltyAmountTotal;
 
             // Fetch unpaid installments
             $installments = Payment::where('loan_id', $loan->id)
@@ -184,9 +220,9 @@ class RepaymentController extends Controller
             }
 
             // Keep installment-level penalty in sync so customer history can display it.
-            if ($penaltyPaid > 0) {
+            if ($totalPenaltySettled > 0) {
                 $firstInstallment = $installments->first();
-                $firstInstallment->penalty_amount = round(($firstInstallment->penalty_amount ?? 0) + $penaltyPaid, 2);
+                $firstInstallment->penalty_amount = round(($firstInstallment->penalty_amount ?? 0) + $totalPenaltySettled, 2);
                 $firstInstallment->save();
             }
 
@@ -194,9 +230,9 @@ class RepaymentController extends Controller
             if ($validated['repayment_type'] === 'Normal') {
                 $firstInst = $installments->first();
                 $dueForFirst = ($firstInst->principal_amount + $firstInst->interest_amount) - $firstInst->total_paid;
-                // Allow small rounding difference
-                if (abs($remainingPaid - $dueForFirst) > 0.01) {
-                    throw new \Exception("Normal payment must equal the current installment due amount ($dueForFirst) plus any penalty.");
+                // Allow small rounding difference.
+                if (abs($totalToDistribute - $dueForFirst) > 0.01) {
+                    throw new \Exception("Total payment (Paid Amount) must cover the current installment principal/interest due ($dueForFirst) plus any penalty/fees.");
                 }
             }
 
@@ -205,54 +241,77 @@ class RepaymentController extends Controller
                 'loan_id' => $loan->id,
                 'collector_id' => $validated['collector_id'],
                 'amount_paid' => $validated['amount_paid'],
+                'waived_amount' => $waivedAmount,
                 'principal_paid' => 0, // Will update after distribution
                 'interest_paid' => 0,
-                'penalty_paid' => $penaltyPaid,
+                'penalty_paid' => $cashPenaltyPaid,
                 'fee_paid' => $feePaid,
                 'payment_method' => $validated['payment_method'],
                 'repayment_type' => $validated['repayment_type'],
                 'transaction_date' => $validated['transaction_date'],
+                'paid_off_amount' => $validated['repayment_type'] === 'Pay Off' ? $validated['amount_paid'] : 0,
+                'recovery_amount' => $validated['repayment_type'] === 'Recovery' ? $validated['amount_paid'] : 0,
+                'withdrawn_prepayment' => in_array($validated['repayment_type'], ['Withdraw', 'Refinance', 'Reschedule']) ? $validated['amount_paid'] : 0,
             ]);
-
             $totalPrincipalPaid = 0;
             $totalInterestPaid = 0;
-            $totalPenaltyPaid = $penaltyPaid;
+            $totalPrepaymentGenerated = 0; // Total surplus or future applications
+            $totalPenaltyPaid = $cashPenaltyPaid;
             $lastUpdatedInst = null;
+            $now = Carbon::now();
+            $todayStr = Carbon::today()->toDateString();
 
             /** @var \App\Models\Payment $inst */
             foreach ($installments as $inst) {
-                if ($remainingPaid <= 0)
+                if ($totalToDistribute <= 0.001)
                     break;
-
+        
                 // Interest first, then principal (standard allocation)
                 $dueInterest = $inst->interest_amount - min($inst->interest_amount, $inst->total_paid);
-                $interestToPay = round(min($remainingPaid, $dueInterest), 2);
+                $interestToPay = round(min($totalToDistribute, $dueInterest), 2);
                 $totalInterestPaid += $interestToPay;
-                $remainingPaid -= $interestToPay;
-
+                $totalToDistribute -= $interestToPay;
+        
                 $principalToPay = 0;
-                if ($remainingPaid > 0.001) {
+                if ($totalToDistribute > 0.001) {
                     $principalPaidSoFar = max(0, $inst->total_paid - $inst->interest_amount);
                     $duePrincipal = $inst->principal_amount - $principalPaidSoFar;
-                    $principalToPay = round(min($remainingPaid, $duePrincipal), 2);
+                    $principalToPay = round(min($totalToDistribute, $duePrincipal), 2);
                     $totalPrincipalPaid += $principalToPay;
-                    $remainingPaid -= $principalToPay;
+                    $totalToDistribute -= $principalToPay;
+                }
+        
+                $appliedToThisRow = round($interestToPay + $principalToPay, 2);
+                if (
+                    $appliedToThisRow > 0 && 
+                    $inst->payment_date > $todayStr && 
+                    !in_array($validated['repayment_type'], ['Withdraw', 'Refinance', 'Reschedule', 'Recovery', 'Pay Off'])
+                ) {
+                    $totalPrepaymentGenerated += $appliedToThisRow;
                 }
 
-                $inst->total_paid = round($inst->total_paid + $interestToPay + $principalToPay, 2);
+                $inst->total_paid = round($inst->total_paid + $appliedToThisRow, 2);
+                $inst->prepayment = round(max(0, $totalToDistribute), 2);
+                $inst->updated_at = $now;
                 $inst->save();
                 $lastUpdatedInst = $inst;
             }
 
+            // Unallocated surplus is also a prepayment
+            if ($totalToDistribute > 0.001) {
+                $totalPrepaymentGenerated += $totalToDistribute;
+            }
+
             // Avoid losing cents from rounding: apply any tiny remainder to last touched installment
-            if ($lastUpdatedInst && $remainingPaid > 0.001 && $remainingPaid < 1) {
+            if ($lastUpdatedInst && $totalToDistribute > 0.001 && $totalToDistribute < 1) {
                 $cap = ($lastUpdatedInst->principal_amount + $lastUpdatedInst->interest_amount) - $lastUpdatedInst->total_paid;
-                $add = round(min($remainingPaid, $cap), 2);
+                $add = round(min($totalToDistribute, $cap), 2);
                 if ($add > 0) {
                     $lastUpdatedInst->total_paid = round($lastUpdatedInst->total_paid + $add, 2);
+                    $lastUpdatedInst->updated_at = $now;
                     $lastUpdatedInst->save();
                     $totalPrincipalPaid += $add;
-                    $remainingPaid -= $add;
+                    $totalToDistribute -= $add;
                 }
             }
 
@@ -261,6 +320,7 @@ class RepaymentController extends Controller
                 'principal_paid' => $totalPrincipalPaid,
                 'interest_paid' => $totalInterestPaid,
                 'penalty_paid' => $totalPenaltyPaid,
+                'prepayment_paid' => round($totalPrepaymentGenerated, 2),
             ]);
 
             // Special handling for Pay Off: If all principal is settled, mark loan as completed
@@ -272,8 +332,11 @@ class RepaymentController extends Controller
                 if ($unpaidPrincipalCount === 0) {
                     // All principal is paid. Force all installments to 'fully paid' state by setting total_paid = principal+interest
                     // This effectively waives any remaining interest.
-                    Payment::where('loan_id', $loan->id)->each(function (Payment $p) {
-                        $p->update(['total_paid' => $p->principal_amount + $p->interest_amount]);
+                    Payment::where('loan_id', $loan->id)->each(function (Payment $p) use ($now) {
+                        $p->update([
+                            'total_paid' => $p->principal_amount + $p->interest_amount,
+                            'updated_at' => $now
+                        ]);
                     });
                 }
             }

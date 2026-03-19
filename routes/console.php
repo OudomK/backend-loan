@@ -9,3 +9,4 @@ Artisan::command('inspire', function () {
 
 \Illuminate\Support\Facades\Schedule::command('app:post-monthly-interest')->monthlyOn(1, '00:00');
 \Illuminate\Support\Facades\Schedule::command('app:auto-draft-dividends')->dailyAt('00:05');
+\Illuminate\Support\Facades\Schedule::command('loans:update-aging')->dailyAt('00:00');

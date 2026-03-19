@@ -45,6 +45,8 @@ class LoanService
                 'interest_rate' => $data['new_rate'],
                 'duration_months' => $newTotalTerm,
                 'repayment_method' => $data['repayment_method'] ?? $loan->repayment_method,
+                'reschedule_fee' => $data['reschedule_fee'] ?? 0,
+                'rescheduled_at' => $data['reschedule_date'],
             ]);
 
             // Record transaction

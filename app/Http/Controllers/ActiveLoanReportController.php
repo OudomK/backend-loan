@@ -134,7 +134,7 @@ class ActiveLoanReportController extends Controller
                 'co_disburse' => $loan->disburseOfficer ? $loan->disburseOfficer->name : ($officer ? $officer->name : ''),
                 'co_repay' => $officer ? $officer->name : '',
                 'officer_name' => $officer ? $officer->name : 'N/A',
-                'product_name' => $product ? $product->name : 'General Loan',
+                'loan_product' => $product ? $product->name : 'General Loan',
                 'customer_code' => $borrower ? $borrower->customer_code : 'N/A',
 
                 'outstanding_amount' => $outstanding,
@@ -146,7 +146,7 @@ class ActiveLoanReportController extends Controller
                 'aging_days' => $agingDays,
                 'overdue_amount' => $loan->total_overdue_amount ?? 0,
 
-                'sector_name' => 'General', // Placeholder
+                'sector_name' => $loan->sector ?? 'General',
                 'first_repayment_date' => Carbon::parse($loan->start_date)->addMonth()->toDateString(), // Approx
                 'last_payment_date' => $loan->last_payment_date,
 

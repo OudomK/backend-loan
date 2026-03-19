@@ -50,14 +50,23 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/app/footer-user', function () {
     return response()->json([
-        'display_name' => Config::get('app.footer_user_name', '—'),
+        'display_name' => \App\Models\Setting::where('key', 'company_name')->value('value') ?? Config::get('app.footer_user_name', '—'),
         'profile' => Config::get('app.footer_user_profile', '—'),
     ]);
 });
 
 Route::get('/app/settings', function () {
+    $dbSettings = \App\Models\Setting::pluck('value', 'key')->toArray();
+    
     return response()->json([
-        'company_name' => Config::get('app.company_name', 'Company Name'),
+        'company_name' => $dbSettings['company_name'] ?? Config::get('app.company_name', 'Company Name'),
+        'company_logo' => isset($dbSettings['company_logo']) ? asset('storage/' . $dbSettings['company_logo']) : null,
+        'default_language' => $dbSettings['default_language'] ?? 'EN',
+        'copyright_text' => $dbSettings['copyright_text'] ?? ('© ' . date('Y') . ' ' . Config::get('app.company_name')),
+        'exchange_rate' => $dbSettings['exchange_rate_khr_to_usd'] ?? 4000,
+        'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,
+        'default_penalty_usd' => $dbSettings['default_penalty_usd'] ?? 2.5,
+        'default_penalty_khr' => $dbSettings['default_penalty_khr'] ?? 10000,
     ]);
 });
 
@@ -171,7 +180,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/loan-collection', [LoanCollectionReportController::class, 'index']);
     Route::get('/reports/interest-income', [InterestIncomeReportController::class, 'index']);
     Route::get('/reports/loan-outstanding-par', [LoanOutstandingParReportController::class, 'index']);
-    Route::get('/test/check-data', [TestDataController::class, 'checkData']);
+
 
     Route::apiResource('payments', PaymentController::class);
 

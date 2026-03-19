@@ -15,15 +15,14 @@ class LoanCollectionReportController extends Controller
         $toDate = $request->query('to_date');
         $currency = $request->query('currency');
 
-        $query = Payment::query()
+        $query = \App\Models\RepaymentTransaction::query()
             ->select([
-                'payments.payment_date',
-                'payments.principal_amount',
-                'payments.interest_amount',
-                'payments.total_paid', // To calculate if it's fully paid or partial, but report asks for "Schedule" usually means due amount.
-                // However, "Collection" might mean what was collected. 
-                // But the columns overlap with "Schedule".
-                // Let's assume it lists the SCHEDULED amounts due in that period.
+                'repayment_transactions.transaction_date',
+                'repayment_transactions.principal_paid',
+                'repayment_transactions.interest_paid',
+                'repayment_transactions.penalty_paid',
+                'repayment_transactions.fee_paid',
+                'repayment_transactions.amount_paid',
                 'loans.loan_code',
                 'loans.currency',
                 'borrowers.id as borrower_id',
@@ -34,12 +33,12 @@ class LoanCollectionReportController extends Controller
                 'borrowers.commune',
                 'loan_officers.name as officer_name',
             ])
-            ->join('loans', 'payments.loan_id', '=', 'loans.id')
+            ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
             ->leftJoin('borrowers', 'loans.borrower_id', '=', 'borrowers.id')
-            ->leftJoin('loan_officers', 'loans.loan_officer_id', '=', 'loan_officers.id');
+            ->leftJoin('loan_officers', 'repayment_transactions.collector_id', '=', 'loan_officers.id');
 
         if ($fromDate && $toDate) {
-            $query->whereBetween('payments.payment_date', [$fromDate, $toDate]);
+            $query->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate]);
         }
 
         if ($currency) {
@@ -47,11 +46,13 @@ class LoanCollectionReportController extends Controller
         }
 
         // Order by Currency then Date then Loan Code
-        $query->orderBy('loans.currency')->orderBy('payments.payment_date')->orderBy('loans.loan_code');
+        $query->orderBy('loans.currency')
+              ->orderBy('repayment_transactions.transaction_date')
+              ->orderBy('loans.loan_code');
 
         $results = $query->get()->map(function ($row) {
             return [
-                'date' => $row->payment_date,
+                'date' => $row->transaction_date,
                 'loan_code' => $row->loan_code,
                 'cid' => $row->borrower_id,
                 'name' => $row->borrower_last . ' ' . $row->borrower_first,
@@ -59,10 +60,11 @@ class LoanCollectionReportController extends Controller
                 'co_name' => $row->officer_name,
                 'village' => $row->village,
                 'commune' => $row->commune,
-                'principal' => $row->principal_amount,
-                'interest' => $row->interest_amount,
-                'fee' => 0, // Mock fee as 0 since we don't have it in payments table yet
-                'total' => $row->principal_amount + $row->interest_amount,
+                'principal' => $row->principal_paid,
+                'interest' => $row->interest_paid,
+                'penalty' => $row->penalty_paid,
+                'fee' => $row->fee_paid,
+                'total' => $row->amount_paid,
                 'currency' => $row->currency,
             ];
         });

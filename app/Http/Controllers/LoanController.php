@@ -97,6 +97,11 @@ class LoanController extends Controller
             $validated['disbursed_by_officer_id'] = $validated['loan_officer_id'];
         }
 
+        // Calculate monthly interest for persistence
+        if (isset($validated['amount']) && isset($validated['interest_rate'])) {
+            $validated['monthly_interest'] = round(($validated['amount'] * $validated['interest_rate']) / 100, 2);
+        }
+
         $loan = Loan::create($validated);
 
         // Save collaterals if any
@@ -130,6 +135,8 @@ class LoanController extends Controller
                             'payment_number' => $item['period'],
                             'principal_amount' => $item['principal'],
                             'interest_amount' => $item['interest'],
+                            'fee_amount' => $item['fee'] ?? 0,
+                            'total_due' => round(($item['principal'] ?? 0) + ($item['interest'] ?? 0) + ($item['fee'] ?? 0), 2),
                             'penalty_amount' => 0,
                             'total_paid' => $item['payment'],
                             'payment_date' => $this->normalizeScheduleDate($item['date']),
@@ -159,6 +166,8 @@ class LoanController extends Controller
                                 'payment_number' => $payment['payment_number'],
                                 'principal_amount' => $payment['principal_amount'],
                                 'interest_amount' => $payment['interest_amount'],
+                                'fee_amount' => $payment['fee_amount'] ?? 0,
+                                'total_due' => round(($payment['principal_amount'] ?? 0) + ($payment['interest_amount'] ?? 0) + ($payment['fee_amount'] ?? 0), 2),
                                 'penalty_amount' => $payment['penalty_amount'],
                                 'total_paid' => $payment['total_paid'],
                                 'payment_date' => $payment['payment_date'],
@@ -187,6 +196,8 @@ class LoanController extends Controller
                                 'payment_number' => $item['period'],
                                 'principal_amount' => $item['principal'],
                                 'interest_amount' => $item['interest'],
+                                'fee_amount' => $item['fee'] ?? 0,
+                                'total_due' => round(($item['principal'] ?? 0) + ($item['interest'] ?? 0) + ($item['fee'] ?? 0), 2),
                                 'penalty_amount' => 0,
                                 'total_paid' => 0,
                                 'payment_date' => $this->normalizeScheduleDate($item['date']),

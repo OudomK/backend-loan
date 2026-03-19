@@ -90,6 +90,32 @@ class DisbursementReportController extends Controller
             // Paid-off Coll. = principal collected on Pay Off (not full amount_paid)
             $paidOffCollected = $transactions->where('repayment_type', 'Pay Off')->sum('principal_paid');
 
+            // --- Due Section (Payments scheduled within the period) ---
+            $duePayments = \App\Models\Payment::whereHas('loan', function ($q) use ($officer) {
+                $q->where('loan_officer_id', $officer->id);
+            })->whereBetween('payment_date', [$fromDateStr, $toDateStr])->get();
+
+            $principalDue = $duePayments->sum('principal_amount');
+            $interestDue  = $duePayments->sum('interest_amount');
+            $feeDue       = 0; // no fee column on payments table
+
+            // --- Write-Off Section ---
+            $woCurLoans = Loan::where('loan_officer_id', $officer->id)
+                ->whereNotNull('written_off_at')
+                ->whereBetween('written_off_at', [$fromDateStr, $toDateStr])
+                ->get();
+
+            $yearStart = \Carbon\Carbon::parse($toDateStr)->startOfYear()->toDateString();
+            $woYtdLoans = Loan::where('loan_officer_id', $officer->id)
+                ->whereNotNull('written_off_at')
+                ->whereBetween('written_off_at', [$yearStart, $toDateStr])
+                ->get();
+
+            // --- Repayment Rate ---
+            $repaymentRate = $principalDue > 0
+                ? round(($principalCollected / $principalDue) * 100, 2)
+                : 0;
+
             // --- PAR Section ---
             $par1Count = 0;
             $par1Amount = 0;
@@ -173,22 +199,24 @@ class DisbursementReportController extends Controller
                 'par30_amount' => $par30Amount,
                 'par30_percent' => $loanOS > 0 ? ($par30Amount / $loanOS) * 100 : 0,
 
-                // Write-Off (Placeholders for now)
-                'wo_cur_count' => 0,
-                'wo_cur_principal' => 0,
-                'wo_cur_interest' => 0,
-                'wo_cur_fee' => 0,
-                'wo_ytd_count' => 0,
-                'wo_ytd_principal' => 0,
-                'wo_ytd_interest' => 0,
-                'wo_ytd_fee' => 0,
+                // Write-Off Current (within period)
+                'wo_cur_count'     => $woCurLoans->count(),
+                'wo_cur_principal' => $woCurLoans->sum('write_off_balance'),
+                'wo_cur_interest'  => 0,
+                'wo_cur_fee'       => 0,
 
-                // Due (Placeholders)
-                'principal_due' => 0,
-                'interest_due' => 0,
-                'fee_due' => 0,
-                'total_arrears' => $par1Amount, // Simple mapping
-                'repayment_rate' => 0,
+                // Write-Off YTD (year-to-date)
+                'wo_ytd_count'     => $woYtdLoans->count(),
+                'wo_ytd_principal' => $woYtdLoans->sum('write_off_balance'),
+                'wo_ytd_interest'  => 0,
+                'wo_ytd_fee'       => 0,
+
+                // Due (scheduled payments within period)
+                'principal_due'  => $principalDue,
+                'interest_due'   => $interestDue,
+                'fee_due'        => $feeDue,
+                'total_arrears'  => $par1Amount,
+                'repayment_rate' => $repaymentRate,
             ];
         }
 

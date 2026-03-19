@@ -39,7 +39,7 @@ class LoanReportResource extends JsonResource
             'currency' => $loan->currency,
             'rate' => $loan->interest_rate,
             'processing_fee' => 0,
-            'monthly_interest_rate' => $loan->interest_rate,
+            'monthly_interest' => (float) $loan->monthly_interest,
             'term' => $loan->duration_months,
             'tenor' => $loan->duration_months,
             'payment_frequency' => $loan->payment_frequency,
@@ -48,6 +48,7 @@ class LoanReportResource extends JsonResource
             're_finance' => $loan->refinanced_amount,
             'admin_fee' => $loan->admin_fee,
             're_finance_fee' => $loan->refinance_fee,
+            'reschedule_fee' => $loan->reschedule_fee,
             'collateral_type' => $this->getCollateralTypeLabel($loan),
             'co_disburse' => $loan->officer?->name,
             'co_repay' => $this->collector?->name ?? $loan->officer?->name,
@@ -55,16 +56,39 @@ class LoanReportResource extends JsonResource
             'principal_paid' => $this->principal_paid,
             'interest_paid' => $this->interest_paid,
             'penalty_paid' => $this->penalty_paid,
-            'paid_off_paid' => $this->repayment_type === 'Pay Off' ? $this->principal_paid : 0,
-            'recovery' => $this->repayment_type === 'Recovery' ? $this->amount_paid : 0,
-            'prepayment' => $this->repayment_type === 'Prepayment' ? $this->amount_paid : 0,
-            'withd_prepayment' => 0,
-            // Total Paid = principal + interest only; penalty is shown in penalty_paid column
-            'total_paid' => (float) $this->principal_paid + (float) $this->interest_paid,
+            'paid_off_paid' => (float) $this->paid_off_amount,
+            'recovery' => (float) $this->recovery_amount,
+            'prepayment' => (float) $this->prepayment_paid,
+            'withd_prepayment' => (float) $this->withdrawn_prepayment,
+            // Total Paid = reflects actual cash collected; Subtract withdrawals from total
+            'total_paid' => $this->repayment_type === 'Withdraw' ? -(float) $this->amount_paid : (float) $this->amount_paid,
             'type_of_payment' => $this->repayment_type,
             'payment_status' => $loan->status,
-            'fee_paid' => 0,
+            'fee_paid' => (float) $this->fee_paid,
+            'total_paid_usd' => $this->calculateUsdValue($loan, $this->repayment_type === 'Withdraw' ? -(float) $this->amount_paid : (float) $this->amount_paid),
+            'principal_paid_usd' => $this->calculateUsdValue($loan, $this->principal_paid),
+            'interest_paid_usd' => $this->calculateUsdValue($loan, $this->interest_paid),
+            'penalty_paid_usd' => $this->calculateUsdValue($loan, $this->penalty_paid),
+            'recovery_usd' => $this->calculateUsdValue($loan, $this->recovery_amount),
+            'prepayment_usd' => $this->calculateUsdValue($loan, $this->prepayment_paid),
+            'withd_prepayment_usd' => $this->calculateUsdValue($loan, $this->withdrawn_prepayment),
+            'paid_off_paid_usd' => $this->calculateUsdValue($loan, $this->paid_off_amount),
+            'fee_paid_usd' => $this->calculateUsdValue($loan, (float) $this->fee_paid),
         ];
+    }
+
+    private function calculateUsdValue($loan, $amount): float
+    {
+        if (str_contains(strtoupper($loan->currency), 'USD')) {
+            return (float) $amount;
+        }
+
+        static $rate = null;
+        if ($rate === null) {
+            $rate = (float) (\App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value') ?: 4000);
+        }
+
+        return $rate > 0 ? (float) ($amount / $rate) : (float) $amount;
     }
 
     /**
