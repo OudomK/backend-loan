@@ -154,7 +154,13 @@ class LoanController extends Controller
                     ];
 
                     // Generate interest-only balloon schedule by default
-                    $schedule = BalloonPaymentCalculator::generateSchedule($loanData, 'interest_only');
+                    $schedule = BalloonPaymentCalculator::generateSchedule(
+                        $loanData,
+                        'interest_only',
+                        null,
+                        $validated['admin_fee'] ?? 0,
+                        $validated['admin_fee_type'] ?? 'one_time'
+                    );
 
                     if (!empty($schedule)) {
                         // Update monthly payment reference (first payment)
@@ -183,7 +189,9 @@ class LoanController extends Controller
                         $validated['duration_months'],
                         $validated['repayment_method'],
                         $validated['start_date'],
-                        $validated['currency'] ?? 'USD'
+                        $validated['currency'] ?? 'USD',
+                        $validated['admin_fee'] ?? 0,
+                        $validated['admin_fee_type'] ?? 'one_time'
                     );
 
                     if (!empty($schedule)) {
@@ -224,6 +232,8 @@ class LoanController extends Controller
             'repayment_method' => 'required|string',
             'start_date' => 'required|date',
             'currency' => 'nullable|string',
+            'admin_fee' => 'nullable|numeric',
+            'admin_fee_type' => 'nullable|string|in:one_time,monthly',
         ]);
 
         try {
@@ -235,7 +245,13 @@ class LoanController extends Controller
                     'start_date' => $validated['start_date'],
                 ];
                 // Generate interest-only balloon schedule by default
-                $scheduleRaw = BalloonPaymentCalculator::generateSchedule($loanData, 'interest_only');
+                $scheduleRaw = BalloonPaymentCalculator::generateSchedule(
+                    $loanData,
+                    'interest_only',
+                    null,
+                    $validated['admin_fee'] ?? 0,
+                    $validated['admin_fee_type'] ?? 'one_time'
+                );
 
                 // Map to format expected by frontend
                 $schedule = array_map(function ($item) {
@@ -257,7 +273,9 @@ class LoanController extends Controller
                     // For negotiable, default to fixed_monthly as a starting point
                     $validated['repayment_method'] === 'negotiable' ? 'fixed_monthly' : $validated['repayment_method'],
                     $validated['start_date'],
-                    $validated['currency'] ?? 'USD'
+                    $validated['currency'] ?? 'USD',
+                    $validated['admin_fee'] ?? 0,
+                    $validated['admin_fee_type'] ?? 'one_time'
                 );
             }
 

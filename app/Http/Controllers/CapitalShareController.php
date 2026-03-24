@@ -237,13 +237,14 @@ class CapitalShareController extends Controller
             $newShareQty = (int) $share->share_qty + $addShares;
             $newTotalCapital = $newShareQty * $parValue;
 
-            // Use direct DB update instead of Eloquent save() to avoid dirty-checking issues
+            // Accumulate balance (do NOT reset to newTotalCapital - that can reduce balance)
+            $newBalance = round((float) $share->balance + $addAmount, 2);
             DB::table('capital_shares')->where('id', $share->id)->update([
-                'share_qty' => $newShareQty,
+                'share_qty'     => $newShareQty,
                 'total_capital' => $newTotalCapital,
-                'amount' => $newTotalCapital,
-                'balance' => $newTotalCapital,
-                'updated_at' => now(),
+                'amount'        => $newTotalCapital,
+                'balance'       => $newBalance,
+                'updated_at'    => now(),
             ]);
 
             CapitalShareTransaction::create([
@@ -341,6 +342,14 @@ class CapitalShareController extends Controller
         ]);
 
         return DB::transaction(function () use ($share, $validated) {
+            // ── Overpayment Guard: protect Investor capital balance ──────────
+            if ($validated['principal_paid'] > $share->balance + 0.001) {
+                return response()->json([
+                    'message' => "Principal paid ({$validated['principal_paid']}) exceeds remaining balance (" . number_format($share->balance, 2) . "). Please check the amount."
+                ], 422);
+            }
+            // ────────────────────────────────────────────────────────────────
+
             $schedule = $share->repayment_schedule ?? [];
             $found = false;
             foreach ($schedule as &$item) {
@@ -360,7 +369,7 @@ class CapitalShareController extends Controller
 
             // Update balance if principal was paid
             if ($validated['principal_paid'] > 0) {
-                $share->balance = max(0, $share->balance - $validated['principal_paid']);
+                $share->balance = round(max(0, $share->balance - $validated['principal_paid']), 2);
             }
 
             // Check if all periods are paid to complete the account

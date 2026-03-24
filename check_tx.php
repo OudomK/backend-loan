@@ -1,0 +1,1 @@
+<?php require "vendor/autoload.php"; $app = require_once "bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); $t = App\Models\RepaymentTransaction::find(8); if ($t) { echo "FOUND ID 8"; } else { echo "NOT FOUND ID 8"; }

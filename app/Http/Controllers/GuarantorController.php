@@ -19,7 +19,10 @@ class GuarantorController extends Controller
                     ->orWhere('id_number', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
                     ->orWhere('age', 'like', "%{$search}%")
-                    ->orWhere('customer_code', 'like', "%{$search}%");
+                    ->orWhere('customer_code', 'like', "%{$search}%")
+                    ->orWhereHas('loans', function ($q) use ($search) {
+                        $q->where('loan_code', 'like', "%{$search}%");
+                    });
             });
             $query->limit(25);
         }
@@ -34,7 +37,7 @@ class GuarantorController extends Controller
             $query->where('phone', $request->query('phone'));
         }
 
-        return response()->json($query->get());
+        return response()->json($query->with('loans')->get());
     }
 
     public function store(Request $request)
@@ -60,12 +63,12 @@ class GuarantorController extends Controller
         ]);
 
         if (empty($validated['customer_code'])) {
-            $latest = \App\Models\Guarantor::orderBy('id', 'desc')->first();
+            $latest = Guarantor::orderBy('id', 'desc')->first();
             $nextId = $latest ? $latest->id + 1 : 1;
             $validated['customer_code'] = 'GU-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
         }
 
-        $guarantor = \App\Models\Guarantor::create($validated);
+        $guarantor = Guarantor::create($validated);
         return response()->json($guarantor, 201);
     }
 
@@ -74,7 +77,7 @@ class GuarantorController extends Controller
         return response()->json($guarantor);
     }
 
-    public function update(Request $request, \App\Models\Guarantor $guarantor)
+    public function update(Request $request, Guarantor $guarantor)
     {
         $validated = $request->validate([
             'customer_code' => 'sometimes|nullable|string|unique:guarantors,customer_code,' . $guarantor->id,
@@ -108,7 +111,7 @@ class GuarantorController extends Controller
 
     public function getNextCode()
     {
-        $latest = \App\Models\Guarantor::orderBy('id', 'desc')->first();
+        $latest = Guarantor::orderBy('id', 'desc')->first();
         $nextId = $latest ? $latest->id + 1 : 1;
         $code = 'GU-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
         return response()->json(['code' => $code]);

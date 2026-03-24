@@ -18,7 +18,10 @@ class BorrowerController extends Controller
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere('id_number', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('customer_code', 'like', "%{$search}%");
+                    ->orWhere('customer_code', 'like', "%{$search}%")
+                    ->orWhereHas('loans', function ($q) use ($search) {
+                        $q->where('loan_code', 'like', "%{$search}%");
+                    });
             });
             $query->limit(25);
         }
@@ -37,7 +40,7 @@ class BorrowerController extends Controller
             $query->where('phone', $request->query('phone'));
         }
 
-        return response()->json($query->get());
+        return response()->json($query->with('loans')->get());
     }
 
     public function store(Request $request)

@@ -23,7 +23,9 @@ class BalloonPaymentCalculator
         float $principal,
         float $annualRate,
         int $durationMonths,
-        string $startDate
+        string $startDate,
+        float $adminFee = 0,
+        string $adminFeeType = 'one_time'
     ): array {
         $schedule = [];
         $monthlyInterestRate = $annualRate / 100; // Treat as Monthly Rate (standard for this app)
@@ -36,13 +38,24 @@ class BalloonPaymentCalculator
 
             $isFinalPayment = ($month === $durationMonths);
 
+            $totalFeeAmount = $principal * ($adminFee / 100);
+            $feeAmount = 0;
+            if ($adminFee > 0) {
+                if ($adminFeeType === 'one_time') {
+                    $feeAmount = ($month === 1) ? round($totalFeeAmount, 2) : 0;
+                } else {
+                    $feeAmount = round($totalFeeAmount / $durationMonths, 2);
+                }
+            }
+
             $schedule[] = [
                 'payment_number' => $month,
                 'payment_date' => $paymentDate->format('Y-m-d'),
                 'principal_amount' => $isFinalPayment ? $principal : 0,
                 'interest_amount' => $monthlyInterest,
+                'fee_amount' => $feeAmount,
                 'penalty_amount' => 0,
-                'total_paid' => $isFinalPayment ? ($principal + $monthlyInterest) : $monthlyInterest,
+                'total_paid' => $isFinalPayment ? ($principal + $monthlyInterest + $feeAmount) : ($monthlyInterest + $feeAmount),
                 'is_balloon' => $isFinalPayment,
                 'remaining_balance' => $isFinalPayment ? 0 : $principal,
             ];
@@ -68,7 +81,9 @@ class BalloonPaymentCalculator
         float $annualRate,
         int $durationMonths,
         string $startDate,
-        float $monthlyPayment = null
+        ?float $monthlyPayment = null,
+        float $adminFee = 0,
+        string $adminFeeType = 'one_time'
     ): array {
         $schedule = [];
         $monthlyInterestRate = $annualRate / 100; // Treat as Monthly Rate
@@ -101,13 +116,24 @@ class BalloonPaymentCalculator
                 $remainingPrincipal -= $principalPortion;
             }
 
+            $totalFeeAmount = $principal * ($adminFee / 100);
+            $feeAmount = 0;
+            if ($adminFee > 0) {
+                if ($adminFeeType === 'one_time') {
+                    $feeAmount = ($month === 1) ? round($totalFeeAmount, 2) : 0;
+                } else {
+                    $feeAmount = round($totalFeeAmount / $durationMonths, 2);
+                }
+            }
+
             $schedule[] = [
                 'payment_number' => $month,
                 'payment_date' => $paymentDate->format('Y-m-d'),
                 'principal_amount' => round($principalPortion, 2),
                 'interest_amount' => $interest,
+                'fee_amount' => $feeAmount,
                 'penalty_amount' => 0,
-                'total_paid' => round($totalPayment, 2),
+                'total_paid' => round($totalPayment + $feeAmount, 2),
                 'is_balloon' => $isFinalPayment,
                 'remaining_balance' => $isFinalPayment ? 0 : round($remainingPrincipal, 2),
             ];
@@ -128,7 +154,9 @@ class BalloonPaymentCalculator
     public static function generateSchedule(
         array $loanData,
         string $balloonType = 'interest_only',
-        ?float $customMonthlyPayment = null
+        ?float $customMonthlyPayment = null,
+        float $adminFee = 0,
+        string $adminFeeType = 'one_time'
     ): array {
         $principal = $loanData['amount'];
         $annualRate = $loanData['interest_rate'];
@@ -141,7 +169,9 @@ class BalloonPaymentCalculator
                 $annualRate,
                 $durationMonths,
                 $startDate,
-                $customMonthlyPayment
+                $customMonthlyPayment,
+                $adminFee,
+                $adminFeeType
             );
         }
 
@@ -150,7 +180,9 @@ class BalloonPaymentCalculator
             $principal,
             $annualRate,
             $durationMonths,
-            $startDate
+            $startDate,
+            $adminFee,
+            $adminFeeType
         );
     }
 

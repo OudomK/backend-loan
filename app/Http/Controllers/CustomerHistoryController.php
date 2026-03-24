@@ -14,19 +14,27 @@ class CustomerHistoryController extends Controller
     private function loanToHistoryArray(Loan $loan): array
     {
         $arr = $loan->toArray();
+
+        // Pre-load all repayment transactions for this loan in ONE query (fix N+1)
+        $txIds = $loan->payments->pluck('repayment_transaction_id')->filter()->unique();
+        $txMap = \App\Models\RepaymentTransaction::whereIn('id', $txIds)
+            ->pluck('repayment_type', 'id');
+
         $arr['payments'] = $loan->payments->sortBy('payment_number')->values()->map(fn($p) => [
-            'id' => $p->id,
-            'payment_number' => $p->payment_number,
-            'principal_amount' => (float) $p->principal_amount,
-            'interest_amount' => (float) $p->interest_amount,
-            'fee_amount' => (float) ($p->fee_amount ?? 0),
-            'penalty_amount' => (float) $p->penalty_amount,
-            'total_paid' => (float) $p->total_paid,
-            'total_due' => (float) ($p->total_due ?? 0),
-            'payment_date' => $p->payment_date,
-            'payment_method' => $p->payment_method,
-            'updated_at' => ($p->total_paid > 0 && $p->updated_at) ? $p->updated_at->toIso8601String() : '',
-            'prepayment' => (float) ($p->prepayment ?? 0),
+            'id'                       => $p->id,
+            'payment_number'           => $p->payment_number,
+            'principal_amount'         => (float) $p->principal_amount,
+            'interest_amount'          => (float) $p->interest_amount,
+            'fee_amount'               => (float) ($p->fee_amount ?? 0),
+            'penalty_amount'           => (float) $p->penalty_amount,
+            'total_paid'               => (float) $p->total_paid,
+            'total_due'                => (float) ($p->total_due ?? 0),
+            'payment_date'             => $p->payment_date,
+            'payment_method'           => $p->payment_method,
+            'updated_at'               => ($p->total_paid > 0 && $p->updated_at) ? $p->updated_at->toIso8601String() : '',
+            'prepayment'               => (float) ($p->prepayment ?? 0),
+            'repayment_transaction_id' => $p->repayment_transaction_id,
+            'repayment_type'           => $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id] ?? null) : null,
         ])->all();
         return $arr;
     }
@@ -47,21 +55,7 @@ class CustomerHistoryController extends Controller
             ->get()
             ->map(fn($item) => $this->formatSearchItem($item, 'Borrower'));
 
-        $coBorrowers = CoBorrower::where('first_name', 'like', "%$query%")
-            ->orWhere('last_name', 'like', "%$query%")
-            ->orWhere('phone', 'like', "%$query%")
-            ->orWhere('customer_code', 'like', "%$query%")
-            ->get()
-            ->map(fn($item) => $this->formatSearchItem($item, 'Co-Borrower'));
-
-        $guarantors = Guarantor::where('first_name', 'like', "%$query%")
-            ->orWhere('last_name', 'like', "%$query%")
-            ->orWhere('phone', 'like', "%$query%")
-            ->orWhere('customer_code', 'like', "%$query%")
-            ->get()
-            ->map(fn($item) => $this->formatSearchItem($item, 'Guarantor'));
-
-        return response()->json($borrowers->concat($coBorrowers)->concat($guarantors));
+        return response()->json($borrowers);
     }
 
     private function formatSearchItem($item, $role)

@@ -30,6 +30,18 @@ class PayrollController extends Controller
             'payment_method' => 'nullable|string',
         ]);
 
+        // ── Duplicate Payroll Guard ─────────────────────────────────────────────
+        $exists = \App\Models\Payroll::where('employee_id', $validated['employee_id'])
+            ->whereRaw("DATE_FORMAT(month_year, '%Y-%m') = DATE_FORMAT(?, '%Y-%m')", [$validated['month_year']])
+            ->exists();
+
+        if ($exists) {
+            return response()->json([
+                'message' => 'Payroll already exists for this employee in the selected month. Please edit the existing record instead.'
+            ], 422);
+        }
+        // ────────────────────────────────────────────────────────────────────────
+
         $validated['total_payable'] = ($validated['salary'] ?? 0)
             + ($validated['allowance'] ?? 0)
             + ($validated['bonus'] ?? 0)

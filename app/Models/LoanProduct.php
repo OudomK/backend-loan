@@ -14,6 +14,10 @@ class LoanProduct extends Model
         'code',
         'description',
         'is_active',
+        'interest_rate',
+        'fee_percentage',
+        'duration_months',
+        'repayment_method',
     ];
 
     public function loans(): \Illuminate\Database\Eloquent\Relations\HasMany

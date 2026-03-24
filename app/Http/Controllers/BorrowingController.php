@@ -157,12 +157,22 @@ class BorrowingController extends Controller
         $validated['total_paid'] = $validated['principal_paid'] + $validated['interest_paid'];
 
         return DB::transaction(function () use ($validated) {
+            // ── Overpayment Guard: protect Investor principal ──────────────────
+            $borrowing = Borrowing::with('repayments')->findOrFail($validated['borrowing_id']);
+            $alreadyPaid  = $borrowing->repayments->sum('principal_paid');
+            $remainingBalance = round($borrowing->amount - $alreadyPaid, 2);
+
+            if ($validated['principal_paid'] > $remainingBalance + 0.001) {
+                return response()->json([
+                    'message' => "Principal paid ({$validated['principal_paid']}) exceeds remaining balance (" . number_format($remainingBalance, 2) . "). Please check the amount."
+                ], 422);
+            }
+            // ─────────────────────────────────────────────────────────────────
+
             $repayment = BorrowingRepayment::create($validated);
 
-            // Check if fully paid
-            $borrowing = Borrowing::with('repayments')->find($validated['borrowing_id']);
-            $totalPrincipalPaid = $borrowing->repayments->sum('principal_paid');
-
+            // Auto-close if fully repaid
+            $totalPrincipalPaid = $alreadyPaid + $validated['principal_paid'];
             if ($totalPrincipalPaid >= $borrowing->amount) {
                 $borrowing->update(['status' => 'completed']);
             }

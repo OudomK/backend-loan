@@ -7,7 +7,7 @@ use DateInterval;
 
 class LoanCalculator
 {
-    public function calculateLoanWithDates($principal, $rate, $duration, $option, $startDate, $currency)
+    public function calculateLoanWithDates($principal, $rate, $duration, $option, $startDate, $currency, $adminFee = 0, $adminFeeType = 'one_time')
     {
         $results = [];
         $startDateObj = new DateTime($startDate);
@@ -36,7 +36,17 @@ class LoanCalculator
             if (strpos($currency, 'KHR') !== false) {
                 return $customRoundKHR($amount);
             }
-            return round($amount); // No cents for USD
+            return round($amount, 2); // Keep 2 decimal places for USD
+        };
+
+        $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
+            if ($adminFee <= 0) return 0;
+            $totalFeeAmount = $principal * ($adminFee / 100);
+            if ($adminFeeType === 'one_time') {
+                return ($periodNumber === 1) ? $applyRounding($totalFeeAmount, $currency) : 0;
+            }
+            // Monthly: spread total fee amount over all payments
+            return $applyRounding($totalFeeAmount / $totalPayments, $currency);
         };
 
 
@@ -73,12 +83,14 @@ class LoanCalculator
                     $firstPaymentInterest = $applyRounding($totalFirstInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
                     $principalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
 
+                    $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
                         'principal' => $applyRounding($principalPay, $currency),
                         'interest' => $firstPaymentInterest,
-                        'payment' => $applyRounding($principalPay + $firstPaymentInterest, $currency),
+                        'fee' => $feePay,
+                        'payment' => $applyRounding($principalPay + $firstPaymentInterest + $feePay, $currency),
                         'balance' => null,
                         'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
@@ -86,12 +98,14 @@ class LoanCalculator
                 } elseif ($i == $totalPayments) {
                     $finalInterestPercent = $isFirst ? $firstPayPercent : $secondPayPercent;
                     $finalInterest = $applyRounding($monthlyInterest * ($finalInterestPercent / 100), $currency);
+                    $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
                         'principal' => $applyRounding($remainingBalance, $currency),
                         'interest' => $finalInterest,
-                        'payment' => $applyRounding($remainingBalance + $finalInterest, $currency),
+                        'fee' => $feePay,
+                        'payment' => $applyRounding($remainingBalance + $finalInterest + $feePay, $currency),
                         'balance' => 0,
                         'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
@@ -99,12 +113,14 @@ class LoanCalculator
                 } else {
                     $principalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
                     $interestPay = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
+                    $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
                         'principal' => $applyRounding($principalPay, $currency),
                         'interest' => $interestPay,
-                        'payment' => $applyRounding($principalPay + $interestPay, $currency),
+                        'fee' => $feePay,
+                        'payment' => $applyRounding($principalPay + $interestPay + $feePay, $currency),
                         'balance' => null,
                         'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
@@ -155,12 +171,14 @@ class LoanCalculator
 
                 if ($i == $totalPayments) {
                     $principalPay = $applyRounding($remainingBalance, $currency);
+                    $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
                         'principal' => $principalPay,
                         'interest' => $interestPay,
-                        'payment' => $applyRounding($principalPay + $interestPay, $currency),
+                        'fee' => $feePay,
+                        'payment' => $applyRounding($principalPay + $interestPay + $feePay, $currency),
                         'balance' => 0,
                         'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
@@ -168,12 +186,14 @@ class LoanCalculator
                 } else {
                     $rawPrincipalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
                     $principalPay = $applyRounding($rawPrincipalPay, $currency);
+                    $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
                         'principal' => $principalPay,
                         'interest' => $interestPay,
-                        'payment' => $applyRounding($principalPay + $interestPay, $currency),
+                        'fee' => $feePay,
+                        'payment' => $applyRounding($principalPay + $interestPay + $feePay, $currency),
                         'balance' => null,
                         'order' => (int) $currentPaymentDate->format('Ymd'),
                     ];
@@ -250,12 +270,14 @@ class LoanCalculator
                     $remainingBalance = 0;
                 }
 
+                $feePay = $calculatePeriodFee($i, $duration);
                 $results[] = [
                     'period' => $periodCounter++,
                     'date' => $currentPaymentDate->format('d/m/Y'),
                     'principal' => $monthlyPrincipal,
                     'interest' => $monthlyInterest,
-                    'payment' => $applyRounding($totalPayment, $currency),
+                    'fee' => $feePay,
+                    'payment' => $applyRounding($totalPayment + $feePay, $currency),
                     'balance' => $remainingBalance,
                 ];
 
@@ -302,12 +324,14 @@ class LoanCalculator
                 $monthlyPayment = $applyRounding($currentPrincipal + $monthlyInterest, $currency);
                 $remainingBalance = $applyRounding($remainingBalance - $currentPrincipal, $currency);
 
+                $feePay = $calculatePeriodFee($i, $duration);
                 $results[] = [
                     'period' => $i,
                     'date' => $currentPaymentDate->format('d/m/Y'),
                     'principal' => $currentPrincipal,
                     'interest' => $monthlyInterest,
-                    'payment' => $monthlyPayment,
+                    'fee' => $feePay,
+                    'payment' => $applyRounding($monthlyPayment + $feePay, $currency),
                     'balance' => $remainingBalance,
                 ];
 
@@ -353,12 +377,14 @@ class LoanCalculator
                     $remainingBalance = $applyRounding($remainingBalance - $monthlyPrincipal, $currency);
                 }
 
+                $feePay = $calculatePeriodFee($i, $duration);
                 $results[] = [
                     'period' => $i,
                     'date' => $currentPaymentDate->format('d/m/Y'),
                     'principal' => $applyRounding($currentPrincipal, $currency),
                     'interest' => $applyRounding($currentInterest, $currency),
-                    'payment' => $applyRounding($currentPrincipal + $currentInterest, $currency),
+                    'fee' => $feePay,
+                    'payment' => $applyRounding($currentPrincipal + $currentInterest + $feePay, $currency),
                     'balance' => $remainingBalance,
                 ];
 
@@ -401,12 +427,14 @@ class LoanCalculator
                     $currentPrincipal = 0;
                 }
 
+                $feePay = $calculatePeriodFee($i, $duration);
                 $results[] = [
                     'period' => $i,
                     'date' => $currentPaymentDate->format('d/m/Y'),
                     'principal' => $currentPrincipal,
                     'interest' => $currentInterest,
-                    'payment' => $applyRounding($currentPrincipal + $currentInterest, $currency),
+                    'fee' => $feePay,
+                    'payment' => $applyRounding($currentPrincipal + $currentInterest + $feePay, $currency),
                     'balance' => $remainingBalance,
                 ];
 
@@ -453,12 +481,14 @@ class LoanCalculator
                     $remainingBalance = $applyRounding($remainingBalance - $monthlyPrincipal, $currency);
                 }
 
+                $feePay = $calculatePeriodFee($i, $duration);
                 $results[] = [
                     'period' => $i,
                     'date' => $currentPaymentDate->format('d/m/Y'),
                     'principal' => $applyRounding($currentPrincipal, $currency),
                     'interest' => $applyRounding($currentInterest, $currency),
-                    'payment' => $applyRounding($currentPrincipal + $currentInterest, $currency),
+                    'fee' => $feePay,
+                    'payment' => $applyRounding($currentPrincipal + $currentInterest + $feePay, $currency),
                     'balance' => $remainingBalance,
                 ];
 

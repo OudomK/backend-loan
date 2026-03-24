@@ -1,0 +1,1 @@
+<?php require "vendor/autoload.php"; $app = require_once "bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); try { $c = new App\Http\Controllers\RepaymentController(); $res = $c->destroy(11); echo "OK"; } catch (\Exception $e) { echo "ERROR: " . $e->getMessage() . "\n" . $e->getTraceAsString(); }

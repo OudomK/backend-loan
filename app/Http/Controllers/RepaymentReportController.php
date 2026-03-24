@@ -20,36 +20,37 @@ class RepaymentReportController extends Controller
             'loan.guarantor',
             'loan.officer',
             'loan.collaterals',
+            'loan.product',
             'collector'
-        ]);
+        ])
+        ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
+        ->join('borrowers', 'loans.borrower_id', '=', 'borrowers.id');
 
         if ($fromDate) {
-            $query->where('transaction_date', '>=', $fromDate);
+            $query->where('repayment_transactions.transaction_date', '>=', $fromDate);
         }
         if ($toDate) {
-            $query->where('transaction_date', '<=', $toDate);
+            $query->where('repayment_transactions.transaction_date', '<=', $toDate);
         }
+        
         if ($officerId && $officerId !== 'all') {
             $query->where(function ($q) use ($officerId) {
-                $q->where('collector_id', $officerId)
-                    ->orWhereHas('loan', function ($sub) use ($officerId) {
-                        $sub->where('loan_officer_id', $officerId);
-                    });
+                $q->where('repayment_transactions.collector_id', $officerId)
+                  ->orWhere('loans.loan_officer_id', $officerId);
             });
         }
 
         $currency = $request->query('currency');
         if ($currency && $currency !== 'all') {
-            $query->whereHas('loan', function ($q) use ($currency) {
-                $q->where('currency', 'LIKE', $currency . '%');
-            });
+            $query->where('loans.currency', 'LIKE', $currency . '%');
         }
 
-        $reports = $query->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
-            ->join('borrowers', 'loans.borrower_id', '=', 'borrowers.id')
-            ->orderBy('repayment_transactions.transaction_date', 'desc')
-            ->orderBy('borrowers.last_name', 'asc')
-            ->orderBy('borrowers.first_name', 'asc')
+        $status = $request->query('status');
+        if ($status && $status !== 'all') {
+            $query->where('loans.status', $status);
+        }
+
+        $reports = $query->orderBy('repayment_transactions.transaction_date', 'desc')
             ->orderBy('repayment_transactions.id', 'desc')
             ->select('repayment_transactions.*')
             ->get();

@@ -113,6 +113,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/repayments/search', [RepaymentController::class, 'search']);
     Route::get('/repayments/installments/{loan_id}', [RepaymentController::class, 'getInstallments']);
     Route::post('/repayments', [RepaymentController::class, 'store']);
+    Route::delete('/repayments/{id}/void', [RepaymentController::class, 'destroy']);
 
     Route::get('/loan-operation/stats', [LoanOperationController::class, 'getStats']);
     Route::get('/loan-operation/activity', [LoanOperationController::class, 'getRecentActivity']);

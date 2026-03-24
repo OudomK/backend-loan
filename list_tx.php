@@ -1,0 +1,1 @@
+<?php require "vendor/autoload.php"; $app = require_once "bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); $txs = App\Models\RepaymentTransaction::all(); foreach($txs as $t) { echo "ID=".$t->id.", LOAN=".$t->loan_id.", TYPE=".$t->repayment_type.", AMOUNT=".$t->amount_paid."\n"; }

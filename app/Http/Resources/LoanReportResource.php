@@ -38,8 +38,10 @@ class LoanReportResource extends JsonResource
             'disb_amount' => $loan->amount,
             'currency' => $loan->currency,
             'rate' => $loan->interest_rate,
+            'interest_rate' => $loan->interest_rate,
             'processing_fee' => 0,
             'monthly_interest' => (float) $loan->monthly_interest,
+            'monthly_interest_rate' => (float) $loan->monthly_interest,
             'term' => $loan->duration_months,
             'tenor' => $loan->duration_months,
             'payment_frequency' => $loan->payment_frequency,
@@ -50,6 +52,7 @@ class LoanReportResource extends JsonResource
             're_finance_fee' => $loan->refinance_fee,
             'reschedule_fee' => $loan->reschedule_fee,
             'collateral_type' => $this->getCollateralTypeLabel($loan),
+            'product_name' => $loan->product?->name,
             'co_disburse' => $loan->officer?->name,
             'co_repay' => $this->collector?->name ?? $loan->officer?->name,
 

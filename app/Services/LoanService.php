@@ -20,13 +20,13 @@ class LoanService
      */
     public function calculateCurrentBalance(Loan $loan): float
     {
-        $totalPrincipal = $loan->payments()->sum('principal_amount');
+        // Use the immutable ledger approach matching Loan->recalculateSchedule()
+        $totalPrincipalPaid = (float) $loan->transactions()->sum('principal_paid')
+                            + (float) $loan->transactions()->sum('prepayment_paid')
+                            + (float) $loan->transactions()->sum('paid_off_amount')
+                            - (float) $loan->transactions()->sum('withdrawn_prepayment');
 
-        $paidToPrincipal = $loan->payments()->get()->sum(function ($p) {
-            return $p->total_paid > $p->interest_amount ? ($p->total_paid - $p->interest_amount) : 0;
-        });
-
-        return (float) ($totalPrincipal - $paidToPrincipal);
+        return round((float) $loan->amount - $totalPrincipalPaid, 2);
     }
 
     public function reschedule(Loan $loan, array $data)
@@ -120,10 +120,8 @@ class LoanService
             $newLoan->disbursed_by_officer_id = $newLoan->loan_officer_id;
             $newLoan->save();
 
-            // Mark old installments as paid
-            $oldLoan->payments->each(function (\App\Models\Payment $p) {
-                $p->update(['total_paid' => $p->principal_amount + $p->interest_amount]);
-            });
+            // Do not artificially mark future interest as paid. The loan is completed.
+            $oldLoan->payments()->where('total_paid', '<', 0.01)->delete();
 
             // Record transaction
             RepaymentTransaction::create([

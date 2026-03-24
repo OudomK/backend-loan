@@ -2,29 +2,50 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\LoanProduct;
 
 class LoanProductSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
-        $products = [
-            ['name' => 'General Loan', 'code' => 'GEN', 'description' => 'Standard all-purpose loan'],
-            ['name' => 'Business Loan', 'code' => 'BUS', 'description' => 'Loan for small and medium enterprises'],
-            ['name' => 'Agriculture Loan', 'code' => 'AGR', 'description' => 'Loan for agricultural purposes'],
-            ['name' => 'Staff Loan', 'code' => 'STF', 'description' => 'Internal loan for employees'],
-            ['name' => 'Education Loan', 'code' => 'EDU', 'description' => 'Loan for educational or tuition fees'],
-        ];
+        LoanProduct::updateOrCreate(
+            ['code' => 'PL-001'],
+            [
+                'name' => 'Personal Loan',
+                'description' => 'Standard personal loan for individual needs',
+                'interest_rate' => 1.2,
+                'fee_percentage' => 1.0,
+                'duration_months' => 12,
+                'repayment_method' => 'annuity_monthly',
+                'is_active' => true,
+            ]
+        );
 
-        foreach ($products as $product) {
-            \App\Models\LoanProduct::firstOrCreate(
-                ['code' => $product['code']],
-                ['name' => $product['name'], 'description' => $product['description'], 'is_active' => true]
-            );
-        }
+        LoanProduct::updateOrCreate(
+            ['code' => 'BL-001'],
+            [
+                'name' => 'Business Loan',
+                'description' => 'Loan for small and medium enterprises',
+                'interest_rate' => 1.5,
+                'fee_percentage' => 2.0,
+                'duration_months' => 24,
+                'repayment_method' => 'annuity_monthly',
+                'is_active' => true,
+            ]
+        );
+
+        LoanProduct::updateOrCreate(
+            ['code' => 'AG-001'],
+            [
+                'name' => 'Agriculture Loan',
+                'description' => 'Loan for farming and agricultural activities',
+                'interest_rate' => 1.0,
+                'fee_percentage' => 0.5,
+                'duration_months' => 6,
+                'repayment_method' => 'Balloon',
+                'is_active' => true,
+            ]
+        );
     }
 }
