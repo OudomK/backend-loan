@@ -7,8 +7,10 @@ use Filament\Widgets\ChartWidget;
 
 class RepaymentsBarChart extends ChartWidget
 {
-    protected ?string $heading = 'Monthly Repayments';
+    protected ?string $heading = 'Collection Trend';
+    protected ?string $description = 'Monthly repayments (USD-normalized)';
     protected static ?int $sort = 3;
+    protected ?string $maxHeight = '300px';
 
     protected function getData(): array
     {
@@ -19,11 +21,18 @@ class RepaymentsBarChart extends ChartWidget
             $labels[] = now()->subMonths($i)->format('M');
         }
 
-        $exchangeRate = (int) (cache()->remember('setting.exchange_rate', 3600, fn () => \App\Models\Setting::where('key', 'exchange_rate')->value('value')) ?? 4000);
+        $exchangeRate = (float) cache()->remember('setting.exchange_rate_khr_to_usd', 3600, function () {
+            $rate = \App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
+                ?? \App\Models\Setting::where('key', 'exchange_rate')->value('value')
+                ?? 4000;
+
+            return max(1, (float) $rate);
+        });
 
         // Aggregate in DB instead of loading all rows (much faster)
         $collectionsRaw = RepaymentTransaction::query()
             ->where('transaction_date', '>=', now()->subMonths(11)->startOfMonth())
+            ->whereNull('repayment_transactions.deleted_at')
             ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
             ->selectRaw('DATE_FORMAT(repayment_transactions.transaction_date, "%Y-%m") as month, loans.currency, SUM(repayment_transactions.amount_paid) as total')
             ->groupBy('month', 'loans.currency')
@@ -47,9 +56,33 @@ class RepaymentsBarChart extends ChartWidget
                     'label' => 'Repayments ($)',
                     'data' => $finalData,
                     'backgroundColor' => '#3b82f6',
+                    'borderRadius' => 8,
+                    'maxBarThickness' => 38,
                 ],
             ],
             'labels' => $labels,
+        ];
+    }
+
+    protected function getOptions(): ?array
+    {
+        return [
+            'plugins' => [
+                'legend' => [
+                    'display' => false,
+                ],
+            ],
+            'scales' => [
+                'x' => [
+                    'grid' => [
+                        'display' => false,
+                    ],
+                ],
+                'y' => [
+                    'beginAtZero' => true,
+                ],
+            ],
+            'maintainAspectRatio' => false,
         ];
     }
 

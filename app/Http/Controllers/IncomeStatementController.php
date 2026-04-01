@@ -17,7 +17,10 @@ class IncomeStatementController extends Controller
         Log::info("Income Statement: from=$fromDate, to=$toDate, currency=$currencyParam");
 
         try {
-            $exchangeRate = (int) (\App\Models\Setting::where('key', 'exchange_rate')->value('value') ?? 4000);
+            $exchangeRate = (float) (\App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
+                ?? \App\Models\Setting::where('key', 'exchange_rate')->value('value')
+                ?? 4000);
+            $exchangeRate = max(1, $exchangeRate);
 
             $currencies = [];
             if ($currencyParam && $currencyParam !== 'all') {
@@ -73,6 +76,7 @@ class IncomeStatementController extends Controller
                 // ── REVENUE ──────────────────────────────────────────────
                 $interest = (double) DB::table('repayment_transactions')
                     ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
+                    ->whereNull('repayment_transactions.deleted_at')
                     ->where('loans.currency', 'LIKE', $curr . '%')
                     ->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate])
                     ->sum('repayment_transactions.interest_paid');
@@ -82,6 +86,7 @@ class IncomeStatementController extends Controller
 
                 $penalty = (double) DB::table('repayment_transactions')
                     ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
+                    ->whereNull('repayment_transactions.deleted_at')
                     ->where('loans.currency', 'LIKE', $curr . '%')
                     ->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate])
                     ->sum('repayment_transactions.penalty_paid');
@@ -99,6 +104,7 @@ class IncomeStatementController extends Controller
 
                 $otherRev = (double) DB::table('miscellaneous_transactions')
                     ->where('type', 'revenue')
+                    ->whereNull('deleted_at')
                     ->where('currency', 'LIKE', $curr . '%')
                     ->whereBetween('transaction_date', [$fromDate, $toDate])
                     ->sum('amount');
@@ -108,7 +114,7 @@ class IncomeStatementController extends Controller
 
                 // ── EXPENSES ─────────────────────────────────────────────
                 if ($curr === 'USD') {
-                    $pQuery = DB::table('payrolls')->whereBetween('payment_date', [$fromDate, $toDate]);
+                    $pQuery = DB::table('payrolls')->whereNull('deleted_at')->whereBetween('payment_date', [$fromDate, $toDate]);
                     
                     // Salary Expense = Base Salary - Deduction
                     $salary = (double) (clone $pQuery)->sum('salary') - (double) (clone $pQuery)->sum('deduction');
@@ -133,6 +139,7 @@ class IncomeStatementController extends Controller
 
                 $borrInt = (double) DB::table('borrowing_repayments')
                     ->join('borrowings', 'borrowing_repayments.borrowing_id', '=', 'borrowings.id')
+                    ->whereNull('borrowing_repayments.deleted_at')
                     ->where('borrowings.currency', 'LIKE', $curr . '%')
                     ->whereBetween('borrowing_repayments.payment_date', [$fromDate, $toDate])
                     ->sum('borrowing_repayments.interest_paid');
@@ -142,6 +149,7 @@ class IncomeStatementController extends Controller
 
                 $otherExp = (double) DB::table('miscellaneous_transactions')
                     ->where('type', 'expense')
+                    ->whereNull('deleted_at')
                     ->where('currency', 'LIKE', $curr . '%')
                     ->whereBetween('transaction_date', [$fromDate, $toDate])
                     ->sum('amount');

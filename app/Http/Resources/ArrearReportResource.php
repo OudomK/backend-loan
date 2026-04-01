@@ -17,8 +17,8 @@ class ArrearReportResource extends JsonResource
     {
         /** @var \App\Models\Loan $this */
         $borrower = $this->borrower;
-        $reportDateStr = $request->query('report_date');
-        $referenceDate = $reportDateStr ? Carbon::parse($reportDateStr) : Carbon::today();
+        $referenceDateStr = $request->query('to_date') ?? $request->query('report_date');
+        $referenceDate = $referenceDateStr ? Carbon::parse($referenceDateStr) : Carbon::today();
 
         $arrearDate = $this->earliest_arrear_date;
         $aging = $arrearDate ? abs($referenceDate->diffInDays(Carbon::parse($arrearDate))) : 0;

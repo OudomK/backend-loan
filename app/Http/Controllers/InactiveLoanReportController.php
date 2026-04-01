@@ -22,7 +22,8 @@ class InactiveLoanReportController extends Controller
             'borrower',
             'officer',
             'disburseOfficer',
-            'collaterals'
+            'collaterals',
+            'product',
         ])
             ->whereIn('status', $statuses);
 
@@ -57,17 +58,25 @@ class InactiveLoanReportController extends Controller
         $loans = $query->get();
 
         // Filter by Date Range (if provided) using the calculated Last Payment Date (Inactive Date)
-        if ($fromDate && $toDate) {
+        if ($fromDate || $toDate) {
             $loans = $loans->filter(function ($loan) use ($fromDate, $toDate) {
-                if (!$loan->last_payment_date)
+                if (!$loan->last_payment_date) {
                     return false;
-                return $loan->last_payment_date >= $fromDate && $loan->last_payment_date <= $toDate;
+                }
+                if ($fromDate && $loan->last_payment_date < $fromDate) {
+                    return false;
+                }
+                if ($toDate && $loan->last_payment_date > $toDate) {
+                    return false;
+                }
+                return true;
             });
         }
 
         $data = $loans->map(function ($loan) {
             $borrower = $loan->borrower;
             $officer = $loan->officer;
+            $product = $loan->product;
 
             // Inactive Date is essentially the last payment date when it was closed
             $inactiveDate = $loan->last_payment_date;
@@ -94,6 +103,8 @@ class InactiveLoanReportController extends Controller
                 'admin_fee' => $loan->admin_fee,
                 'processing_fee' => 0,
                 'refinance_fee' => $loan->refinance_fee,
+                'loan_product' => $product ? $product->name : 'General Loan',
+                'product_name' => $product ? $product->name : 'General Loan',
 
                 'collateral_type' => $loan->collaterals->isNotEmpty() ? $loan->collaterals->first()->type : '',
                 'co_disburse' => $loan->disburseOfficer ? $loan->disburseOfficer->name : ($officer ? $officer->name : ''),

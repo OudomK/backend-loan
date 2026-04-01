@@ -3,161 +3,172 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
-use Illuminate\Http\Request;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 
 class WriteOffCollectionReportController extends Controller
 {
     public function index(Request $request)
     {
-        $fromDate = $request->query('from_date');
-        $currency = $request->query('currency');
-        $toDateStr = $request->query('to_date');
-        $referenceDate = $toDateStr ? Carbon::parse($toDateStr) : Carbon::today();
-        $refDateStr = $referenceDate->toDateString();
-        $toDateStr = $refDateStr; // Use standardized YYYY-MM-DD for mapping too
+        $fromDateInput = $request->query('from_date');
+        $toDateInput = $request->query('to_date');
+        $currency = $request->query('currency', 'all');
 
-        // Main Query
+        $fromDate = $fromDateInput
+            ? Carbon::parse($fromDateInput)->startOfDay()
+            : Carbon::today()->startOfMonth()->startOfDay();
+        $toDate = $toDateInput
+            ? Carbon::parse($toDateInput)->endOfDay()
+            : Carbon::today()->endOfDay();
+
+        $fromDateStr = $fromDate->toDateString();
+        $toDateStr = $toDate->toDateString();
+        $toDateTime = $toDate->toDateTimeString();
+
         $query = Loan::with([
             'borrower',
             'coBorrower',
             'guarantor',
             'officer',
-            'collaterals'
+            'collaterals',
+            'payments' => function ($query) {
+                $query->orderBy('payment_date', 'asc');
+            },
+            'transactions' => function ($query) use ($toDateTime) {
+                $query->where('transaction_date', '<=', $toDateTime)
+                    ->orderBy('transaction_date', 'asc');
+            },
         ])
-            ->select([
-                'id',
-                'loan_code',
-                'amount',
-                'currency',
-                'interest_rate',
-                'duration_months',
-                'start_date',
-                'maturity_date',
-                'status',
-                'recovery_amount',
-                'written_off_at',
-                'borrower_id',
-                'co_borrower_id',
-                'guarantor_id',
-                'loan_officer_id',
-                'aging',
-            ]);
-
-        if ($toDateStr) {
-            $query->where('start_date', '<=', $toDateStr);
-        }
-
-        // Only include loans that were not closed/canceled before the report date
-        $query->whereIn('status', ['active', 'written_off']);
+            ->where('status', '!=', 'pending')
+            ->whereDate('start_date', '>=', $fromDateStr)
+            ->whereDate('start_date', '<=', $toDateStr);
 
         if ($currency && $currency !== 'all') {
             $query->where('currency', $currency);
         }
 
-        // Add Eloquent Subqueries (Now safer without joins)
-        $query->addSelect([
-            'earliest_arrear_date' => \App\Models\Payment::select('payment_date')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr)
-                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
-                ->orderBy('payment_date', 'asc')
-                ->limit(1),
+        $loans = $query
+            ->orderBy('start_date')
+            ->orderBy('loan_code')
+            ->get()
+            ->map(function ($loan) use ($toDate, $toDateStr) {
+                $borrower = $loan->borrower;
+                $borrowerName = $borrower
+                    ? trim((string) (($borrower->last_name ?? '') . ' ' . ($borrower->first_name ?? '')))
+                    : '';
 
-            'arrear_principal' => \App\Models\Payment::selectRaw('SUM(principal_amount - GREATEST(0, total_paid - interest_amount))')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr)
-                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)'),
+                $co = $loan->coBorrower;
+                $coName = $co
+                    ? trim((string) (($co->last_name ?? '') . ' ' . ($co->first_name ?? '')))
+                    : '';
 
-            'total_principal_paid' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, total_paid - interest_amount))')
-                ->whereColumn('loan_id', 'loans.id'),
-        ]);
+                $guarantor = $loan->guarantor;
+                $guarantorName = $guarantor
+                    ? trim((string) (($guarantor->last_name ?? '') . ' ' . ($guarantor->first_name ?? '')))
+                    : '';
 
-        $loans = $query->get()->map(function ($loan) use ($toDateStr) {
-            $borrower = $loan->borrower;
-            $borrowerName = $borrower ? ($borrower->last_name . ' ' . $borrower->first_name) : '';
-            
-            $co = $loan->coBorrower;
-            $coName = $co ? ($co->last_name . ' ' . $co->first_name) : '';
-            
-            $gua = $loan->guarantor;
-            $guaName = $gua ? ($gua->last_name . ' ' . $gua->first_name) : '';
+                $transactionsAtDate = $loan->transactions;
+                $principalPaid = $transactionsAtDate->sum(function ($transaction) {
+                    return $this->principalComponent($transaction);
+                });
 
-            // Calculate DPD (Days Past Due)
-            $aging = 0;
-            $isToday = Carbon::parse($toDateStr)->isToday();
+                $scheduledPaidAtDate = $transactionsAtDate->sum(function ($transaction) {
+                    return (float) ($transaction->fee_paid ?? 0)
+                        + (float) ($transaction->interest_paid ?? 0)
+                        + (float) ($transaction->principal_paid ?? 0)
+                        + (float) ($transaction->paid_off_amount ?? 0);
+                });
 
-            if ($isToday) {
-                // Use the persistent field for today's report
-                $aging = (int) ($loan->aging ?? 0);
-            } else {
-                // Fallback to dynamic calculation for historical reports
-                $refDate = Carbon::parse($toDateStr)->startOfDay();
-                if ($loan->earliest_arrear_date) {
-                    $earliest = Carbon::parse($loan->earliest_arrear_date)->startOfDay();
-                    $aging = (int) abs($refDate->diffInDays($earliest, false));
+                $recoveryAmount = max(0, $transactionsAtDate->sum(function ($transaction) {
+                    return (float) ($transaction->recovery_amount ?? 0);
+                }));
+
+                $outstanding = max(0, (float) ($loan->amount ?? 0) - $principalPaid);
+
+                $cumulativeDue = 0.0;
+                $cumulativePrincipalDue = 0.0;
+                $earliestArrearDate = null;
+
+                foreach ($loan->payments as $payment) {
+                    if (($payment->payment_date ?? '') >= $toDateStr) {
+                        continue;
+                    }
+
+                    $cumulativeDue += (float) ($payment->principal_amount ?? 0)
+                        + (float) ($payment->interest_amount ?? 0)
+                        + (float) ($payment->fee_amount ?? 0);
+                    $cumulativePrincipalDue += (float) ($payment->principal_amount ?? 0);
+
+                    if (($cumulativeDue - $scheduledPaidAtDate) > 0.01 && $earliestArrearDate === null) {
+                        $earliestArrearDate = $payment->payment_date;
+                    }
                 }
-            }
 
-            // Secondary fallback: If there is arrear principal, aging MUST be at least 1
-            if ($aging <= 0 && ($loan->arrear_principal ?? 0) > 0) {
-                $aging = 1; 
-            }
+                $amountDefault = max(0, $cumulativePrincipalDue - $principalPaid);
+                $aging = 0;
 
-            // Classification Logic (NBC Standard: 30, 90, 180, 360)
-            $classification = "Standard Loan";
-            if ($loan->written_off_at) {
-                $classification = "Loss Loan";
-            } else if ($aging >= 360) {
-                $classification = "Loss Loan";
-            } else if ($aging >= 180) {
-                $classification = "Doubtful Loan";
-            } else if ($aging >= 90) {
-                $classification = "Substandard Loan";
-            } else if ($aging >= 30) {
-                $classification = "Special Mention Loan";
-            }
+                if ($earliestArrearDate) {
+                    $aging = $toDate->copy()->startOfDay()->diffInDays(
+                        Carbon::parse($earliestArrearDate)->startOfDay()
+                    );
+                }
 
-            // Outstanding balance vs Arrear amount
-            $principalPaid = $loan->total_principal_paid ?? 0;
-            $outstanding = max(0, $loan->amount - $principalPaid);
-            $arrearPrincipal = $loan->arrear_principal ?? 0;
+                if ($aging <= 0 && $amountDefault > 0.01) {
+                    $aging = 1;
+                }
 
-            // First collateral type
-            $collateralType = $loan->collaterals->first()?->type ?? '';
+                $writtenOffAt = $loan->written_off_at
+                    ? Carbon::parse($loan->written_off_at)->endOfDay()
+                    : null;
+                $isWrittenOffAtDate = $writtenOffAt !== null && $writtenOffAt->lte($toDate);
 
-            return [
-                'disb_date' => $loan->start_date,
-                'loan_code' => $loan->loan_code,
-                'customer_code' => $loan->borrower_id,
-                'borrower_name' => $borrowerName,
-                'phone_number' => $borrower->phone ?? '',
-                'co_borrower' => $coName,
-                'guarantor' => $guaName,
-                'village' => $borrower->village ?? '',
-                'commune' => $borrower->commune ?? '',
-                'district' => $borrower->district ?? '',
-                'province' => $borrower->province ?? '',
-                'collateral_type' => $collateralType,
-                'co_repay' => $loan->officer->name ?? '',
-                'maturity_date' => $loan->maturity_date,
-                'currency' => $loan->currency,
-                'term' => $loan->duration_months,
-                'amount' => $loan->amount,
-                'amount_default' => $arrearPrincipal,
-                'default_balance' => $outstanding,
-                'recovery_amount' => $loan->recovery_amount ?? 0,
-                'aging' => $aging,
-                'classification' => $classification,
-            ];
-        });
+                if ($outstanding <= 0.01 && !$isWrittenOffAtDate) {
+                    return null;
+                }
 
+                $writeOffAmount = (float) ($loan->write_off_balance ?? 0);
+                if ($writeOffAmount <= 0.01) {
+                    $writeOffAmount = $outstanding;
+                }
 
-        // Group by classification
-        $grouped = $loans->groupBy('classification');
+                $defaultBalance = $isWrittenOffAtDate
+                    ? max(0, $writeOffAmount - $recoveryAmount)
+                    : $outstanding;
+                $amountDefault = $isWrittenOffAtDate
+                    ? max(0, $writeOffAmount)
+                    : $amountDefault;
 
-        // Ensure all categories exist
+                $classification = $this->classificationLabel($aging, $isWrittenOffAtDate);
+                $collateralType = $loan->collaterals->first()?->type ?? '';
+
+                return [
+                    'disb_date' => $loan->start_date,
+                    'loan_code' => $loan->loan_code,
+                    'customer_code' => $borrower->customer_code ?? '',
+                    'borrower_name' => $borrowerName,
+                    'phone_number' => $borrower->phone ?? '',
+                    'co_borrower' => $coName,
+                    'guarantor' => $guarantorName,
+                    'village' => $borrower->village ?? '',
+                    'commune' => $borrower->commune ?? '',
+                    'district' => $borrower->district ?? '',
+                    'province' => $borrower->province ?? '',
+                    'collateral_type' => $collateralType,
+                    'co_repay' => $loan->officer->name ?? '',
+                    'maturity_date' => $loan->maturity_date,
+                    'currency' => $loan->currency,
+                    'term' => (int) ($loan->duration_months ?? 0),
+                    'amount' => (float) ($loan->amount ?? 0),
+                    'amount_default' => $amountDefault,
+                    'default_balance' => $defaultBalance,
+                    'recovery_amount' => $recoveryAmount,
+                    'aging' => $aging,
+                    'classification' => $classification,
+                ];
+            })
+            ->filter()
+            ->values();
+
         $categories = [
             'Standard Loan' => [],
             'Special Mention Loan' => [],
@@ -166,13 +177,39 @@ class WriteOffCollectionReportController extends Controller
             'Loss Loan' => [],
         ];
 
-        foreach ($grouped as $classification => $items) {
+        foreach ($loans->groupBy('classification') as $classification => $items) {
             $categories[$classification] = $items->values()->toArray();
         }
 
         return response()->json([
             'success' => true,
-            'data' => $categories
+            'data' => $categories,
         ]);
+    }
+
+    private function principalComponent($transaction): float
+    {
+        return (float) ($transaction->principal_paid ?? 0)
+            + (float) ($transaction->prepayment_paid ?? 0)
+            + (float) ($transaction->paid_off_amount ?? 0)
+            - (float) ($transaction->withdrawn_prepayment ?? 0);
+    }
+
+    private function classificationLabel(int $aging, bool $isWrittenOffAtDate): string
+    {
+        if ($isWrittenOffAtDate || $aging >= 360) {
+            return 'Loss Loan';
+        }
+        if ($aging >= 180) {
+            return 'Doubtful Loan';
+        }
+        if ($aging >= 90) {
+            return 'Substandard Loan';
+        }
+        if ($aging >= 30) {
+            return 'Special Mention Loan';
+        }
+
+        return 'Standard Loan';
     }
 }

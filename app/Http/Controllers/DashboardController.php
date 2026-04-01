@@ -14,7 +14,10 @@ class DashboardController extends Controller
     public function getStats(Request $request)
     {
         $referenceDate = Carbon::today();
-        $exchangeRate = (int) (\App\Models\Setting::where('key', 'exchange_rate')->value('value') ?? 4000);
+        $exchangeRate = (float) (\App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
+            ?? \App\Models\Setting::where('key', 'exchange_rate')->value('value')
+            ?? 4000);
+        $exchangeRate = max(1, $exchangeRate);
 
         // Customer Stats
         $totalCustomers = Borrower::count();

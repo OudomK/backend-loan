@@ -3,10 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
-use App\Models\LoanOfficer;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\RepaymentTransaction;
 
@@ -24,11 +22,15 @@ class QualityPortfolioController extends Controller
         $fromDateStr = $fromDate->toDateString();
         $toDateStr = $toDate->toDateString();
 
-        // 1. Get all combinations of Loan Officer and Product from existing loans
+        // Group by officer + product + currency so mixed currencies never collapse
+        // into one row when the user selects "all".
         $combinations = Loan::with(['officer', 'product'])
-            ->select('loan_officer_id', 'product_id')
+            ->select('loan_officer_id', 'product_id', 'currency')
             ->whereNotNull('loan_officer_id')
-            ->groupBy('loan_officer_id', 'product_id')
+            ->when($currency !== 'all', function ($query) use ($currency) {
+                $query->where('currency', $currency);
+            })
+            ->groupBy('loan_officer_id', 'product_id', 'currency')
             ->get();
 
         $reportData = [];
@@ -36,26 +38,24 @@ class QualityPortfolioController extends Controller
         foreach ($combinations as $combo) {
             $officer = $combo->officer;
             $product = $combo->product;
+            $comboCurrency = $combo->currency;
 
-            if (!$officer)
+            if (!$officer || !$comboCurrency)
                 continue;
 
             try {
-                // Get loans for this officer and product
+                // Get loans for this officer/product/currency combination.
                 $baseQuery = Loan::where('loan_officer_id', $officer->id)
-                    ->where('product_id', $combo->product_id);
+                    ->where('product_id', $combo->product_id)
+                    ->where('currency', $comboCurrency);
 
-                if ($currency !== 'all') {
-                    $baseQuery->where('currency', $currency);
-                }
-
-                // --- Skip if no loans exist for this combo in the selected currency ---
+                // --- Skip if no loans exist for this combo ---
                 if ((clone $baseQuery)->count() === 0)
                     continue;
 
                 // --- 1. No. Disb & Disb. Amount ---
                 $oldDisb = (clone $baseQuery)->where('start_date', '<', $fromDateStr)->where('status', '!=', 'pending');
-                $newDisb = (clone $baseQuery)->whereBetween('start_date', [$fromDateStr, $toDateStr]);
+                $newDisb = (clone $baseQuery)->whereBetween('start_date', [$fromDateStr, $toDateStr])->where('status', '!=', 'pending');
 
                 $oldDisbCount = $oldDisb->count();
                 $newDisbCount = $newDisb->count();
@@ -63,54 +63,57 @@ class QualityPortfolioController extends Controller
                 $newDisbAmount = $newDisb->sum('amount') ?? 0;
 
                 // --- 2. Portfolio Size (End of Period) ---
-                $activeAtEnd = (clone $baseQuery)->where('start_date', '<=', $toDateStr)
-                    ->where(function ($q) {
-                        $q->where('status', 'active')
-                            ->orWhere('status', 'completed')
-                            ->orWhere('status', 'paid_off');
-                    });
+                $portfolioLoans = Loan::with([
+                    'payments' => function ($query) {
+                        $query->orderBy('payment_date', 'asc');
+                    },
+                    'transactions' => function ($query) use ($toDateStr) {
+                        $query->where('transaction_date', '<=', $toDateStr);
+                    },
+                ])
+                    ->where('loan_officer_id', $officer->id)
+                    ->where('product_id', $combo->product_id)
+                    ->where('currency', $comboCurrency)
+                    ->where('start_date', '<=', $toDateStr)
+                    ->where('status', '!=', 'pending')
+                    ->where(function ($query) use ($toDateStr) {
+                        $query->whereNull('written_off_at')
+                            ->orWhereDate('written_off_at', '>', $toDateStr);
+                    })
+                    ->get();
 
-                $totalClient = $activeAtEnd->count();
-
+                $activeBorrowerIds = [];
                 $loanOS = 0;
                 $interestOS = 0;
-
-                $activeLoans = $activeAtEnd->get();
-                foreach ($activeLoans as $loan) {
-                    $totalPrincipalPaid = DB::table('payments')
-                        ->where('loan_id', $loan->id)
-                        ->where('payment_date', '<=', $toDateStr)
-                        ->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
-
-                    $loanOS += max(0, $loan->amount - ($totalPrincipalPaid ?? 0));
-
-                    $interestOS += DB::table('payments')
-                        ->where('loan_id', $loan->id)
-                        ->where('payment_date', '<=', $toDateStr)
-                        ->sum(DB::raw('GREATEST(0, interest_amount - total_paid)'));
-                }
+                $feeOS = 0;
 
                 // --- 3. Portfolio Mutation (This Period) ---
-                $transactions = RepaymentTransaction::whereHas('loan', function ($q) use ($officer, $combo) {
+                $transactions = RepaymentTransaction::whereHas('loan', function ($q) use ($officer, $combo, $comboCurrency) {
                     $q->where('loan_officer_id', $officer->id)
-                        ->where('product_id', $combo->product_id);
+                        ->where('product_id', $combo->product_id)
+                        ->where('currency', $comboCurrency);
                 })->whereBetween('transaction_date', [$fromDateStr, $toDateStr])->get();
 
                 $collectedPrincipal = $transactions->sum('principal_paid') ?? 0;
                 $collectedInterest = $transactions->sum('interest_paid') ?? 0;
+                $feeCollected = $transactions->sum('fee_paid') ?? 0;
                 $penaltyCollected = $transactions->sum('penalty_paid') ?? 0;
-                $paidOffCollected = $transactions->where('repayment_type', 'Pay Off')->sum('amount_paid') ?? 0;
+                $paidOffCollected = $transactions->where('repayment_type', 'Pay Off')->sum(function ($transaction) {
+                    return (float) ($transaction->principal_paid ?? 0)
+                        + (float) ($transaction->paid_off_amount ?? 0);
+                }) ?? 0;
                 $recovery = $transactions->where('repayment_type', 'Recovery')->sum('amount_paid') ?? 0;
 
-                $principalDue = DB::table('payments')
-                    ->whereIn('loan_id', (clone $baseQuery)->pluck('id'))
+                $loanIds = (clone $baseQuery)
+                    ->where('status', '!=', 'pending')
+                    ->pluck('id');
+                $duePayments = \App\Models\Payment::whereIn('loan_id', $loanIds)
                     ->whereBetween('payment_date', [$fromDateStr, $toDateStr])
-                    ->sum('principal_amount') ?? 0;
+                    ->get();
 
-                $interestDue = DB::table('payments')
-                    ->whereIn('loan_id', (clone $baseQuery)->pluck('id'))
-                    ->whereBetween('payment_date', [$fromDateStr, $toDateStr])
-                    ->sum('interest_amount') ?? 0;
+                $principalDue = $duePayments->sum('principal_amount') ?? 0;
+                $interestDue = $duePayments->sum('interest_amount') ?? 0;
+                $feeDue = $duePayments->sum('fee_amount') ?? 0;
 
                 // --- Write-Offs ---
                 $woMonth = (clone $baseQuery)->whereNotNull('written_off_at')->whereBetween('written_off_at', [$fromDateStr, $toDateStr]);
@@ -128,37 +131,94 @@ class QualityPortfolioController extends Controller
                 $par30Count = 0;
                 $par30Amount = 0;
 
-                foreach ($activeLoans as $loan) {
-                    $earliestArrear = DB::table('payments')
-                        ->where('loan_id', $loan->id)
-                        ->where('payment_date', '<', $toDateStr)
-                        ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
-                        ->orderBy('payment_date', 'asc')
-                        ->first();
+                foreach ($portfolioLoans as $loan) {
+                    $transactionsAtEnd = $loan->transactions;
 
-                    if ($earliestArrear) {
-                        $aging = Carbon::parse($toDateStr)->diffInDays(Carbon::parse($earliestArrear->payment_date));
-                        $principalPaidAtEnd = DB::table('payments')
-                            ->where('loan_id', $loan->id)
-                            ->where('payment_date', '<=', $toDateStr)
-                            ->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
-                        $currentOS = max(0, $loan->amount - ($principalPaidAtEnd ?? 0));
+                    $principalPaidAtEnd = $transactionsAtEnd->sum(function ($transaction) {
+                        return (float) ($transaction->principal_paid ?? 0)
+                            + (float) ($transaction->prepayment_paid ?? 0)
+                            + (float) ($transaction->paid_off_amount ?? 0)
+                            - (float) ($transaction->withdrawn_prepayment ?? 0);
+                    });
 
-                        if ($aging >= 1) {
-                            $par1Count++;
-                            $par1Amount += $currentOS;
+                    $currentOS = max(0, (float) $loan->amount - $principalPaidAtEnd);
+                    if ($currentOS <= 0.01) {
+                        continue;
+                    }
+
+                    $loanOS += $currentOS;
+                    $activeBorrowerIds[] = $loan->borrower_id;
+
+                    $paymentsUpToDate = $loan->payments->filter(function ($payment) use ($toDateStr) {
+                        return $payment->payment_date <= $toDateStr;
+                    });
+
+                    $interestPaidAtEnd = $transactionsAtEnd->sum(function ($transaction) {
+                        return (float) ($transaction->interest_paid ?? 0);
+                    });
+                    $feePaidAtEnd = $transactionsAtEnd->sum(function ($transaction) {
+                        return (float) ($transaction->fee_paid ?? 0);
+                    });
+
+                    $interestScheduledAtEnd = $paymentsUpToDate->sum(function ($payment) {
+                        return (float) ($payment->interest_amount ?? 0);
+                    });
+                    $feeScheduledAtEnd = $paymentsUpToDate->sum(function ($payment) {
+                        return (float) ($payment->fee_amount ?? 0);
+                    });
+
+                    $interestOS += max(0, $interestScheduledAtEnd - $interestPaidAtEnd);
+                    $feeOS += max(0, $feeScheduledAtEnd - $feePaidAtEnd);
+
+                    $scheduledPaidAtEnd = $transactionsAtEnd->sum(function ($transaction) {
+                        return (float) ($transaction->fee_paid ?? 0)
+                            + (float) ($transaction->interest_paid ?? 0)
+                            + (float) ($transaction->principal_paid ?? 0)
+                            + (float) ($transaction->paid_off_amount ?? 0);
+                    });
+
+                    $cumulativeDue = 0.0;
+                    $earliestOverdueDate = null;
+
+                    foreach ($loan->payments as $payment) {
+                        if ($payment->payment_date >= $toDateStr) {
+                            continue;
                         }
-                        if ($aging >= 30) {
-                            $par30Count++;
-                            $par30Amount += $currentOS;
+
+                        $cumulativeDue += (float) ($payment->principal_amount ?? 0)
+                            + (float) ($payment->interest_amount ?? 0)
+                            + (float) ($payment->fee_amount ?? 0);
+
+                        if (($cumulativeDue - $scheduledPaidAtEnd) > 0.01) {
+                            $earliestOverdueDate = $payment->payment_date;
+                            break;
                         }
                     }
+
+                    if (!$earliestOverdueDate) {
+                        continue;
+                    }
+
+                    $aging = abs($toDate->diffInDays(Carbon::parse($earliestOverdueDate)));
+
+                    if ($aging >= 1) {
+                        $par1Count++;
+                        $par1Amount += $currentOS;
+                    }
+                    if ($aging >= 30) {
+                        $par30Count++;
+                        $par30Amount += $currentOS;
+                    }
                 }
+
+                $totalClient = collect($activeBorrowerIds)->unique()->count();
+                $totalArrears = max(0, ($principalDue + $interestDue + $feeDue) - ($collectedPrincipal + $collectedInterest + $feeCollected));
 
                 $reportData[] = [
                     'co_code' => $officer->id,
                     'co_name' => $officer->name,
                     'product_name' => $product ? $product->name : 'General Loan',
+                    'currency' => $comboCurrency,
                     'no_disb_old' => $oldDisbCount,
                     'no_disb_new' => $newDisbCount,
                     'no_disb_total' => $oldDisbCount + $newDisbCount,
@@ -166,21 +226,22 @@ class QualityPortfolioController extends Controller
                     'disb_amount_new' => $newDisbAmount,
                     'disb_amount_total' => $oldDisbAmount + $newDisbAmount,
                     'disb_amount_extra' => $newDisbAmount,
+                    'borrower_ids' => collect($activeBorrowerIds)->unique()->values()->all(),
                     'total_client' => $totalClient,
                     'loan_os' => $loanOS,
                     'interest_os' => $interestOS,
-                    'fee_os' => 0,
+                    'fee_os' => $feeOS,
                     'no_of_client' => $totalClient,
                     'principal_collected' => $collectedPrincipal,
                     'interest_collected' => $collectedInterest,
-                    'fee_collected' => 0,
+                    'fee_collected' => $feeCollected,
                     'penalty_collected' => $penaltyCollected,
                     'paid_off_collected' => $paidOffCollected,
                     'recovery' => $recovery,
                     'principal_due' => $principalDue,
                     'interest_due' => $interestDue,
-                    'fee_due' => 0,
-                    'total_arrears' => max(0, ($principalDue + $interestDue) - ($collectedPrincipal + $collectedInterest)),
+                    'fee_due' => $feeDue,
+                    'total_arrears' => $totalArrears,
                     'repayment_rate' => $principalDue > 0 ? (($collectedPrincipal / $principalDue) * 100) : 100,
                     'no_par_1' => $par1Count,
                     'amount_par_1' => $par1Amount,

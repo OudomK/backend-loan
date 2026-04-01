@@ -57,13 +57,13 @@ Route::get('/app/footer-user', function () {
 
 Route::get('/app/settings', function () {
     $dbSettings = \App\Models\Setting::pluck('value', 'key')->toArray();
-    
+
     return response()->json([
         'company_name' => $dbSettings['company_name'] ?? Config::get('app.company_name', 'Company Name'),
         'company_logo' => isset($dbSettings['company_logo']) ? asset('storage/' . $dbSettings['company_logo']) : null,
         'default_language' => $dbSettings['default_language'] ?? 'EN',
         'copyright_text' => $dbSettings['copyright_text'] ?? ('© ' . date('Y') . ' ' . Config::get('app.company_name')),
-        'exchange_rate' => $dbSettings['exchange_rate_khr_to_usd'] ?? 4000,
+        'exchange_rate' => $dbSettings['exchange_rate_khr_to_usd'] ?? $dbSettings['exchange_rate'] ?? 4000,
         'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,
         'default_penalty_usd' => $dbSettings['default_penalty_usd'] ?? 2.5,
         'default_penalty_khr' => $dbSettings['default_penalty_khr'] ?? 10000,
@@ -109,11 +109,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('loans/suggest-code', [LoanController::class, 'suggestCode']);
     Route::apiResource('loans', LoanController::class);
 
-    Route::get('/repayments/due-list', [RepaymentController::class, 'getDueList']);
-    Route::get('/repayments/search', [RepaymentController::class, 'search']);
-    Route::get('/repayments/installments/{loan_id}', [RepaymentController::class, 'getInstallments']);
-    Route::post('/repayments', [RepaymentController::class, 'store']);
-    Route::delete('/repayments/{id}/void', [RepaymentController::class, 'destroy']);
+    Route::get('/repayments/due-list', [RepaymentController::class, 'getDueList'])->middleware('permission:ViewAny:RepaymentTransaction');
+    Route::get('/repayments/search', [RepaymentController::class, 'search'])->middleware('permission:ViewAny:RepaymentTransaction');
+    Route::get('/repayments/installments/{loan_id}', [RepaymentController::class, 'getInstallments'])->middleware('permission:ViewAny:RepaymentTransaction');
+    Route::post('/repayments', [RepaymentController::class, 'store'])->middleware('permission:Create:RepaymentTransaction');
+    Route::delete('/repayments/{id}/void', [RepaymentController::class, 'destroy'])->middleware('permission:Delete:RepaymentTransaction');
 
     Route::get('/loan-operation/stats', [LoanOperationController::class, 'getStats']);
     Route::get('/loan-operation/activity', [LoanOperationController::class, 'getRecentActivity']);
@@ -136,11 +136,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('saving-accounts-report', [SavingAccountController::class, 'getSavingReport']);
     Route::post('capital-shares/preview-schedule', [CapitalShareController::class, 'previewSchedule']);
     Route::apiResource('capital-shares', CapitalShareController::class);
-    Route::post('capital-shares/{share}/repay', [CapitalShareController::class, 'repay']);
-    Route::post('capital-shares/{share}/add-capital', [CapitalShareController::class, 'addCapital']);
-    Route::post('capital-shares/{share}/withdraw-capital', [CapitalShareController::class, 'withdrawCapital']);
-    Route::get('capital-shares/{id}/transactions', [CapitalShareController::class, 'getTransactions']);
-    Route::post('capital-shares/{share}/sell', [CapitalShareController::class, 'sellShare']);
+    Route::post('capital-shares/{share}/repay', [CapitalShareController::class, 'repay'])->middleware('permission:Update:CapitalShareTransaction');
+    Route::post('capital-shares/{share}/add-capital', [CapitalShareController::class, 'addCapital'])->middleware('permission:Create:CapitalShareTransaction');
+    Route::post('capital-shares/{share}/withdraw-capital', [CapitalShareController::class, 'withdrawCapital'])->middleware('permission:Delete:CapitalShareTransaction');
+    Route::get('capital-shares/{id}/transactions', [CapitalShareController::class, 'getTransactions'])->middleware('permission:ViewAny:CapitalShareTransaction');
+    Route::post('capital-shares/{share}/sell', [CapitalShareController::class, 'sellShare'])->middleware('permission:Update:CapitalShare');
 
     Route::get('export/saving-report', [ExportController::class, 'exportSavingReport']);
     Route::get('export/capital-report', [ExportController::class, 'exportCapitalReport']);
@@ -191,9 +191,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('payrolls', PayrollController::class);
     Route::get('/reports/income-statement', [IncomeStatementController::class, 'index']);
 
-    Route::get('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'index']);
-    Route::post('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'store']);
-    Route::delete('/miscellaneous-transactions/{id}', [MiscellaneousTransactionController::class, 'destroy']);
+    Route::get('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'index'])->middleware('permission:ViewAny:MiscellaneousTransaction');
+    Route::post('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'store'])->middleware('permission:Create:MiscellaneousTransaction');
+    Route::delete('/miscellaneous-transactions/{id}', [MiscellaneousTransactionController::class, 'destroy'])->middleware('permission:Delete:MiscellaneousTransaction');
 
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
 });

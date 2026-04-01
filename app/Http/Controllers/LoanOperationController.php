@@ -16,7 +16,8 @@ class LoanOperationController extends Controller
     public function getStats()
     {
         try {
-            $rawRate = \App\Models\Setting::where('key', 'exchange_rate')->value('value');
+            $rawRate = \App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
+                ?? \App\Models\Setting::where('key', 'exchange_rate')->value('value');
             $exchangeRate = max(1, (int) ($rawRate ?? 4000));
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('LoanOperation getStats: exchange_rate failed', ['error' => $e->getMessage()]);
@@ -36,13 +37,13 @@ class LoanOperationController extends Controller
                 ->join('loans', 'payments.loan_id', '=', 'loans.id')
                 ->where('loans.status', '!=', 'completed')
                 ->where('loans.currency', 'LIKE', 'USD%')
-                ->selectRaw('COALESCE(SUM(LEAST(COALESCE(principal_amount,0), GREATEST(0, COALESCE(total_paid,0) - COALESCE(interest_amount,0)))), 0) as paid')
+                ->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0) - COALESCE(payments.interest_amount,0)))), 0) as paid')
                 ->value('paid') ?? 0);
             $principalPaidKHR = (float) (DB::table('payments')
                 ->join('loans', 'payments.loan_id', '=', 'loans.id')
                 ->where('loans.status', '!=', 'completed')
                 ->where('loans.currency', 'LIKE', 'KHR%')
-                ->selectRaw('COALESCE(SUM(LEAST(COALESCE(principal_amount,0), GREATEST(0, COALESCE(total_paid,0) - COALESCE(interest_amount,0)))), 0) as paid')
+                ->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0) - COALESCE(payments.interest_amount,0)))), 0) as paid')
                 ->value('paid') ?? 0);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('LoanOperation getStats: principal paid query failed', ['error' => $e->getMessage()]);
@@ -87,10 +88,10 @@ class LoanOperationController extends Controller
             $par30AmountUSD = 0.0;
             $par30AmountKHR = 0.0;
             if ($loanIdsOverdue30->isNotEmpty()) {
-                $par30PrincipalPaidUSD = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'USD%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(principal_amount,0), GREATEST(0, COALESCE(total_paid,0)-COALESCE(interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
+                $par30PrincipalPaidUSD = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'USD%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0)-COALESCE(payments.interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
                 $par30DisbursedUSD = (float) Loan::whereIn('id', $loanIdsOverdue30)->where('currency', 'LIKE', 'USD%')->sum('amount');
                 $par30AmountUSD = max(0, $par30DisbursedUSD - $par30PrincipalPaidUSD);
-                $par30PrincipalPaidKHR = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'KHR%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(principal_amount,0), GREATEST(0, COALESCE(total_paid,0)-COALESCE(interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
+                $par30PrincipalPaidKHR = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'KHR%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0)-COALESCE(payments.interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
                 $par30DisbursedKHR = (float) Loan::whereIn('id', $loanIdsOverdue30)->where('currency', 'LIKE', 'KHR%')->sum('amount');
                 $par30AmountKHR = max(0, $par30DisbursedKHR - $par30PrincipalPaidKHR);
             }

@@ -20,6 +20,64 @@ use App\Services\BalloonPaymentCalculator;
  */
 class CapitalShareController extends Controller
 {
+    private function ensurePermission(Request $request, string $permission): void
+    {
+        $user = $request->user();
+        abort_if(!$user, 401, 'Unauthenticated.');
+
+        $role = strtolower((string) ($user->roles()->pluck('name')->first() ?? $user->role ?? ''));
+
+        if (in_array($role, ['admin', 'super_admin'], true) || $user->can($permission)) {
+            return;
+        }
+
+        abort(403, 'You do not have permission to perform this action.');
+    }
+
+    private function hasCapitalMovements(CapitalShare $share): bool
+    {
+        return $share->transactions()
+            ->whereIn('transaction_type', ['Deposit', 'Withdrawal', 'Repayment'])
+            ->exists();
+    }
+
+    private function deriveCapitalValues(array $validated, ?CapitalShare $existing = null): array
+    {
+        $shareQty = array_key_exists('share_qty', $validated)
+            ? (int) $validated['share_qty']
+            : (int) ($existing?->share_qty ?? 0);
+
+        $amount = array_key_exists('amount', $validated)
+            ? round((float) $validated['amount'], 2)
+            : round((float) ($existing?->amount ?? 0), 2);
+
+        $parValue = array_key_exists('par_value', $validated)
+            ? (float) $validated['par_value']
+            : (float) ($existing?->par_value ?? 0);
+
+        if ($parValue <= 0) {
+            if ($shareQty > 0 && $amount > 0) {
+                $parValue = round($amount / $shareQty, 8);
+            } else {
+                $parValue = (float) ($existing?->par_value ?? 1);
+                if ($parValue <= 0) {
+                    $parValue = 1.0;
+                }
+            }
+        }
+
+        if ($amount <= 0 && $shareQty > 0) {
+            $amount = round($shareQty * $parValue, 2);
+        }
+
+        return [
+            'share_qty' => $shareQty,
+            'par_value' => $parValue,
+            'amount' => $amount,
+            'total_capital' => $amount,
+        ];
+    }
+
     public function index()
     {
         $shares = CapitalShare::with(['lender', 'investor'])->get();
@@ -72,6 +130,8 @@ class CapitalShareController extends Controller
 
     public function store(Request $request)
     {
+        $this->ensurePermission($request, 'ui:capital_share:create');
+
         \Illuminate\Support\Facades\Log::info("Capital Share Store Request: " . json_encode($request->all()));
 
         $category = $request->input('category');
@@ -80,8 +140,8 @@ class CapitalShareController extends Controller
         $validated = $request->validate([
             'lender_id' => "required|exists:$lenderTable,id",
             'category' => 'required|string',
-            'par_value' => 'nullable|numeric',
-            'share_qty' => 'nullable|integer',
+            'par_value' => 'nullable|numeric|min:0',
+            'share_qty' => 'nullable|integer|min:0',
             'currency' => 'required|string',
 
             // New Borrowing/Share Fields
@@ -90,17 +150,47 @@ class CapitalShareController extends Controller
             'borrowing_date' => 'nullable|date',
             'account_no' => 'nullable|string',
             'contract_no' => 'nullable|string',
-            'amount' => 'nullable|numeric',
+            'amount' => 'nullable|numeric|min:0',
             'int_pay_mode' => 'nullable|string',
-            'balance' => 'nullable|numeric',
-            'dividends' => 'nullable|numeric',
-            'total_dividend_paid' => 'nullable|numeric',
+            'balance' => 'nullable|numeric|min:0',
+            'dividends' => 'nullable|numeric|min:0',
+            'total_dividend_paid' => 'nullable|numeric|min:0',
             'last_dividend_date' => 'nullable|date',
             'repayment_schedule' => 'nullable|array',
             'holder_id' => 'nullable|integer',
             'certificate_no' => 'nullable|string',
             'purchase_date' => 'nullable|date',
         ]);
+
+        if ($category === 'Real Capital') {
+            $capitalValues = $this->deriveCapitalValues($validated);
+
+            if ($capitalValues['amount'] <= 0) {
+                return response()->json([
+                    'message' => 'Amount must be greater than 0 for Real Capital.',
+                ], 422);
+            }
+
+            if ($capitalValues['share_qty'] <= 0) {
+                return response()->json([
+                    'message' => 'Share quantity must be greater than 0 for Real Capital.',
+                ], 422);
+            }
+
+            $validated = array_merge($validated, $capitalValues);
+            $validated['balance'] = $capitalValues['amount'];
+        } else {
+            $validated['amount'] = round((float) ($validated['amount'] ?? 0), 2);
+
+            if ($validated['amount'] <= 0) {
+                return response()->json([
+                    'message' => 'Amount must be greater than 0 for Loan Capital.',
+                ], 422);
+            }
+
+            $validated['total_capital'] = $validated['amount'];
+            $validated['balance'] = $validated['amount'];
+        }
 
         $share = new CapitalShare();
 
@@ -115,7 +205,7 @@ class CapitalShareController extends Controller
         $share->par_value = $validated['par_value'] ?? 1.0;
         $share->share_qty = $validated['share_qty'] ?? 0;
         $share->amount = $validated['amount'] ?? 0;
-        $share->total_capital = $share->amount;
+        $share->total_capital = $validated['total_capital'] ?? $share->amount;
         $share->balance = $validated['balance'] ?? $share->amount;
         $share->currency = $validated['currency'];
         $share->status = 'Active';
@@ -141,11 +231,13 @@ class CapitalShareController extends Controller
         CapitalShareTransaction::create([
             'capital_share_id' => $share->id,
             'transaction_type' => 'Initial',
-            'amount' => $share->total_capital,
+            'amount' => $share->amount,
             'share_qty' => $share->share_qty,
-            'payment_method' => $share->payment_method,
-            'transaction_date' => $share->borrowing_date ?? now(),
-            'description' => 'Initial capital purchase',
+            'payment_method' => null,
+            'transaction_date' => $share->borrowing_date ?? $share->purchase_date ?? now(),
+            'description' => $category === 'Real Capital'
+                ? 'Initial capital purchase'
+                : 'Initial loan capital setup',
             'performed_by' => Auth::id(),
         ]);
 
@@ -154,6 +246,8 @@ class CapitalShareController extends Controller
 
     public function update(Request $request, $id)
     {
+        $this->ensurePermission($request, 'ui:capital_share:edit');
+
         $share = CapitalShare::findOrFail($id);
         $category = $request->input('category', $share->category);
         $lenderTable = $category === 'Real Capital' ? 'investors' : 'lenders';
@@ -162,8 +256,8 @@ class CapitalShareController extends Controller
             'lender_id' => "nullable|exists:$lenderTable,id",
             'category' => 'nullable|string',
             'status' => 'nullable|string',
-            'share_qty' => 'nullable|integer',
-            'par_value' => 'nullable|numeric',
+            'share_qty' => 'nullable|integer|min:0',
+            'par_value' => 'nullable|numeric|min:0',
             'currency' => 'nullable|string',
 
             // New Borrowing/Share Fields
@@ -172,17 +266,23 @@ class CapitalShareController extends Controller
             'borrowing_date' => 'nullable|date',
             'account_no' => 'nullable|string',
             'contract_no' => 'nullable|string',
-            'amount' => 'nullable|numeric',
+            'amount' => 'nullable|numeric|min:0',
             'int_pay_mode' => 'nullable|string',
-            'balance' => 'nullable|numeric',
-            'dividends' => 'nullable|numeric',
-            'total_dividend_paid' => 'nullable|numeric',
+            'balance' => 'nullable|numeric|min:0',
+            'dividends' => 'nullable|numeric|min:0',
+            'total_dividend_paid' => 'nullable|numeric|min:0',
             'last_dividend_date' => 'nullable|date',
             'repayment_schedule' => 'nullable|array',
             'holder_id' => 'nullable|integer',
             'certificate_no' => 'nullable|string',
             'purchase_date' => 'nullable|date',
         ]);
+
+        if ($category !== $share->category) {
+            return response()->json([
+                'message' => 'Changing category on an existing capital/share record is not supported. Please create a new record instead.',
+            ], 422);
+        }
 
         if (isset($validated['lender_id'])) {
             if ($category === 'Real Capital') {
@@ -195,18 +295,60 @@ class CapitalShareController extends Controller
             unset($validated['lender_id']);
         }
 
-        if (isset($validated['amount'])) {
-            $share->total_capital = $validated['amount'];
-            $share->balance = $validated['amount'];
+        unset($validated['balance']);
+
+        if ($category === 'Real Capital') {
+            $financialFieldsChanged = array_key_exists('amount', $validated)
+                || array_key_exists('share_qty', $validated)
+                || array_key_exists('par_value', $validated);
+
+            if ($financialFieldsChanged && $this->hasCapitalMovements($share)) {
+                return response()->json([
+                    'message' => 'This capital account already has transactions. Please use Add Capital or Withdraw Capital instead of editing the invested amount directly.',
+                ], 422);
+            }
+
+            if ($financialFieldsChanged) {
+                $capitalValues = $this->deriveCapitalValues($validated, $share);
+
+                if ($capitalValues['amount'] <= 0) {
+                    return response()->json([
+                        'message' => 'Amount must be greater than 0 for Real Capital.',
+                    ], 422);
+                }
+
+                if ($capitalValues['share_qty'] <= 0) {
+                    return response()->json([
+                        'message' => 'Share quantity must be greater than 0 for Real Capital.',
+                    ], 422);
+                }
+
+                $validated = array_merge($validated, $capitalValues);
+                $validated['balance'] = $capitalValues['amount'];
+            }
+        } elseif (array_key_exists('amount', $validated)) {
+            $newAmount = round((float) $validated['amount'], 2);
+            $repaidPrincipal = round(max(0, (float) $share->amount - (float) $share->balance), 2);
+
+            if ($newAmount <= 0) {
+                return response()->json([
+                    'message' => 'Amount must be greater than 0 for Loan Capital.',
+                ], 422);
+            }
+
+            if ($newAmount + 0.001 < $repaidPrincipal) {
+                return response()->json([
+                    'message' => 'Amount cannot be less than the principal already repaid.',
+                ], 422);
+            }
+
+            $validated['amount'] = $newAmount;
+            $validated['total_capital'] = $newAmount;
+            $validated['balance'] = round(max(0, $newAmount - $repaidPrincipal), 2);
         }
 
         $share->fill($validated);
         $share->save();
-
-        // Ensure balance is saved if it was updated above but not in $validated
-        if ($share->isDirty('balance')) {
-            $share->save();
-        }
 
         return response()->json($share);
     }
@@ -214,6 +356,13 @@ class CapitalShareController extends Controller
     public function addCapital(Request $request, $id)
     {
         $share = CapitalShare::findOrFail($id);
+
+        if ($share->category !== 'Real Capital') {
+            return response()->json([
+                'message' => 'Add Capital is only available for Real Capital accounts.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'share_qty' => 'nullable|integer|min:1',
             'amount' => 'nullable|numeric|min:0.01',
@@ -221,6 +370,12 @@ class CapitalShareController extends Controller
             'transaction_date' => 'nullable|date',
             'description' => 'nullable|string',
         ]);
+
+        if (empty($validated['share_qty']) && empty($validated['amount'])) {
+            return response()->json([
+                'message' => 'Please provide a share quantity or amount to add.',
+            ], 422);
+        }
 
         return DB::transaction(function () use ($share, $validated) {
             $parValue = $share->par_value > 0 ? (float) $share->par_value : 1;
@@ -232,6 +387,12 @@ class CapitalShareController extends Controller
             } else {
                 $addShares = (int) $validated['share_qty'];
                 $addAmount = $addShares * $parValue;
+            }
+
+            if ($addShares <= 0) {
+                return response()->json([
+                    'message' => 'Amount is below one share value. Please enter a valid share quantity or amount.',
+                ], 422);
             }
 
             $newShareQty = (int) $share->share_qty + $addShares;
@@ -268,6 +429,13 @@ class CapitalShareController extends Controller
     public function withdrawCapital(Request $request, $id)
     {
         $share = CapitalShare::findOrFail($id);
+
+        if ($share->category !== 'Real Capital') {
+            return response()->json([
+                'message' => 'Withdraw Capital is only available for Real Capital accounts.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'share_qty' => 'nullable|integer|min:1',
             'amount' => 'nullable|numeric|min:0.01',
@@ -275,6 +443,12 @@ class CapitalShareController extends Controller
             'transaction_date' => 'nullable|date',
             'description' => 'nullable|string',
         ]);
+
+        if (empty($validated['share_qty']) && empty($validated['amount'])) {
+            return response()->json([
+                'message' => 'Please provide a share quantity or amount to withdraw.',
+            ], 422);
+        }
 
         $parValue = $share->par_value > 0 ? (float) $share->par_value : 1;
 
@@ -287,19 +461,31 @@ class CapitalShareController extends Controller
             $withdrawAmount = $withdrawShares * $parValue;
         }
 
+        if ($withdrawShares <= 0) {
+            return response()->json([
+                'message' => 'Amount is below one share value. Please enter a valid share quantity or amount.',
+            ], 422);
+        }
+
         if ((int) $share->share_qty < $withdrawShares) {
             return response()->json(['message' => 'Insufficient share quantity'], 400);
+        }
+
+        if ($withdrawAmount > (float) $share->balance + 0.001) {
+            return response()->json(['message' => 'Insufficient capital balance'], 422);
         }
 
         return DB::transaction(function () use ($share, $validated, $withdrawShares, $withdrawAmount, $parValue) {
             $newShareQty = (int) $share->share_qty - $withdrawShares;
             $newTotalCapital = $newShareQty * $parValue;
+            $newBalance = round(max(0, (float) $share->balance - $withdrawAmount), 2);
 
             DB::table('capital_shares')->where('id', $share->id)->update([
                 'share_qty' => $newShareQty,
                 'total_capital' => $newTotalCapital,
                 'amount' => $newTotalCapital,
-                'balance' => $newTotalCapital,
+                'balance' => $newBalance,
+                'status' => $newShareQty <= 0 || $newBalance <= 0.001 ? 'Withdrawn' : 'Active',
                 'updated_at' => now(),
             ]);
 
@@ -332,23 +518,34 @@ class CapitalShareController extends Controller
     public function repay(Request $request, $id)
     {
         $share = CapitalShare::findOrFail($id);
+
+        if ($share->category !== 'Loan Capital') {
+            return response()->json([
+                'message' => 'Repayment is only available for Loan Capital accounts.',
+            ], 422);
+        }
+
         $validated = $request->validate([
             'period' => 'required|integer',
-            'principal_paid' => 'required|numeric',
-            'interest_paid' => 'required|numeric',
+            'principal_paid' => 'required|numeric|min:0',
+            'interest_paid' => 'required|numeric|min:0',
             'payment_method' => 'required|string',
             'transaction_date' => 'required|date',
             'description' => 'nullable|string',
         ]);
 
         return DB::transaction(function () use ($share, $validated) {
-            // ── Overpayment Guard: protect Investor capital balance ──────────
+            if (empty($share->repayment_schedule)) {
+                return response()->json([
+                    'message' => 'This loan capital account has no repayment schedule.',
+                ], 422);
+            }
+
             if ($validated['principal_paid'] > $share->balance + 0.001) {
                 return response()->json([
                     'message' => "Principal paid ({$validated['principal_paid']}) exceeds remaining balance (" . number_format($share->balance, 2) . "). Please check the amount."
                 ], 422);
             }
-            // ────────────────────────────────────────────────────────────────
 
             $schedule = $share->repayment_schedule ?? [];
             $found = false;
@@ -362,17 +559,15 @@ class CapitalShareController extends Controller
             }
 
             if (!$found) {
-                return response()->json(['message' => 'Period not found in schedule'], 400);
+                return response()->json(['message' => 'Period not found in schedule'], 422);
             }
 
             $share->repayment_schedule = $schedule;
 
-            // Update balance if principal was paid
             if ($validated['principal_paid'] > 0) {
                 $share->balance = round(max(0, $share->balance - $validated['principal_paid']), 2);
             }
 
-            // Check if all periods are paid to complete the account
             $allPaid = true;
             foreach ($schedule as $item) {
                 if (($item['status'] ?? '') !== 'paid') {
@@ -380,13 +575,13 @@ class CapitalShareController extends Controller
                     break;
                 }
             }
+
             if ($allPaid) {
-                $share->status = 'Completed';
+                $share->status = 'Withdrawn';
             }
 
             $share->save();
 
-            // Create transaction log
             CapitalShareTransaction::create([
                 'capital_share_id' => $share->id,
                 'transaction_type' => 'Repayment',
@@ -404,7 +599,6 @@ class CapitalShareController extends Controller
             ]);
         });
     }
-
     public function previewSchedule(Request $request, LoanCalculator $calculator)
     {
         $validated = $request->validate([
@@ -468,3 +662,5 @@ class CapitalShareController extends Controller
         return 'CSA-' . str_pad(mt_rand(1, 999999), 6, '0', STR_PAD_LEFT);
     }
 }
+
+

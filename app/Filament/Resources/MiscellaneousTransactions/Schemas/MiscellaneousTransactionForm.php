@@ -23,9 +23,17 @@ class MiscellaneousTransactionForm
                             ->schema([
                                 Select::make('type')
                                     ->options([
-                                        'Income' => 'Income',
-                                        'Expense' => 'Expense',
+                                        'revenue' => 'Revenue',
+                                        'expense' => 'Expense',
+                                        'Income' => 'Revenue (Legacy)',
+                                        'Expense' => 'Expense (Legacy)',
                                     ])
+                                    ->dehydrateStateUsing(function ($state): string {
+                                        $normalized = strtolower((string) $state);
+
+                                        return $normalized === 'income' ? 'revenue' : $normalized;
+                                    })
+                                    ->helperText('Use Revenue/Expense so reports are calculated correctly.')
                                     ->required(),
                                 TextInput::make('category')
                                     ->required()

@@ -12,6 +12,8 @@ use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Filament\Tables\Table;
 
 class MiscellaneousTransactionResource extends Resource
@@ -37,6 +39,14 @@ class MiscellaneousTransactionResource extends Resource
     public static function table(Table $table): Table
     {
         return MiscellaneousTransactionsTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
     }
 
     public static function getRelations(): array

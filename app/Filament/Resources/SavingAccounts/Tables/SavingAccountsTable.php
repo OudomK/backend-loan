@@ -16,17 +16,19 @@ class SavingAccountsTable
         return $table
             ->columns([
                 TextColumn::make('account_number')
-                    ->label('A/C Number')
+                    ->label('Ref No')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('saver.id')
-                    ->label('Saver')
+                    ->label('Client')
                     ->getStateUsing(fn($record) => "{$record->saver?->last_name} {$record->saver?->first_name}")
                     ->searchable(['saver.first_name', 'saver.last_name'])
                     ->sortable(),
                 TextColumn::make('account_type')
+                    ->label('Plan')
                     ->badge(),
                 TextColumn::make('balance')
+                    ->label('Outstanding')
                     ->money('USD')
                     ->sortable(),
                 TextColumn::make('status')
@@ -53,9 +55,9 @@ class SavingAccountsTable
             ->filters([
                 SelectFilter::make('account_type')
                     ->options([
-                        'Daily Saving' => 'Daily saving',
-                        'Goal Saving' => 'Goal saving',
-                        'Fixed Deposit' => 'Fixed deposit',
+                        'Daily Saving' => 'Short term',
+                        'Goal Saving' => 'Mid term',
+                        'Fixed Deposit' => 'Long term',
                     ]),
                 SelectFilter::make('status')
                     ->options([

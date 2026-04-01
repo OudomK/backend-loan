@@ -2,18 +2,23 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Payment;
-use Illuminate\Http\Request;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 
 class LoanCollectionReportController extends Controller
 {
     public function index(Request $request)
     {
-        $fromDate = $request->query('from_date');
-        $toDate = $request->query('to_date');
-        $currency = $request->query('currency');
+        $fromDateInput = $request->query('from_date');
+        $toDateInput = $request->query('to_date');
+        $currency = $request->query('currency', 'all');
+
+        $fromDate = $fromDateInput
+            ? Carbon::parse($fromDateInput)->startOfDay()
+            : Carbon::today()->startOfMonth()->startOfDay();
+        $toDate = $toDateInput
+            ? Carbon::parse($toDateInput)->endOfDay()
+            : Carbon::today()->endOfDay();
 
         $query = \App\Models\RepaymentTransaction::query()
             ->select([
@@ -33,15 +38,17 @@ class LoanCollectionReportController extends Controller
                 'borrowers.commune',
                 'loan_officers.name as officer_name',
             ])
+            ->whereNull('repayment_transactions.deleted_at')
             ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
             ->leftJoin('borrowers', 'loans.borrower_id', '=', 'borrowers.id')
             ->leftJoin('loan_officers', 'repayment_transactions.collector_id', '=', 'loan_officers.id');
 
-        if ($fromDate && $toDate) {
-            $query->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate]);
-        }
+        $query->whereBetween('repayment_transactions.transaction_date', [
+            $fromDate->toDateTimeString(),
+            $toDate->toDateTimeString(),
+        ]);
 
-        if ($currency) {
+        if ($currency && $currency !== 'all') {
             $query->where('loans.currency', $currency);
         }
 

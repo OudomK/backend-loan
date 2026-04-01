@@ -9,13 +9,17 @@ use Filament\Widgets\TableWidget as BaseWidget;
 
 class RecentActivityTable extends BaseWidget
 {
-    protected static ?string $heading = 'Recent Repayments';
-    protected static ?int $sort = 4;
+    protected static ?string $heading = 'Recent Repayment Activity';
+    protected static ?int $sort = 5;
     protected int|string|array $columnSpan = 'full';
 
     public function table(Table $table): Table
     {
         return $table
+            ->heading('Recent Repayment Activity')
+            ->description('Latest 5 repayment transactions across all officers')
+            ->emptyStateHeading('No recent repayments')
+            ->emptyStateDescription('Repayment transactions will appear here once they are recorded.')
             ->query(function () {
                 return RepaymentTransaction::query()
                     ->with(['loan.borrower'])
@@ -27,20 +31,37 @@ class RecentActivityTable extends BaseWidget
                     ->label('Date')
                     ->date()
                     ->sortable(),
+                Tables\Columns\TextColumn::make('loan.loan_code')
+                    ->label('Loan Code')
+                    ->searchable(),
                 Tables\Columns\TextColumn::make('loan.borrower.full_name')
                     ->label('Borrower')
                     ->getStateUsing(fn($record) => ($record->loan->borrower->last_name ?? '') . ' ' . ($record->loan->borrower->first_name ?? '')),
                 Tables\Columns\TextColumn::make('amount_paid')
                     ->label('Amount')
-                    ->money('USD')
+                    ->formatStateUsing(function ($state, $record): string {
+                        $amount = (float) $state;
+                        $isKhr = str_starts_with((string) ($record->loan->currency ?? ''), 'KHR');
+
+                        return $isKhr
+                            ? '៛ ' . number_format($amount, 0)
+                            : '$' . number_format($amount, 2);
+                    })
                     ->color('success')
+                    ->alignEnd()
                     ->weight('bold'),
                 Tables\Columns\TextColumn::make('payment_method')
-                    ->badge(),
+                    ->badge()
+                    ->color('gray'),
                 Tables\Columns\TextColumn::make('repayment_type')
                     ->label('Type')
                     ->badge()
-                    ->color('info'),
+                    ->color(fn(string $state): string => match ($state) {
+                        'Pay Off' => 'success',
+                        'Withdraw' => 'danger',
+                        'Prepayment' => 'warning',
+                        default => 'info',
+                    }),
             ])
             ->paginated(false);
     }

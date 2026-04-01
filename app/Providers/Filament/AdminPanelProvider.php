@@ -36,15 +36,16 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
-            ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
                 Dashboard::class,
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
+                \App\Filament\Widgets\DashboardHero::class,
                 \App\Filament\Widgets\StatsOverview::class,
                 \App\Filament\Widgets\DisbursementLineChart::class,
                 \App\Filament\Widgets\RepaymentsBarChart::class,
+                \App\Filament\Widgets\MonthlyPerformanceChart::class,
                 \App\Filament\Widgets\RecentActivityTable::class,
             ])
             ->middleware([

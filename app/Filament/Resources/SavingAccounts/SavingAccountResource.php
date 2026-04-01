@@ -24,6 +24,9 @@ class SavingAccountResource extends Resource
     protected static ?int $navigationSort = 3;
 
     protected static ?string $recordTitleAttribute = 'account_number';
+    protected static ?string $navigationLabel = 'Borrowings';
+    protected static ?string $modelLabel = 'Borrowing';
+    protected static ?string $pluralModelLabel = 'Borrowings';
 
     public static function getGloballySearchableAttributes(): array
     {

@@ -3,43 +3,81 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
-use Illuminate\Http\Request;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class WriteOffReportController extends Controller
 {
     public function index(Request $request)
     {
-        $fromDateStr = $request->query('from_date');
-        $toDateStr = $request->query('to_date');
+        $fromDateInput = $request->query('from_date');
+        $toDateInput = $request->query('to_date');
         $currency = $request->query('currency', 'all');
 
-        $toDate = $toDateStr ? Carbon::parse($toDateStr) : Carbon::today();
-        $fromDate = $fromDateStr ? Carbon::parse($fromDateStr) : $toDate->copy()->startOfMonth();
+        $toDate = $toDateInput ? Carbon::parse($toDateInput)->endOfDay() : Carbon::today()->endOfDay();
+        $fromDate = $fromDateInput
+            ? Carbon::parse($fromDateInput)->startOfDay()
+            : $toDate->copy()->startOfMonth()->startOfDay();
 
-        $query = Loan::with(['borrower', 'officer', 'collaterals', 'product'])
+        $fromDateOnly = $fromDate->toDateString();
+        $toDateOnly = $toDate->toDateString();
+        $toDateTime = $toDate->toDateTimeString();
+
+        $query = Loan::with([
+            'borrower',
+            'officer',
+            'disburseOfficer',
+            'collaterals',
+            'product',
+            'transactions' => function ($query) use ($toDateTime) {
+                $query->where('transaction_date', '<=', $toDateTime)
+                    ->orderBy('transaction_date', 'asc');
+            },
+        ])
             ->whereNotNull('written_off_at')
-            ->whereBetween('written_off_at', [$fromDate->toDateString(), $toDate->toDateString()]);
+            ->whereDate('written_off_at', '>=', $fromDateOnly)
+            ->whereDate('written_off_at', '<=', $toDateOnly);
 
         if ($currency !== 'all') {
             $query->where('currency', $currency);
         }
 
-        $loans = $query->get();
+        $loans = $query
+            ->orderBy('written_off_at')
+            ->orderBy('loan_code')
+            ->get();
+
         $reportData = [];
 
         foreach ($loans as $loan) {
             try {
-                // Get collected principal and interest
-                $collectedPrincipal = DB::table('payments')
-                    ->where('loan_id', $loan->id)
-                    ->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
+                $writtenOffAt = Carbon::parse($loan->written_off_at)->endOfDay();
 
-                $collectedInterest = DB::table('payments')
-                    ->where('loan_id', $loan->id)
-                    ->sum(DB::raw('total_paid - GREATEST(0, total_paid - interest_amount)'));
+                $preWriteOffTransactions = $loan->transactions->filter(function ($transaction) use ($writtenOffAt) {
+                    return Carbon::parse($transaction->transaction_date)->lte($writtenOffAt)
+                        && strcasecmp((string) ($transaction->repayment_type ?? ''), 'Recovery') !== 0;
+                });
+
+                $principalCollected = max(0, $preWriteOffTransactions->sum(function ($transaction) {
+                    return $this->principalComponent($transaction);
+                }));
+
+                $interestCollected = max(0, $preWriteOffTransactions->sum(function ($transaction) {
+                    return (float) ($transaction->interest_paid ?? 0);
+                }));
+
+                $recoveryAmount = max(0, $loan->transactions->sum(function ($transaction) {
+                    return (float) ($transaction->recovery_amount ?? 0);
+                }));
+
+                $writeOffAmount = (float) ($loan->write_off_balance ?? 0);
+                if ($writeOffAmount <= 0.01) {
+                    $writeOffAmount = max(0, (float) $loan->amount - $principalCollected);
+                }
+
+                $currentWriteOffBalance = max(0, $writeOffAmount - $recoveryAmount);
+                $borrowerName = trim((string) (($loan->borrower->last_name ?? '') . ' ' . ($loan->borrower->first_name ?? '')));
 
                 $reportData[] = [
                     'written_off_date' => $loan->written_off_at,
@@ -47,40 +85,61 @@ class WriteOffReportController extends Controller
                     'loan_code' => $loan->loan_code,
                     'product_name' => $loan->product->name ?? 'General Loan',
                     'customer_code' => $loan->borrower->customer_code ?? '',
-                    'customer_name' => ($loan->borrower->last_name ?? '') . ' ' . ($loan->borrower->first_name ?? ''),
+                    'customer_name' => $borrowerName,
                     'village' => $loan->borrower->village ?? '',
                     'commune' => $loan->borrower->commune ?? '',
                     'district' => $loan->borrower->district ?? '',
                     'province' => $loan->borrower->province ?? '',
-                    'amount' => $loan->amount,
+                    'amount' => (float) ($loan->amount ?? 0),
                     'currency' => $loan->currency,
-                    'rate' => $loan->interest_rate,
-                    'monthly_interest_rate' => $loan->interest_rate, // Assuming yearly, usually same label in excel
-                    'term' => $loan->duration_months,
-                    'tenor' => strtolower($loan->payment_frequency ?? '') === 'monthly' ? 'Months' : 'ដង',
+                    'rate' => (float) ($loan->interest_rate ?? 0),
+                    'monthly_interest_rate' => (float) ($loan->monthly_interest ?? ((float) ($loan->interest_rate ?? 0) / 12)),
+                    'term' => (int) ($loan->duration_months ?? 0),
+                    'tenor' => $this->tenorLabel($loan->payment_frequency),
                     'payment_method' => $loan->repayment_method ?? '',
-                    'loan_cycle' => $loan->loan_cycle ?? 1,
-                    'refinance_fee' => $loan->refinance_fee ?? 0,
-                    'admin_fee' => $loan->admin_fee ?? 0,
-                    'restructure_fee' => 0,
-                    'collateral_type' => $loan->collaterals->isNotEmpty() ? $loan->collaterals->first()->type : '',
-                    'co_disburse' => $loan->officer->name ?? '',
+                    'loan_cycle' => (int) ($loan->loan_cycle ?? 1),
+                    'refinance_fee' => (float) ($loan->refinance_fee ?? 0),
+                    'admin_fee' => (float) ($loan->admin_fee ?? 0),
+                    'restructure_fee' => (float) ($loan->reschedule_fee ?? 0),
+                    'collateral_type' => $loan->collaterals->isNotEmpty() ? ($loan->collaterals->first()->type ?? '') : '',
+                    'co_disburse' => $loan->disburseOfficer->name ?? ($loan->officer->name ?? ''),
                     'co_repay' => $loan->officer->name ?? '',
-                    'amount_write_off' => $loan->amount,
-                    'write_off_balance' => $loan->write_off_balance ?? 0,
-                    'principal_collected' => $collectedPrincipal,
-                    'interest_collected' => $collectedInterest,
-                    'recovery_amount' => $loan->recovery_amount ?? 0,
+                    'amount_write_off' => $writeOffAmount,
+                    'write_off_balance' => $currentWriteOffBalance,
+                    'principal_collected' => $principalCollected,
+                    'interest_collected' => $interestCollected,
+                    'recovery_amount' => $recoveryAmount,
                     'maturity_date' => $loan->maturity_date,
                     'write_off_reason' => $loan->write_off_reason ?? '',
-                    'status' => $loan->status,
+                    'status' => $loan->status ?? 'written_off',
                     'classify_wo' => $loan->classify_wo ?? '',
                 ];
-            } catch (\Exception $e) {
-                Log::error("WriteOffReport Error for Loan {$loan->id}: " . $e->getMessage());
+            } catch (\Throwable $e) {
+                Log::error("WriteOffReport Error for Loan {$loan->id}: {$e->getMessage()}");
             }
         }
 
         return response()->json($reportData);
+    }
+
+    private function principalComponent($transaction): float
+    {
+        return (float) ($transaction->principal_paid ?? 0)
+            + (float) ($transaction->prepayment_paid ?? 0)
+            + (float) ($transaction->paid_off_amount ?? 0)
+            - (float) ($transaction->withdrawn_prepayment ?? 0);
+    }
+
+    private function tenorLabel(?string $paymentFrequency): string
+    {
+        $normalized = strtolower(trim((string) $paymentFrequency));
+
+        return match ($normalized) {
+            'monthly' => 'Months',
+            'weekly' => 'Weeks',
+            'daily' => 'Days',
+            'bi-monthly', 'bimonthly', 'semi-monthly' => 'Semi-Monthly',
+            default => $normalized !== '' ? ucwords(str_replace(['_', '-'], ' ', $normalized)) : '',
+        };
     }
 }

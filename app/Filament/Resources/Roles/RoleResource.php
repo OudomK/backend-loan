@@ -64,7 +64,7 @@ class RoleResource extends Resource
     {
         return [
             'Fund Management' => [
-                'savings' => 'Savings',
+                'savings' => 'Borrowing',
                 'capital_share' => 'Capital & Share',
                 'dividend' => 'Dividend Declaration',
             ],

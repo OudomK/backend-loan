@@ -15,20 +15,22 @@ class SavingAccountForm
     {
         return $schema
             ->components([
-                Section::make('Account Overview')
-                    ->description('Primary account identification.')
+                Section::make('Borrowing Overview')
+                    ->description('Primary borrowing identification.')
                     ->icon('heroicon-o-credit-card')
                     ->schema([
                         Grid::make(3)
                             ->schema([
                                 TextInput::make('account_number')
+                                    ->label('Borrowing Ref No')
                                     ->required()
                                     ->unique(ignoreRecord: true),
                                 Select::make('account_type')
+                                    ->label('Borrowing Plan')
                                     ->options([
-                                        'Daily Saving' => 'Daily saving',
-                                        'Goal Saving' => 'Goal saving',
-                                        'Fixed Deposit' => 'Fixed deposit',
+                                        'Daily Saving' => 'Short term',
+                                        'Goal Saving' => 'Mid term',
+                                        'Fixed Deposit' => 'Long term',
                                     ])
                                     ->required(),
                                 Select::make('status')
@@ -67,25 +69,27 @@ class SavingAccountForm
                             ]),
                     ]),
 
-                Section::make('Related Customers')
-                    ->description('Link this account to specific customers.')
+                Section::make('Related Parties')
+                    ->description('Link this borrowing to related customers.')
                     ->icon('heroicon-o-user-group')
                     ->schema([
                         Grid::make(2)
                             ->schema([
                                 Select::make('saver_id')
+                                    ->label('Client')
                                     ->relationship('saver', 'id')
                                     ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
                                     ->searchable(),
                                 Select::make('borrower_id')
+                                    ->label('Borrower')
                                     ->relationship('borrower', 'id')
                                     ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
                                     ->searchable(),
                             ]),
                     ]),
 
-                Section::make('Financial Terms & Balances')
-                    ->description('Balance, interest, and terms.')
+                Section::make('Borrowing Terms & Balances')
+                    ->description('Outstanding balance, interest, and repayment terms.')
                     ->icon('heroicon-o-calculator')
                     ->schema([
                         Grid::make(3)

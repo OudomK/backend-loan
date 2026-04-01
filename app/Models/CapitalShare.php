@@ -25,6 +25,8 @@ class CapitalShare extends Model
         'loan_account',
         'borrowing_date',
         'contract_no',
+        'amount',
+        'int_pay_mode',
         'dividends',
         'total_dividend_paid',
         'last_dividend_date',

@@ -12,35 +12,39 @@ class LoanOutstandingParReportController extends Controller
     {
         // Support either 'date' or 'report_date'
         $reportDateStr = $request->query('date') ?? $request->query('report_date');
-        $refDate = $reportDateStr ? Carbon::parse($reportDateStr) : Carbon::today();
+        $refDate = $reportDateStr ? Carbon::parse($reportDateStr)->endOfDay() : Carbon::today()->endOfDay();
         $refDateStr = $refDate->toDateString();
+        $refDateTime = $refDate->toDateTimeString();
 
-        // Query loans disbursed on or before the report date
-        $query = Loan::with(['officer'])
-            ->where('start_date', '<=', $refDateStr);
-
-        // Calculate paid principal and earliest arrear date dynamically up to the report date
-        $query->addSelect([
-            'total_principal_paid' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, LEAST(principal_amount, total_paid - interest_amount)))')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<=', $refDateStr),
-
-            // A scheduled payment expected BEFORE the ref date that wasn't fully paid
-            'earliest_arrear_date' => \App\Models\Payment::select('payment_date')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr)
-                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
-                ->orderBy('payment_date', 'asc')
-                ->limit(1),
-        ]);
-
-        $loans = $query->get();
+        $loans = Loan::with([
+            'payments' => function ($query) {
+                $query->orderBy('payment_date', 'asc');
+            },
+            'transactions' => function ($query) use ($refDateTime) {
+                $query->where('transaction_date', '<=', $refDateTime);
+            },
+        ])
+            ->where('start_date', '<=', $refDateStr)
+            ->where('status', '!=', 'pending')
+            ->where(function ($query) use ($refDateStr) {
+                $query->whereNull('written_off_at')
+                    ->orWhereDate('written_off_at', '>', $refDateStr);
+            })
+            ->get();
 
         $groupedData = [];
 
         foreach ($loans as $loan) {
-            $principalPaid = $loan->total_principal_paid ?? 0;
-            $outstanding = $loan->amount - $principalPaid;
+            $transactionsAtDate = $loan->transactions;
+
+            $principalPaid = $transactionsAtDate->sum(function ($transaction) {
+                return (float) ($transaction->principal_paid ?? 0)
+                    + (float) ($transaction->prepayment_paid ?? 0)
+                    + (float) ($transaction->paid_off_amount ?? 0)
+                    - (float) ($transaction->withdrawn_prepayment ?? 0);
+            });
+
+            $outstanding = max(0, (float) $loan->amount - $principalPaid);
 
             // If fully paid off by this exact date, skip
             if ($outstanding <= 0.01) {
@@ -88,9 +92,36 @@ class LoanOutstandingParReportController extends Controller
             $group['total_loan_os'] += $convertedToUsd;
 
             // PAR & NPL Calculation
+            $scheduledPaidAtDate = $transactionsAtDate->sum(function ($transaction) {
+                return (float) ($transaction->fee_paid ?? 0)
+                    + (float) ($transaction->interest_paid ?? 0)
+                    + (float) ($transaction->principal_paid ?? 0)
+                    + (float) ($transaction->paid_off_amount ?? 0);
+            });
+
+            $earliestArrearDate = null;
+            $cumulativeDue = 0.0;
+
+            foreach ($loan->payments as $payment) {
+                if ($payment->payment_date >= $refDateStr) {
+                    continue;
+                }
+
+                $cumulativeDue += (float) ($payment->principal_amount ?? 0)
+                    + (float) ($payment->interest_amount ?? 0)
+                    + (float) ($payment->fee_amount ?? 0);
+
+                if (($cumulativeDue - $scheduledPaidAtDate) > 0.01) {
+                    $earliestArrearDate = $payment->payment_date;
+                    break;
+                }
+            }
+
             $agingDays = 0;
-            if ($loan->earliest_arrear_date) {
-                $agingDays = $refDate->diffInDays(Carbon::parse($loan->earliest_arrear_date));
+            if ($earliestArrearDate) {
+                $agingDays = $refDate->copy()->startOfDay()->diffInDays(
+                    Carbon::parse($earliestArrearDate)->startOfDay()
+                );
             }
 
             if ($agingDays > 0) {

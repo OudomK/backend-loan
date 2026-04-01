@@ -3,10 +3,16 @@
 namespace App\Filament\Resources\Payrolls\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class PayrollsTable
@@ -14,6 +20,7 @@ class PayrollsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->defaultSort('month_year', 'desc')
             ->columns([
                 TextColumn::make('month_year')
                     ->label('Period')
@@ -45,13 +52,19 @@ class PayrollsTable
                         'Paid' => 'Paid',
                         'Pending' => 'Pending',
                     ]),
+                TrashedFilter::make(),
             ])
             ->recordActions([
                 EditAction::make(),
+                DeleteAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
                 ]),
             ]);
     }

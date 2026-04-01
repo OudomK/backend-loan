@@ -1,1 +1,0 @@
-<?php require "vendor/autoload.php"; $app = require_once "bootstrap/app.php"; $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class); $kernel->bootstrap(); $ps = App\Models\Payment::where("loan_id", 3)->get(); foreach($ps as $p) { echo "Row ".$p->payment_number.": ID=".$p->id.", TX_ID=".($p->repayment_transaction_id ?? "NULL").", PAID=".$p->total_paid."\n"; }

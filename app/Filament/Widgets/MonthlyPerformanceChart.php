@@ -9,10 +9,11 @@ use Illuminate\Support\Carbon;
 
 class MonthlyPerformanceChart extends ChartWidget
 {
-    protected ?string $heading = 'Performance: Disbursements vs Collections';
+    protected ?string $heading = 'Disbursement vs Collection';
+    protected ?string $description = '12-month comparison in USD';
     protected static ?int $sort = 4;
     protected int|string|array $columnSpan = 'full';
-    protected ?string $maxHeight = '250px';
+    protected ?string $maxHeight = '320px';
 
     protected function getData(): array
     {
@@ -23,7 +24,10 @@ class MonthlyPerformanceChart extends ChartWidget
             $labels[] = now()->subMonths($i)->format('M');
         }
 
-        $exchangeRate = (int) (\App\Models\Setting::where('key', 'exchange_rate')->value('value') ?? 4000);
+        $exchangeRate = (float) (\App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
+            ?? \App\Models\Setting::where('key', 'exchange_rate')->value('value')
+            ?? 4000);
+        $exchangeRate = max(1, $exchangeRate);
 
         // Fetch disbursements grouped by month and currency
         $disbursementsRaw = Loan::where('status', 'active')
@@ -78,15 +82,47 @@ class MonthlyPerformanceChart extends ChartWidget
                     'data' => $disbursementData,
                     'backgroundColor' => '#f59e0b',
                     'borderColor' => '#f59e0b',
+                    'borderRadius' => 8,
+                    'maxBarThickness' => 30,
                 ],
                 [
                     'label' => 'Collections ($)',
                     'data' => $collectionData,
                     'backgroundColor' => '#3b82f6',
                     'borderColor' => '#3b82f6',
+                    'borderRadius' => 8,
+                    'maxBarThickness' => 30,
                 ],
             ],
             'labels' => $labels,
+        ];
+    }
+
+    protected function getOptions(): ?array
+    {
+        return [
+            'plugins' => [
+                'legend' => [
+                    'position' => 'bottom',
+                ],
+            ],
+            'interaction' => [
+                'mode' => 'index',
+                'intersect' => false,
+            ],
+            'scales' => [
+                'x' => [
+                    'stacked' => false,
+                    'grid' => [
+                        'display' => false,
+                    ],
+                ],
+                'y' => [
+                    'beginAtZero' => true,
+                    'stacked' => false,
+                ],
+            ],
+            'maintainAspectRatio' => false,
         ];
     }
 

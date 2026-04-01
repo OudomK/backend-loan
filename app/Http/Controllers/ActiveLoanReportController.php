@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Loan;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class ActiveLoanReportController extends Controller
 {
@@ -22,15 +21,25 @@ class ActiveLoanReportController extends Controller
         $fromDate = $fromDateStr ? Carbon::parse($fromDateStr) : null;
         $fromDateStr = $fromDate ? $fromDate->toDateString() : null;
 
-        // Query Active Loans
+        // Load candidate loans and reconstruct the portfolio as of the selected date.
         $query = Loan::with([
             'borrower',
             'officer',
             'disburseOfficer',
             'collaterals',
-            'product'
+            'product',
+            'payments' => function ($query) {
+                $query->orderBy('payment_date', 'asc');
+            },
+            'transactions' => function ($query) use ($refDateStr) {
+                $query->where('transaction_date', '<=', $refDateStr);
+            },
         ])
-            ->where('status', 'active');
+            ->where('status', '!=', 'pending')
+            ->where(function ($query) use ($refDateStr) {
+                $query->whereNull('written_off_at')
+                    ->orWhereDate('written_off_at', '>', $refDateStr);
+            });
 
         // Filter by Disbursement Date Range
         if ($fromDateStr) {
@@ -44,67 +53,74 @@ class ActiveLoanReportController extends Controller
             $query->where('loan_officer_id', $officerId);
         }
 
-        // Add calculated fields using subqueries (similar to ArrearReport for performance)
-        // 1. Total Paid Principal
-        $query->addSelect([
-            'total_principal_paid' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, LEAST(principal_amount, total_paid - interest_amount)))')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<=', $refDateStr),
-
-            'total_interest_paid' => \App\Models\Payment::selectRaw('SUM(LEAST(interest_amount, total_paid))')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<=', $refDateStr),
-
-            // Last Transaction Date
-            'last_payment_date' => \App\Models\RepaymentTransaction::select('transaction_date')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('transaction_date', '<=', $refDateStr)
-                ->orderBy('transaction_date', 'desc')
-                ->limit(1),
-
-            // Earliest Arrear Date (for Aging)
-            'earliest_arrear_date' => \App\Models\Payment::select('payment_date')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr)
-                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
-                ->orderBy('payment_date', 'asc')
-                ->limit(1),
-
-            // Overdue Amount
-            'total_overdue_amount' => \App\Models\Payment::selectRaw('SUM(principal_amount + interest_amount - total_paid)')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr)
-                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)'),
-
-            // Check if rescheduled
-            'is_rescheduled' => \App\Models\RepaymentTransaction::selectRaw('COUNT(*)')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('repayment_type', 'Reschedule'),
-        ]);
-
         $loans = $query->get();
 
         // Transform Data
         $data = $loans->map(function ($loan) use ($refDate) {
             $borrower = $loan->borrower;
             $officer = $loan->officer;
-
             $product = $loan->product;
+            $transactionsAtDate = $loan->transactions;
 
-            // Calculations
-            $principalPaid = $loan->total_principal_paid ?? 0;
-            $outstanding = $loan->amount - $principalPaid;
-            if ($outstanding < 0)
-                $outstanding = 0;
+            $principalPaid = $transactionsAtDate->sum(function ($transaction) {
+                return (float) ($transaction->principal_paid ?? 0)
+                    + (float) ($transaction->prepayment_paid ?? 0)
+                    + (float) ($transaction->paid_off_amount ?? 0)
+                    - (float) ($transaction->withdrawn_prepayment ?? 0);
+            });
 
-            // Aging
-            $agingDays = 0;
-            if ($loan->earliest_arrear_date) {
-                $agingDays = $refDate->diffInDays(Carbon::parse($loan->earliest_arrear_date));
+            $outstanding = max(0, (float) $loan->amount - $principalPaid);
+            if ($outstanding <= 0.01) {
+                return null;
             }
+
+            $interestPaid = $transactionsAtDate->sum(function ($transaction) {
+                return (float) ($transaction->interest_paid ?? 0);
+            });
+
+            $scheduledPaidAtDate = $transactionsAtDate->sum(function ($transaction) {
+                return (float) ($transaction->principal_paid ?? 0)
+                    + (float) ($transaction->interest_paid ?? 0)
+                    + (float) ($transaction->paid_off_amount ?? 0);
+            });
+
+            $paymentsBeforeRefDate = $loan->payments->filter(function ($payment) use ($refDate) {
+                return $payment->payment_date < $refDate->toDateString();
+            });
+
+            $totalDueBeforeRefDate = 0.0;
+            $cumulativeDue = 0.0;
+            $earliestArrearDate = null;
+
+            foreach ($paymentsBeforeRefDate as $payment) {
+                $installmentDue = (float) ($payment->principal_amount ?? 0)
+                    + (float) ($payment->interest_amount ?? 0);
+
+                $totalDueBeforeRefDate += $installmentDue;
+                $cumulativeDue += $installmentDue;
+
+                if (!$earliestArrearDate && ($cumulativeDue - $scheduledPaidAtDate) > 0.01) {
+                    $earliestArrearDate = $payment->payment_date;
+                }
+            }
+
+            $overdueAmount = max(0, $totalDueBeforeRefDate - $scheduledPaidAtDate);
+            $agingDays = $earliestArrearDate
+                ? $refDate->diffInDays(Carbon::parse($earliestArrearDate))
+                : 0;
 
             // Collateral
             $collateralType = $loan->collaterals->isNotEmpty() ? $loan->collaterals->first()->type : '';
+            $firstRepaymentDate = optional($loan->payments->first())->payment_date
+                ?? Carbon::parse($loan->start_date)->addMonth()->toDateString();
+            $maturityDate = $loan->maturity_date
+                ?? optional($loan->payments->last())->payment_date
+                ?? Carbon::parse($loan->start_date)->addMonths($loan->duration_months)->toDateString();
+            $lastPaymentDate = $transactionsAtDate->max('transaction_date');
+            $loanProduct = $product ? $product->name : 'General Loan';
+            $isRescheduled = $transactionsAtDate->contains(function ($transaction) {
+                return $transaction->repayment_type === 'Reschedule';
+            });
 
             // Formatting
             return [
@@ -121,42 +137,43 @@ class ActiveLoanReportController extends Controller
                 'currency_code' => $loan->currency,
                 'interest_rate' => $loan->interest_rate,
                 'processing_fee' => 0,
-                'monthly_interest_rate' => $loan->interest_rate / 12, // Approx
+                'monthly_interest_rate' => $loan->monthly_interest ?? ($loan->interest_rate / 12),
                 'term' => $loan->duration_months,
                 'tenor' => strtolower($loan->payment_frequency ?? '') === 'monthly' ? 'Months' : 'ដង',
                 'payment_method' => $loan->repayment_method,
                 'loan_cycle' => $loan->loan_cycle,
                 'refinance_amount' => $loan->refinanced_amount ?? 0,
-                'restructure' => $loan->is_rescheduled > 0 ? 1 : 0,
+                'restructure' => $isRescheduled ? 1 : 0,
                 'admin_fee' => $loan->admin_fee,
                 'refinance_fee' => $loan->refinance_fee,
                 'collateral_type' => $collateralType,
                 'co_disburse' => $loan->disburseOfficer ? $loan->disburseOfficer->name : ($officer ? $officer->name : ''),
                 'co_repay' => $officer ? $officer->name : '',
                 'officer_name' => $officer ? $officer->name : 'N/A',
-                'loan_product' => $product ? $product->name : 'General Loan',
+                'loan_product' => $loanProduct,
+                'product_name' => $loanProduct,
                 'customer_code' => $borrower ? $borrower->customer_code : 'N/A',
 
                 'outstanding_amount' => $outstanding,
                 'principal_paid' => $principalPaid,
-                'interest_paid' => $loan->total_interest_paid ?? 0,
+                'interest_paid' => $interestPaid,
 
                 // Dates
-                'maturity_date' => Carbon::parse($loan->start_date)->addMonths($loan->duration_months)->toDateString(),
+                'maturity_date' => $maturityDate,
                 'aging_days' => $agingDays,
-                'overdue_amount' => $loan->total_overdue_amount ?? 0,
+                'overdue_amount' => $overdueAmount,
 
                 'sector_name' => $loan->sector ?? 'General',
-                'first_repayment_date' => Carbon::parse($loan->start_date)->addMonth()->toDateString(), // Approx
-                'last_payment_date' => $loan->last_payment_date,
+                'first_repayment_date' => $firstRepaymentDate,
+                'last_payment_date' => $lastPaymentDate,
 
-                'account_status' => $loan->status,
+                'account_status' => 'active',
                 'account_rating' => $this->getAccountRating($agingDays),
                 'short_long_term' => $loan->duration_months > 12 ? 'Long Term' : 'Short Term',
                 'secure_loan_type' => $loan->collaterals->isNotEmpty() ? 'Secured' : 'Unsecured',
                 'provision_amount' => $outstanding * $this->getProvisionRate($agingDays),
             ];
-        });
+        })->filter()->values();
 
         return response()->json($data);
     }

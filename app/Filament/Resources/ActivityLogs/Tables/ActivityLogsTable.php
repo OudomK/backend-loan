@@ -32,17 +32,7 @@ class ActivityLogsTable
                     ->label('User')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('causer.roles.name')
-                    ->label('Role')
-                    ->badge()
-                    ->color('info')
-                    ->searchable(),
-                TextColumn::make('properties.ip')
-                    ->label('IP Address')
-                    ->searchable()
-                    ->sortable()
-                    ->url(fn($state) => $state ? "https://ipinfo.io/{$state}" : null)
-                    ->openUrlInNewTab(),
+
                 TextColumn::make('created_at')
                     ->label('Logged At')
                     ->dateTime('M j, Y g:i:s A')

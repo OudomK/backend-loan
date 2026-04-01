@@ -171,7 +171,9 @@ class RepaymentController extends Controller
         ]);
 
         return DB::transaction(function () use ($validated) {
-            $loan = Loan::findOrFail($validated['loan_id']);
+            // Acquire Pessimistic Lock (FOR UPDATE) to prevent Race Conditions (Double-Clicks)
+            $loan = Loan::where('id', $validated['loan_id'])->lockForUpdate()->firstOrFail();
+            
             $waivedAmount = $validated['waived_amount'] ?? 0;
             $penaltyAmountTotal = $validated['penalty_amount'] ?? 0;
             $feePaid = $validated['fee_amount'] ?? 0;

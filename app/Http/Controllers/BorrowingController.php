@@ -2,14 +2,28 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Lender;
 use App\Models\Borrowing;
 use App\Models\BorrowingRepayment;
+use App\Models\Lender;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class BorrowingController extends Controller
 {
+    private function ensurePermission(Request $request, string $permission): void
+    {
+        $user = $request->user();
+        abort_if(!$user, 401, 'Unauthenticated.');
+
+        $role = strtolower((string) ($user->roles()->pluck('name')->first() ?? $user->role ?? ''));
+
+        if (in_array($role, ['admin', 'super_admin'], true) || $user->can($permission)) {
+            return;
+        }
+
+        abort(403, 'You do not have permission to perform this action.');
+    }
+
     public function getBorrowings()
     {
         $borrowings = Borrowing::with('lender', 'repayments')
@@ -17,9 +31,9 @@ class BorrowingController extends Controller
             ->get();
 
         return response()->json($borrowings->map(function ($b) {
-            $totalPrincipalPaid = $b->repayments->sum('principal_paid');
-            $totalInterestPaid = $b->repayments->sum('interest_paid');
-            $balance = $b->amount - $totalPrincipalPaid;
+            $totalPrincipalPaid = (float) $b->repayments->sum('principal_paid');
+            $totalInterestPaid = (float) $b->repayments->sum('interest_paid');
+            $balance = round((float) $b->amount - $totalPrincipalPaid, 2);
 
             return [
                 'id' => $b->id,
@@ -59,12 +73,14 @@ class BorrowingController extends Controller
 
     public function storeLender(Request $request)
     {
+        $this->ensurePermission($request, 'ui:savings:create');
+
         $validated = $request->validate([
             'lender_code' => 'required|unique:lenders',
             'name' => 'required',
             'lender_type' => 'required',
             'phone' => 'nullable',
-            'address' => 'nullable'
+            'address' => 'nullable',
         ]);
 
         $lender = Lender::create($validated);
@@ -73,21 +89,26 @@ class BorrowingController extends Controller
 
     public function updateLender(Request $request, $id)
     {
+        $this->ensurePermission($request, 'ui:savings:edit');
+
         $lender = Lender::findOrFail($id);
         $validated = $request->validate([
             'lender_code' => 'required|unique:lenders,lender_code,' . $id,
             'name' => 'required',
             'lender_type' => 'required',
             'phone' => 'nullable',
-            'address' => 'nullable'
+            'address' => 'nullable',
         ]);
+
         $lender->update($validated);
         return response()->json($lender);
     }
 
     public function updateBorrowing(Request $request, $id)
     {
-        $borrowing = Borrowing::findOrFail($id);
+        $this->ensurePermission($request, 'ui:savings:edit');
+
+        $borrowing = Borrowing::with('repayments')->findOrFail($id);
 
         $validated = $request->validate([
             'lender_id' => 'required|exists:lenders,id',
@@ -99,17 +120,28 @@ class BorrowingController extends Controller
             'contract_no' => 'nullable|string',
             'payment_method' => 'required',
             'currency' => 'required',
-            'term_months' => 'required|integer',
-            'amount' => 'required|numeric',
-            'interest_rate' => 'required|numeric',
+            'term_months' => 'required|integer|min:1',
+            'amount' => 'required|numeric|gt:0',
+            'interest_rate' => 'required|numeric|min:0',
             'int_pay_mode' => 'nullable|string',
-            'fee' => 'nullable|numeric',
+            'fee' => 'nullable|numeric|min:0',
             'first_pay_date' => 'nullable|date',
             'maturity_date' => 'nullable|date',
             'sl_term' => 'nullable',
-            'late_principal' => 'nullable|numeric',
-            'loan_interest' => 'nullable|numeric',
+            'late_principal' => 'nullable|numeric|min:0',
+            'loan_interest' => 'nullable|numeric|min:0',
         ]);
+
+        $totalPrincipalPaid = (float) $borrowing->repayments->sum('principal_paid');
+        $newAmount = (float) $validated['amount'];
+
+        if ($newAmount + 0.001 < $totalPrincipalPaid) {
+            return response()->json([
+                'message' => 'Loan amount cannot be less than the principal already repaid.',
+            ], 422);
+        }
+
+        $validated['status'] = $totalPrincipalPaid + 0.001 >= $newAmount ? 'completed' : 'active';
 
         $borrowing->update($validated);
         return response()->json($borrowing);
@@ -117,6 +149,8 @@ class BorrowingController extends Controller
 
     public function storeBorrowing(Request $request)
     {
+        $this->ensurePermission($request, 'ui:savings:create');
+
         $validated = $request->validate([
             'lender_id' => 'required|exists:lenders,id',
             'transaction_no' => 'nullable|string',
@@ -127,17 +161,19 @@ class BorrowingController extends Controller
             'contract_no' => 'nullable|string',
             'payment_method' => 'required',
             'currency' => 'required',
-            'term_months' => 'required|integer',
-            'amount' => 'required|numeric',
-            'interest_rate' => 'required|numeric',
+            'term_months' => 'required|integer|min:1',
+            'amount' => 'required|numeric|gt:0',
+            'interest_rate' => 'required|numeric|min:0',
             'int_pay_mode' => 'nullable|string',
-            'fee' => 'nullable|numeric',
+            'fee' => 'nullable|numeric|min:0',
             'first_pay_date' => 'nullable|date',
             'maturity_date' => 'nullable|date',
             'sl_term' => 'nullable',
-            'late_principal' => 'nullable|numeric',
-            'loan_interest' => 'nullable|numeric',
+            'late_principal' => 'nullable|numeric|min:0',
+            'loan_interest' => 'nullable|numeric|min:0',
         ]);
+
+        $validated['status'] = 'active';
 
         $borrowing = Borrowing::create($validated);
         return response()->json($borrowing);
@@ -145,11 +181,13 @@ class BorrowingController extends Controller
 
     public function repayBorrowing(Request $request)
     {
+        $this->ensurePermission($request, 'ui:savings:edit');
+
         $validated = $request->validate([
             'borrowing_id' => 'required|exists:borrowings,id',
             'payment_date' => 'required|date',
-            'principal_paid' => 'required|numeric',
-            'interest_paid' => 'required|numeric',
+            'principal_paid' => 'required|numeric|min:0',
+            'interest_paid' => 'required|numeric|min:0',
             'payment_method' => 'required',
             'remarks' => 'nullable',
         ]);
@@ -157,25 +195,28 @@ class BorrowingController extends Controller
         $validated['total_paid'] = $validated['principal_paid'] + $validated['interest_paid'];
 
         return DB::transaction(function () use ($validated) {
-            // ── Overpayment Guard: protect Investor principal ──────────────────
             $borrowing = Borrowing::with('repayments')->findOrFail($validated['borrowing_id']);
-            $alreadyPaid  = $borrowing->repayments->sum('principal_paid');
-            $remainingBalance = round($borrowing->amount - $alreadyPaid, 2);
+            $alreadyPaid = (float) $borrowing->repayments->sum('principal_paid');
+            $remainingBalance = round((float) $borrowing->amount - $alreadyPaid, 2);
+
+            if ($remainingBalance <= 0.001) {
+                return response()->json([
+                    'message' => 'This borrowing is already fully repaid.',
+                ], 422);
+            }
 
             if ($validated['principal_paid'] > $remainingBalance + 0.001) {
                 return response()->json([
-                    'message' => "Principal paid ({$validated['principal_paid']}) exceeds remaining balance (" . number_format($remainingBalance, 2) . "). Please check the amount."
+                    'message' => "Principal paid ({$validated['principal_paid']}) exceeds remaining balance (" . number_format($remainingBalance, 2) . "). Please check the amount.",
                 ], 422);
             }
-            // ─────────────────────────────────────────────────────────────────
 
             $repayment = BorrowingRepayment::create($validated);
 
-            // Auto-close if fully repaid
-            $totalPrincipalPaid = $alreadyPaid + $validated['principal_paid'];
-            if ($totalPrincipalPaid >= $borrowing->amount) {
-                $borrowing->update(['status' => 'completed']);
-            }
+            $totalPrincipalPaid = $alreadyPaid + (float) $validated['principal_paid'];
+            $borrowing->update([
+                'status' => $totalPrincipalPaid + 0.001 >= (float) $borrowing->amount ? 'completed' : 'active',
+            ]);
 
             return response()->json($repayment);
         });

@@ -47,35 +47,122 @@ class DisbursementReportController extends Controller
             $amtDisbNew = $newDisb->sum('amount');
 
             // --- Portfolio Size Section ---
-            // Active loans as of to_date
-            $activeLoans = Loan::with(['payments', 'borrower'])
+            // Approximate portfolio state as of to_date using transactions recorded on/before to_date.
+            $portfolioLoans = Loan::with([
+                'payments' => function ($query) {
+                    $query->orderBy('payment_date', 'asc');
+                },
+                'transactions' => function ($query) use ($toDateStr) {
+                    $query->where('transaction_date', '<=', $toDateStr);
+                },
+            ])
                 ->where('loan_officer_id', $officer->id)
                 ->where('start_date', '<=', $toDateStr)
-                ->where('status', 'active') // Or checked if it was active at that time
+                ->where('status', '!=', 'pending')
+                ->where(function ($query) use ($toDateStr) {
+                    $query->whereNull('written_off_at')
+                        ->orWhereDate('written_off_at', '>', $toDateStr);
+                })
                 ->get();
 
-            $totalClient = $activeLoans->unique('borrower_id')->count();
             $loanOS = 0;
             $interestOS = 0;
-            // Fee OS = per loan: total_fee (amount * admin_fee%) - fee already collected; then sum
             $feeOS = 0;
-            foreach ($activeLoans as $loan) {
-                $totalFee = $loan->amount * ((float) ($loan->admin_fee ?? 0) / 100);
-                $feeCollectedForLoan = RepaymentTransaction::where('loan_id', $loan->id)->sum('fee_paid');
-                $feeOS += max(0, $totalFee - $feeCollectedForLoan);
-            }
+            $activeBorrowerIds = [];
 
-            foreach ($activeLoans as $loan) {
-                foreach ($loan->payments as $p) {
-                    // Only count payments that were due or scheduled
-                    // Remaining = (Principal + Interest) - Paid
-                    $paidInterest = min($p->total_paid, $p->interest_amount);
-                    $paidPrincipal = max(0, $p->total_paid - $p->interest_amount);
+            // --- PAR Section ---
+            $par1Count = 0;
+            $par1Amount = 0;
+            $par1_29Count = 0;
+            $par1_29Amount = 0;
+            $par30Count = 0;
+            $par30Amount = 0;
 
-                    $loanOS += max(0, $p->principal_amount - $paidPrincipal);
-                    $interestOS += max(0, $p->interest_amount - $paidInterest);
+            foreach ($portfolioLoans as $loan) {
+                $transactionsAtEnd = $loan->transactions;
+
+                $principalPaidAtEnd = $transactionsAtEnd->sum(function ($transaction) {
+                    return (float) ($transaction->principal_paid ?? 0)
+                        + (float) ($transaction->prepayment_paid ?? 0)
+                        + (float) ($transaction->paid_off_amount ?? 0)
+                        - (float) ($transaction->withdrawn_prepayment ?? 0);
+                });
+
+                $currentLoanOS = max(0, (float) $loan->amount - $principalPaidAtEnd);
+                if ($currentLoanOS <= 0.01) {
+                    continue;
+                }
+
+                $loanOS += $currentLoanOS;
+                $activeBorrowerIds[] = $loan->borrower_id;
+
+                $paymentsUpToDate = $loan->payments->filter(function ($payment) use ($toDateStr) {
+                    return $payment->payment_date <= $toDateStr;
+                });
+
+                $interestCollectedAtEnd = $transactionsAtEnd->sum(function ($transaction) {
+                    return (float) ($transaction->interest_paid ?? 0);
+                });
+                $feeCollectedAtEnd = $transactionsAtEnd->sum(function ($transaction) {
+                    return (float) ($transaction->fee_paid ?? 0);
+                });
+
+                $interestScheduledAtEnd = $paymentsUpToDate->sum(function ($payment) {
+                    return (float) ($payment->interest_amount ?? 0);
+                });
+                $feeScheduledAtEnd = $paymentsUpToDate->sum(function ($payment) {
+                    return (float) ($payment->fee_amount ?? 0);
+                });
+
+                $interestOS += max(0, $interestScheduledAtEnd - $interestCollectedAtEnd);
+                $feeOS += max(0, $feeScheduledAtEnd - $feeCollectedAtEnd);
+
+                $scheduledPaidAtEnd = $transactionsAtEnd->sum(function ($transaction) {
+                    return (float) ($transaction->fee_paid ?? 0)
+                        + (float) ($transaction->interest_paid ?? 0)
+                        + (float) ($transaction->principal_paid ?? 0)
+                        + (float) ($transaction->paid_off_amount ?? 0);
+                });
+
+                $cumulativeDue = 0.0;
+                $earliestOverdueDate = null;
+
+                foreach ($loan->payments as $payment) {
+                    if ($payment->payment_date >= $toDateStr) {
+                        continue;
+                    }
+
+                    $cumulativeDue += (float) ($payment->principal_amount ?? 0)
+                        + (float) ($payment->interest_amount ?? 0)
+                        + (float) ($payment->fee_amount ?? 0);
+
+                    if (($cumulativeDue - $scheduledPaidAtEnd) > 0.01) {
+                        $earliestOverdueDate = $payment->payment_date;
+                        break;
+                    }
+                }
+
+                if (!$earliestOverdueDate) {
+                    continue;
+                }
+
+                $aging = abs($toDate->diffInDays(Carbon::parse($earliestOverdueDate)));
+
+                if ($aging >= 1) {
+                    $par1Count++;
+                    $par1Amount += $currentLoanOS;
+                }
+                if ($aging >= 1 && $aging <= 29) {
+                    $par1_29Count++;
+                    $par1_29Amount += $currentLoanOS;
+                }
+                if ($aging >= 30) {
+                    $par30Count++;
+                    $par30Amount += $currentLoanOS;
                 }
             }
+
+            $totalClient = collect($activeBorrowerIds)->unique()->count();
 
             // --- Portfolio Mutation Section ---
             $transactions = RepaymentTransaction::whereHas('loan', function ($q) use ($officer) {
@@ -88,7 +175,10 @@ class DisbursementReportController extends Controller
             $penaltyCollected = $transactions->sum('penalty_paid');
             $recovery = $transactions->where('repayment_type', 'Recovery')->sum('amount_paid');
             // Paid-off Coll. = principal collected on Pay Off (not full amount_paid)
-            $paidOffCollected = $transactions->where('repayment_type', 'Pay Off')->sum('principal_paid');
+            $paidOffCollected = $transactions->where('repayment_type', 'Pay Off')->sum(function ($transaction) {
+                return (float) ($transaction->principal_paid ?? 0)
+                    + (float) ($transaction->paid_off_amount ?? 0);
+            });
 
             // --- Due Section (Payments scheduled within the period) ---
             $duePayments = \App\Models\Payment::whereHas('loan', function ($q) use ($officer) {
@@ -115,48 +205,6 @@ class DisbursementReportController extends Controller
             $repaymentRate = $principalDue > 0
                 ? round(($principalCollected / $principalDue) * 100, 2)
                 : 0;
-
-            // --- PAR Section ---
-            $par1Count = 0;
-            $par1Amount = 0;
-            $par1_29Count = 0;
-            $par1_29Amount = 0;
-            $par30Count = 0;
-            $par30Amount = 0;
-
-            foreach ($activeLoans as $loan) {
-                $earliestOverdue = $loan->payments
-                    ->where('payment_date', '<', $toDateStr)
-                    ->filter(function ($p) {
-                        return $p->total_paid < ($p->principal_amount + $p->interest_amount - 0.01);
-                    })
-                    ->sortBy('payment_date')
-                    ->first();
-
-                if ($earliestOverdue) {
-                    $aging = abs($toDate->diffInDays(Carbon::parse($earliestOverdue->payment_date)));
-
-                    // Calc current loan OS for PAR amount
-                    $currentLoanOS = 0;
-                    foreach ($loan->payments as $p) {
-                        $paidPrincipal = max(0, $p->total_paid - $p->interest_amount);
-                        $currentLoanOS += max(0, $p->principal_amount - $paidPrincipal);
-                    }
-
-                    if ($aging >= 1) {
-                        $par1Count++;
-                        $par1Amount += $currentLoanOS;
-                    }
-                    if ($aging >= 1 && $aging <= 29) {
-                        $par1_29Count++;
-                        $par1_29Amount += $currentLoanOS;
-                    }
-                    if ($aging >= 30) {
-                        $par30Count++;
-                        $par30Amount += $currentLoanOS;
-                    }
-                }
-            }
 
             $reportData[] = [
                 'co_code' => str_pad($officer->id, 4, '0', STR_PAD_LEFT),

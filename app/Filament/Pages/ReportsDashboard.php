@@ -15,8 +15,9 @@ class ReportsDashboard extends Page
 
     public function getReportGroups(): array
     {
-        $baseUrl = config('app.url') . '/api/reports';
-        $exportUrl = config('app.url') . '/api/export';
+        $appUrl = rtrim((string) config('app.url'), '/');
+        $baseUrl = $appUrl . '/api/reports';
+        $exportUrl = $appUrl . '/api/export';
 
         return [
             'operational' => [
@@ -30,6 +31,7 @@ class ReportsDashboard extends Page
                         'description' => 'Current active loan accounts.',
                         'url' => $baseUrl . '/active-loan',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-document-text',
                         'color' => 'success',
                     ],
                     [
@@ -37,6 +39,7 @@ class ReportsDashboard extends Page
                         'description' => 'Funds released history.',
                         'url' => $baseUrl . '/disbursement',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-arrow-trending-up',
                         'color' => 'primary',
                     ],
                     [
@@ -44,6 +47,7 @@ class ReportsDashboard extends Page
                         'description' => 'Full overdue payments list.',
                         'url' => $baseUrl . '/arrear-all',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-exclamation-triangle',
                         'color' => 'danger',
                     ],
                     [
@@ -51,6 +55,7 @@ class ReportsDashboard extends Page
                         'description' => 'Early-stage late payments.',
                         'url' => $baseUrl . '/arrear-under-30',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-clock',
                         'color' => 'warning',
                     ],
                     [
@@ -58,6 +63,7 @@ class ReportsDashboard extends Page
                         'description' => 'All collected repayments.',
                         'url' => $baseUrl . '/repayment',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-arrow-down-left',
                         'color' => 'success',
                     ],
                     [
@@ -65,6 +71,7 @@ class ReportsDashboard extends Page
                         'description' => 'Settled or closed accounts.',
                         'url' => $baseUrl . '/inactive-loan',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-archive-box',
                         'color' => 'gray',
                     ],
                 ],
@@ -80,20 +87,23 @@ class ReportsDashboard extends Page
                         'description' => 'Interest revenue generated.',
                         'url' => $baseUrl . '/interest-income',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-currency-dollar',
                         'color' => 'primary',
                     ],
                     [
                         'name' => 'Income Statement',
                         'description' => 'Profit & Loss (P&L).',
-                        'url' => config('app.url') . '/api/reports/income-statement',
+                        'url' => $appUrl . '/api/reports/income-statement',
                         'type' => 'PDF',
+                        'icon' => 'heroicon-o-document-chart-bar',
                         'color' => 'primary',
                     ],
                     [
                         'name' => 'Dividend History',
                         'description' => 'Payouts and declarations.',
-                        'url' => config('app.url') . '/api/dividends-report',
+                        'url' => $appUrl . '/api/dividends-report',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-chart-pie',
                         'color' => 'indigo',
                     ],
                     [
@@ -101,6 +111,7 @@ class ReportsDashboard extends Page
                         'description' => 'Bad debt and write-off list.',
                         'url' => $baseUrl . '/write-off',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-shield-exclamation',
                         'color' => 'danger',
                     ],
                 ],
@@ -112,10 +123,11 @@ class ReportsDashboard extends Page
                 'color' => 'warning',
                 'reports' => [
                     [
-                        'name' => 'Savings Export',
-                        'description' => 'Savings data (Excel).',
+                        'name' => 'Borrowing Export',
+                        'description' => 'Borrowing data (Excel).',
                         'url' => $exportUrl . '/saving-report',
                         'type' => 'Excel',
+                        'icon' => 'heroicon-o-arrow-down-tray',
                         'color' => 'success',
                     ],
                     [
@@ -123,17 +135,37 @@ class ReportsDashboard extends Page
                         'description' => 'Investor data (Excel).',
                         'url' => $exportUrl . '/capital-report',
                         'type' => 'Excel',
+                        'icon' => 'heroicon-o-arrow-down-tray',
                         'color' => 'success',
                     ],
                     [
                         'name' => 'Audit Logs',
                         'description' => 'System activity and audit trails.',
-                        'url' => config('app.url') . '/admin/activity-logs',
+                        'url' => $appUrl . '/admin/activity-logs',
                         'type' => 'API',
+                        'icon' => 'heroicon-o-clipboard-document-check',
                         'color' => 'indigo',
                     ],
                 ],
             ],
+        ];
+    }
+
+    public function getReportStats(): array
+    {
+        $groups = $this->getReportGroups();
+        $reports = collect($groups)->flatMap(fn (array $group) => $group['reports'] ?? []);
+
+        $total = $reports->count();
+        $api = $reports->where('type', 'API')->count();
+        $excel = $reports->where('type', 'Excel')->count();
+        $pdf = $reports->where('type', 'PDF')->count();
+
+        return [
+            'total' => $total,
+            'api' => $api,
+            'excel' => $excel,
+            'pdf' => $pdf,
         ];
     }
 }

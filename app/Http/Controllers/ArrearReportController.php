@@ -13,8 +13,10 @@ class ArrearReportController extends Controller
     {
         $officerId = $request->query('officer_id');
         $currency = $request->query('currency');
+        $fromDateStr = $request->query('from_date');
         $toDateStr = $request->query('to_date');
         $reportType = $request->query('report_type', 'under30');
+        $fromDate = $fromDateStr ? Carbon::parse($fromDateStr) : null;
         $referenceDate = $toDateStr ? Carbon::parse($toDateStr) : Carbon::today();
         $refDateStr = $referenceDate->toDateString();
 
@@ -93,15 +95,21 @@ class ArrearReportController extends Controller
         $loans = $query->get();
 
         // 2. Filter by Aging in PHP (if necessary)
-        $filtered = $loans->filter(function ($loan) use ($referenceDate, $reportType) {
+        $filtered = $loans->filter(function ($loan) use ($referenceDate, $reportType, $fromDate) {
             if (!$loan->earliest_arrear_date) {
                 return false;
             }
 
+            $arrearDate = Carbon::parse($loan->earliest_arrear_date);
+
             if ($reportType === 'all')
                 return true;
 
-            $aging = abs($referenceDate->diffInDays(Carbon::parse($loan->earliest_arrear_date)));
+            if ($fromDate && $arrearDate->lt($fromDate)) {
+                return false;
+            }
+
+            $aging = abs($referenceDate->diffInDays($arrearDate));
 
             return $aging >= 1 && $aging <= 30;
         })->values();

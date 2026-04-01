@@ -88,7 +88,9 @@ class LoanReportResource extends JsonResource
 
         static $rate = null;
         if ($rate === null) {
-            $rate = (float) (\App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value') ?: 4000);
+            $rate = (float) (\App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
+                ?? \App\Models\Setting::where('key', 'exchange_rate')->value('value')
+                ?? 4000);
         }
 
         return $rate > 0 ? (float) ($amount / $rate) : (float) $amount;
