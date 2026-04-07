@@ -14,6 +14,11 @@ class LoansTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Loan Portfolio')
+            ->description('Review disbursements, interest terms, and repayment status across all loan records.')
+            ->defaultSort('start_date', 'desc')
+            ->persistSortInSession()
+            ->striped()
             ->columns([
                 TextColumn::make('loan_code')
                     ->label('Code')
@@ -25,7 +30,7 @@ class LoansTable
                     ->searchable(['borrower.first_name', 'borrower.last_name'])
                     ->sortable(),
                 TextColumn::make('amount')
-                    ->money('USD')
+                    ->money(fn($record): string => str_starts_with(strtoupper((string) $record->currency), 'KHR') ? 'KHR' : 'USD')
                     ->sortable(),
                 TextColumn::make('interest_rate')
                     ->label('Rate')
@@ -63,7 +68,11 @@ class LoansTable
                     ]),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->label('Manage')
+                    ->icon('heroicon-m-pencil-square')
+                    ->color('warning')
+                    ->button(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

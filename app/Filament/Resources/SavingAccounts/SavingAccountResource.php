@@ -21,6 +21,8 @@ class SavingAccountResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Fund Management';
+
     protected static ?int $navigationSort = 3;
 
     protected static ?string $recordTitleAttribute = 'account_number';
@@ -30,7 +32,14 @@ class SavingAccountResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['account_number', 'borrower.name'];
+        return [
+            'account_number',
+            'account_no',
+            'saver.first_name',
+            'saver.last_name',
+            'borrower.first_name',
+            'borrower.last_name',
+        ];
     }
 
     public static function form(Schema $schema): Schema
@@ -46,7 +55,7 @@ class SavingAccountResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['borrower']);
+            ->with(['saver', 'borrower']);
     }
 
     public static function getRelations(): array
@@ -65,3 +74,4 @@ class SavingAccountResource extends Resource
         ];
     }
 }
+

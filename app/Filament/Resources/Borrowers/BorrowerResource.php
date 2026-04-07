@@ -20,13 +20,15 @@ class BorrowerResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Client Management';
+
     protected static ?int $navigationSort = 4;
 
-    protected static ?string $recordTitleAttribute = 'name';
+    protected static ?string $recordTitleAttribute = 'first_name';
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['name', 'phone', 'customer_code'];
+        return ['first_name', 'last_name', 'phone', 'customer_code'];
     }
 
     public static function form(Schema $schema): Schema
@@ -55,3 +57,4 @@ class BorrowerResource extends Resource
         ];
     }
 }
+

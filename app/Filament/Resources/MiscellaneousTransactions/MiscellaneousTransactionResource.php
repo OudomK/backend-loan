@@ -22,6 +22,8 @@ class MiscellaneousTransactionResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'HR & Payroll';
+
     protected static ?int $navigationSort = 9;
 
     protected static ?string $recordTitleAttribute = 'description';
@@ -65,3 +67,4 @@ class MiscellaneousTransactionResource extends Resource
         ];
     }
 }
+

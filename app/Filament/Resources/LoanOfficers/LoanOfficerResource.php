@@ -21,6 +21,8 @@ class LoanOfficerResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-user-circle';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Client Management';
+
     protected static ?int $navigationSort = 11;
 
     protected static ?string $recordTitleAttribute = 'name';
@@ -62,3 +64,4 @@ class LoanOfficerResource extends Resource
         ];
     }
 }
+

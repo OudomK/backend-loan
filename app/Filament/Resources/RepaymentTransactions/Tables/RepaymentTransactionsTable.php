@@ -31,13 +31,13 @@ class RepaymentTransactionsTable
                     ->searchable(['loan.borrower.first_name', 'loan.borrower.last_name'])
                     ->sortable(),
                 TextColumn::make('amount_paid')
-                    ->money('USD')
+                    ->money(fn($record): string => str_starts_with(strtoupper((string) $record->loan?->currency), 'KHR') ? 'KHR' : 'USD')
                     ->sortable(),
                 TextColumn::make('principal_paid')
-                    ->money('USD')
+                    ->money(fn($record): string => str_starts_with(strtoupper((string) $record->loan?->currency), 'KHR') ? 'KHR' : 'USD')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('interest_paid')
-                    ->money('USD')
+                    ->money(fn($record): string => str_starts_with(strtoupper((string) $record->loan?->currency), 'KHR') ? 'KHR' : 'USD')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('payment_method')
                     ->badge()

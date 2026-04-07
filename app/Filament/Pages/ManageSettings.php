@@ -31,6 +31,11 @@ class ManageSettings extends Page implements HasForms
         return 'General Settings';
     }
 
+    public static function getNavigationGroup(): ?string
+    {
+        return 'Administration';
+    }
+
     public static function getNavigationSort(): ?int
     {
         return 16;

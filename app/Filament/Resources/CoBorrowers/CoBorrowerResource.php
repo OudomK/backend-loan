@@ -18,6 +18,8 @@ class CoBorrowerResource extends Resource
 {
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-users';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'Client Management';
+
     protected static ?int $navigationSort = 5;
 
     protected static ?string $recordTitleAttribute = 'customer_code';
@@ -48,3 +50,4 @@ class CoBorrowerResource extends Resource
         ];
     }
 }
+

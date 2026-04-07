@@ -19,6 +19,7 @@ class ActivityLogResource extends Resource
     protected static ?string $model = ActivityLog::class;
 
     protected static ?string $navigationLabel = 'Audit Logs';
+    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
     protected static ?string $modelLabel = 'Audit Log';
     protected static ?string $pluralModelLabel = 'Audit Logs';
 
@@ -58,3 +59,4 @@ class ActivityLogResource extends Resource
         ];
     }
 }
+

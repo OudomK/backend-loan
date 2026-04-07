@@ -19,7 +19,9 @@ class LoanResource extends Resource
 {
     protected static ?string $model = Loan::class;
 
-    protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Credit Operations';
 
     protected static ?int $navigationSort = 1;
 
@@ -27,7 +29,7 @@ class LoanResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['loan_code', 'borrower.name'];
+        return ['loan_code', 'borrower.first_name', 'borrower.last_name', 'borrower.customer_code'];
     }
 
     public static function form(Schema $schema): Schema
@@ -62,3 +64,4 @@ class LoanResource extends Resource
         ];
     }
 }
+

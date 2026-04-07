@@ -78,8 +78,7 @@ Route::middleware('auth:sanctum')->group(function () {
         $user = $request->user();
         $perms = $user->getAllPermissions()->pluck('name');
         $roles = $user->roles->pluck('name');
-        \Illuminate\Support\Facades\Log::info("USER CHECK - ID: {$user->id}, Roles: " . json_encode($roles) . ", Perms Count: " . count($perms));
-        \Illuminate\Support\Facades\Log::info("USER PERMISSIONS: " . json_encode($perms));
+
         return response()->json([
             'id' => $user->id,
             'name' => $user->name,

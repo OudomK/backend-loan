@@ -7,6 +7,7 @@ use Filament\Pages\Page;
 class ReportsDashboard extends Page
 {
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-chart-bar';
+    protected static string|\UnitEnum|null $navigationGroup = 'Reports';
     protected static ?string $navigationLabel = 'Reports';
     protected static ?string $title = 'Business Reports';
     protected static ?int $navigationSort = 14;
@@ -169,3 +170,4 @@ class ReportsDashboard extends Page
         ];
     }
 }
+

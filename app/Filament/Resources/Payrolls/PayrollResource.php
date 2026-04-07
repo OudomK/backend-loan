@@ -22,6 +22,8 @@ class PayrollResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';
 
+    protected static string|\UnitEnum|null $navigationGroup = 'HR & Payroll';
+
     protected static ?int $navigationSort = 12;
 
     protected static ?string $recordTitleAttribute = 'month_year';
@@ -61,3 +63,4 @@ class PayrollResource extends Resource
         ];
     }
 }
+
