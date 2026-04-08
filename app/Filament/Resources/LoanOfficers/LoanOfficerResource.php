@@ -45,7 +45,10 @@ class LoanOfficerResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['employee']);
+            ->with(['employee'])
+            ->withCount([
+                'loans as active_loans_count' => fn(Builder $query) => $query->where('status', 'active'),
+            ]);
     }
 
     public static function getRelations(): array

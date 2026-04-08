@@ -3,48 +3,84 @@
 namespace App\Filament\Resources\LoanOfficers\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class LoanOfficersTable
 {
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Loan Officers')
+            ->description('Manage loan officers, their assigned cases, and performance.')
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('employee.employee_code')
                     ->label('Emp Code')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('phone')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('gender')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('start_date')
+                    ->label('Start Date')
+                    ->date('d/m/Y')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('max_loan_amount')
+                    ->label('Max Loan Amount')
+                    ->formatStateUsing(fn($state): string => $state !== null ? '$' . number_format((float) $state, 2) : '-')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn(string $state): string => match ($state) {
-                        'Active' => 'success',
-                        'Inactive' => 'warning',
+                    ->formatStateUsing(fn(?string $state): string => ucfirst(strtolower((string) $state)))
+                    ->color(fn(?string $state): string => match (strtolower((string) $state)) {
+                        'active' => 'success',
+                        'inactive' => 'warning',
                         default => 'gray',
-                    }),
-                TextColumn::make('loans_count')
+                    })
+                    ->toggleable(),
+                TextColumn::make('active_loans_count')
                     ->label('Active Loans')
-                    ->counts('loans'),
+                    ->sortable()
+                    ->toggleable(),
             ])
+            ->deferColumnManager()
             ->filters([
                 SelectFilter::make('status')
                     ->options([
-                        'Active' => 'Active',
-                        'Inactive' => 'Inactive',
-                    ]),
+                        'active' => 'Active',
+                        'inactive' => 'Inactive',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = strtolower((string) ($data['value'] ?? ''));
+                        if ($value === '') {
+                            return $query;
+                        }
+
+                        return $query->whereRaw('LOWER(status) = ?', [$value]);
+                    }),
             ])
             ->recordActions([
                 EditAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New Loan Officer')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

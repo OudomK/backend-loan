@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\SavingAccounts\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
@@ -14,6 +15,8 @@ class SavingAccountsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Saving Accounts')
+            ->description('Monitor customer deposits, savings plans, and account interest.')
             ->columns([
                 TextColumn::make('account_number')
                     ->label('Ref No')
@@ -70,6 +73,10 @@ class SavingAccountsTable
                 EditAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New Saving Account')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\CapitalShares\Schemas;
 
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
@@ -22,28 +23,50 @@ class CapitalShareForm
                             ->schema([
                                 TextInput::make('account_no')
                                     ->required()
+                                    ->unique(ignoreRecord: true)
                                     ->maxLength(100),
-                                Select::make('lender_id') // Model Label: Investor
+                                Select::make('lender_id')
                                     ->label('Lender')
                                     ->relationship('lender', 'name')
-                                    ->searchable(),
+                                    ->searchable()
+                                    ->preload()
+                                    ->visible(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Loan Capital')
+                                    ->required(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Loan Capital')
+                                    ->dehydrated(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Loan Capital'),
                                 Select::make('investor_id')
                                     ->label('Investor')
                                     ->relationship('investor', 'first_name')
-                                    ->searchable(),
+                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name} ({$record->customer_code})")
+                                    ->searchable()
+                                    ->preload()
+                                    ->visible(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Real Capital')
+                                    ->required(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Real Capital')
+                                    ->dehydrated(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Real Capital'),
                             ]),
                         Grid::make(2)
                             ->schema([
                                 Select::make('category')
                                     ->options([
-                                        'Regular' => 'Regular Share',
-                                        'Premium' => 'Premium Share',
+                                        'Real Capital' => 'Real Capital',
+                                        'Loan Capital' => 'Loan Capital',
                                     ])
-                                    ->required(),
+                                    ->default('Real Capital')
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(function ($state, callable $set, callable $get): void {
+                                        if ($state === 'Real Capital') {
+                                            $set('lender_id', null);
+                                            self::syncTotalCapital($set, $get);
+                                        } else {
+                                            $set('investor_id', null);
+                                            $amount = (float) ($get('amount') ?: 0);
+                                            $set('total_capital', round($amount, 2));
+                                        }
+                                    }),
                                 Select::make('status')
                                     ->options([
                                         'Active' => 'Active',
-                                        'Closed' => 'Closed',
+                                        'Withdrawn' => 'Withdrawn',
                                     ])
                                     ->default('Active')
                                     ->required(),
@@ -57,22 +80,43 @@ class CapitalShareForm
                             ->schema([
                                 TextInput::make('share_qty')
                                     ->numeric()
-                                    ->required(),
+                                    ->required(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Real Capital')
+                                    ->live()
+                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => self::syncTotalCapital($set, $get)),
                                 TextInput::make('par_value')
                                     ->numeric()
                                     ->prefix('$')
-                                    ->required(),
+                                    ->required(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Real Capital')
+                                    ->live()
+                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => self::syncTotalCapital($set, $get)),
+                                TextInput::make('amount')
+                                    ->label('Loan Amount')
+                                    ->numeric()
+                                    ->prefix('$')
+                                    ->visible(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Loan Capital')
+                                    ->required(fn(callable $get) => ($get('category') ?? 'Real Capital') === 'Loan Capital')
+                                    ->live()
+                                    ->afterStateUpdated(function ($state, callable $set): void {
+                                        $set('total_capital', round((float) ($state ?: 0), 2));
+                                    }),
                                 TextInput::make('total_capital')
                                     ->numeric()
                                     ->prefix('$')
-                                    ->disabled()
+                                    ->readOnly()
+                                    ->dehydrated()
                                     ->placeholder('Auto-calculated'),
                                 TextInput::make('certificate_no')
-                                    ->label('Certificate No'),
+                                    ->label('Certificate No')
+                                    ->unique(ignoreRecord: true),
                                 DatePicker::make('purchase_date')
                                     ->native(false),
-                                TextInput::make('currency')
-                                    ->default('USD'),
+                                Select::make('currency')
+                                    ->options([
+                                        'USD' => 'USD',
+                                        'KHR' => 'KHR',
+                                    ])
+                                    ->default('USD')
+                                    ->required(),
                                 TextInput::make('dividends')
                                     ->numeric()
                                     ->prefix('$')
@@ -84,7 +128,7 @@ class CapitalShareForm
                             ]),
                     ]),
 
-                Section::make('Legacy / Additional Details')
+                Section::make('Additional Details')
                     ->collapsible()
                     ->collapsed()
                     ->schema([
@@ -98,33 +142,26 @@ class CapitalShareForm
                                 DatePicker::make('borrowing_date')
                                     ->native(false),
                                 TextInput::make('contract_no'),
-                                TextInput::make('payment_method'),
-                                DatePicker::make('first_pay_date')
-                                    ->native(false),
-                                TextInput::make('term_months')
-                                    ->numeric(),
-                                TextInput::make('amount')
-                                    ->numeric()
-                                    ->prefix('$'),
-                                TextInput::make('interest_rate')
-                                    ->numeric()
-                                    ->suffix('%'),
                                 TextInput::make('int_pay_mode'),
-                                TextInput::make('fee')
-                                    ->numeric()
-                                    ->prefix('$'),
-                                DatePicker::make('maturity_date')
-                                    ->native(false),
-                                TextInput::make('sl_term'),
-                                Select::make('holder_id')
-                                    ->options([
-                                        // Dynamic options could be added here if needed
-                                    ]),
-                                TextInput::make('repayment_schedule')
+                                TextInput::make('holder_id'),
+                                Textarea::make('repayment_schedule')
+                                    ->label('Repayment Schedule (JSON)')
                                     ->columnSpanFull()
-                                    ->placeholder('JSON Structure'),
+                                    ->placeholder('[{\"period\":1,\"date\":\"2026-04-08\",\"principal\":100}]')
+                                    ->rule('nullable|json')
+                                    ->dehydrateStateUsing(fn($state) => blank($state) ? null : json_decode((string) $state, true))
+                                    ->formatStateUsing(fn($state) => is_array($state) ? json_encode($state, JSON_PRETTY_PRINT) : $state),
                             ]),
                     ]),
             ]);
+    }
+
+    private static function syncTotalCapital(callable $set, callable $get): void
+    {
+        $quantity = (float) ($get('share_qty') ?: 0);
+        $parValue = (float) ($get('par_value') ?: 0);
+        $totalCapital = round($quantity * $parValue, 2);
+
+        $set('total_capital', $totalCapital);
     }
 }

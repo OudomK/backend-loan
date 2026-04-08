@@ -55,9 +55,12 @@ class RepaymentsBarChart extends ChartWidget
                 [
                     'label' => 'Repayments ($)',
                     'data' => $finalData,
-                    'backgroundColor' => '#3b82f6',
-                    'borderRadius' => 8,
-                    'maxBarThickness' => 38,
+                    'backgroundColor' => '#4f46e5', // Indigo 600
+                    'borderRadius' => 6,
+                    'borderWidth' => 0,
+                    'borderSkipped' => false,
+                    'maxBarThickness' => 32,
+                    'hoverBackgroundColor' => '#6366f1', // Indigo 500
                 ],
             ],
             'labels' => $labels,

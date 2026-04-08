@@ -2,6 +2,9 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Pages\Dashboard;
+use App\Models\Setting;
+use App\Support\AdminFontRegistry;
 use Filament\Http\Middleware\Authenticate;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Enums\ThemeMode;
@@ -9,19 +12,17 @@ use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
 use Filament\View\PanelsRenderHook;
-use Filament\Widgets\AccountWidget;
-use Filament\Widgets\FilamentInfoWidget;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\HtmlString;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -35,8 +36,7 @@ class AdminPanelProvider extends PanelProvider
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->spa()
             ->login()
-            ->darkMode()
-            ->defaultThemeMode(ThemeMode::Dark)
+            ->defaultThemeMode(ThemeMode::Light)
             ->font(
                 family: 'Kantumruy Pro',
                 provider: LocalFontProvider::class,
@@ -46,21 +46,36 @@ class AdminPanelProvider extends PanelProvider
                 'primary' => Color::Teal,
             ])
             ->renderHook(
+                PanelsRenderHook::HEAD_END,
+                fn(): HtmlString => new HtmlString($this->renderAdminFontStyle()),
+            )
+            ->renderHook(
                 PanelsRenderHook::BODY_END,
                 fn(): HtmlString => new HtmlString(<<<'HTML'
                     <script data-navigate-once>
                         (() => {
-                            const MIN_WIDTH = 240
-                            const MAX_WIDTH = 520
+                            const DEFAULT_WIDTH = 248
+                            const MIN_WIDTH = 216
+                            const MAX_WIDTH = 340
                             const STORAGE_KEY = 'fi-sidebar-width-admin'
-                            const SIDEBAR_SCROLL_KEY = 'fi-sidebar-scroll-admin'
                             const root = document.documentElement
                             const resizableQuery = window.matchMedia('(min-width: 480px)')
+                            const getEffectiveMaxWidth = () => Math.max(
+                                MIN_WIDTH + 24,
+                                Math.min(MAX_WIDTH, Math.round(window.innerWidth * 0.32)),
+                            )
+                            const normalizeWidth = (value) => clamp(Math.round(value), MIN_WIDTH, getEffectiveMaxWidth())
+
+                            // Reset invalid values that were saved by older buggy code.
+                            const savedWidth = Number(localStorage.getItem(STORAGE_KEY))
+
+                            if (! Number.isFinite(savedWidth) || savedWidth < MIN_WIDTH || savedWidth > getEffectiveMaxWidth()) {
+                                localStorage.removeItem(STORAGE_KEY)
+                            }
 
                             let isDragging = false
                             let handle = null
                             let hasSidebarObserver = false
-                            let scrollSaveTimeout = null
 
                             const isRtl = () => root.getAttribute('dir') === 'rtl'
                             const clamp = (value, min, max) => Math.min(Math.max(value, min), max)
@@ -69,23 +84,23 @@ class AdminPanelProvider extends PanelProvider
                                 const raw = getComputedStyle(root).getPropertyValue('--sidebar-width').trim()
 
                                 if (! raw) {
-                                    return 320
+                                    return DEFAULT_WIDTH
                                 }
 
                                 if (raw.endsWith('rem')) {
                                     const rem = Number.parseFloat(raw)
                                     const base = Number.parseFloat(getComputedStyle(root).fontSize) || 16
 
-                                    return Number.isFinite(rem) ? rem * base : 320
+                                    return Number.isFinite(rem) ? rem * base : DEFAULT_WIDTH
                                 }
 
                                 const pixels = Number.parseFloat(raw)
 
-                                return Number.isFinite(pixels) ? pixels : 320
+                                return Number.isFinite(pixels) ? pixels : DEFAULT_WIDTH
                             }
 
                             const applyWidth = (value, shouldPersist = true) => {
-                                const width = clamp(Math.round(value), MIN_WIDTH, MAX_WIDTH)
+                                const width = normalizeWidth(value)
                                 root.style.setProperty('--sidebar-width', `${width}px`)
 
                                 if (shouldPersist) {
@@ -94,55 +109,7 @@ class AdminPanelProvider extends PanelProvider
                             }
 
                             const hasSidebar = () => Boolean(document.querySelector('.fi-sidebar'))
-                            const getSidebarScrollElement = () =>
-                                document.querySelector('.fi-sidebar-nav') ??
-                                document.querySelector('.fi-sidebar')
 
-                            const saveSidebarScroll = () => {
-                                const scrollElement = getSidebarScrollElement()
-
-                                if (! scrollElement) {
-                                    return
-                                }
-
-                                localStorage.setItem(
-                                    SIDEBAR_SCROLL_KEY,
-                                    `${Math.max(0, Math.round(scrollElement.scrollTop))}`,
-                                )
-                            }
-
-                            const restoreSidebarScroll = () => {
-                                const scrollElement = getSidebarScrollElement()
-
-                                if (! scrollElement) {
-                                    return
-                                }
-
-                                const saved = Number(localStorage.getItem(SIDEBAR_SCROLL_KEY))
-
-                                if (! Number.isFinite(saved) || saved < 0) {
-                                    return
-                                }
-
-                                scrollElement.scrollTop = saved
-                            }
-
-                            const bindSidebarScrollPersistence = () => {
-                                const scrollElement = getSidebarScrollElement()
-
-                                if (! scrollElement || scrollElement.dataset.fiScrollBound === '1') {
-                                    return
-                                }
-
-                                scrollElement.dataset.fiScrollBound = '1'
-                                scrollElement.addEventListener('scroll', () => {
-                                    if (scrollSaveTimeout) {
-                                        window.clearTimeout(scrollSaveTimeout)
-                                    }
-
-                                    scrollSaveTimeout = window.setTimeout(saveSidebarScroll, 40)
-                                }, { passive: true })
-                            }
 
                             const syncHandleVisibility = () => {
                                 const shouldShow =
@@ -269,29 +236,24 @@ class AdminPanelProvider extends PanelProvider
 
                                 if (Number.isFinite(saved) && saved > 0) {
                                     applyWidth(saved, false)
+                                } else {
+                                    applyWidth(DEFAULT_WIDTH, false)
                                 }
 
                                 ensureHandle()
                                 attachSidebarObserver()
                                 syncHandleVisibility()
-                                bindSidebarScrollPersistence()
-                                restoreSidebarScroll()
-                                window.requestAnimationFrame(() => restoreSidebarScroll())
                             }
 
-                            window.addEventListener('resize', syncHandleVisibility)
-                            window.addEventListener('beforeunload', saveSidebarScroll)
+                            window.addEventListener('resize', () => {
+                                applyWidth(getCurrentWidth())
+                                syncHandleVisibility()
+                            })
                             document.addEventListener('mousemove', onDrag)
                             document.addEventListener('touchmove', onDrag, { passive: false })
                             document.addEventListener('mouseup', stopDrag)
                             document.addEventListener('touchend', stopDrag)
                             document.addEventListener('touchcancel', stopDrag)
-                            document.addEventListener('click', (event) => {
-                                if (event.target.closest('.fi-sidebar a, .fi-sidebar button')) {
-                                    saveSidebarScroll()
-                                }
-                            }, true)
-                            document.addEventListener('livewire:navigating', saveSidebarScroll)
                             document.addEventListener('livewire:navigated', init)
 
                             init()
@@ -306,7 +268,6 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                \App\Filament\Widgets\DashboardHero::class,
                 \App\Filament\Widgets\StatsOverview::class,
                 \App\Filament\Widgets\DisbursementLineChart::class,
                 \App\Filament\Widgets\RepaymentsBarChart::class,
@@ -345,5 +306,30 @@ class AdminPanelProvider extends PanelProvider
             ->authMiddleware([
                 Authenticate::class,
             ]);
+    }
+
+    private function renderAdminFontStyle(): string
+    {
+        return sprintf(
+            '<style id="admin-font-family-override">:root{--font-family:%s;}</style>',
+            $this->resolveAdminFontStack(),
+        );
+    }
+
+    private function resolveAdminFontStack(): string
+    {
+        try {
+            if (!Schema::hasTable('settings')) {
+                return AdminFontRegistry::cssStack(null);
+            }
+
+            $selected = Setting::query()
+                ->where('key', 'admin_font_family')
+                ->value('value');
+
+            return AdminFontRegistry::cssStack(is_string($selected) ? $selected : null);
+        } catch (\Throwable) {
+            return AdminFontRegistry::cssStack(null);
+        }
     }
 }

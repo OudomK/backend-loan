@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Employees\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\ImageColumn;
@@ -15,6 +16,8 @@ class EmployeesTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Employees')
+            ->description('Manage staff records, positions, and contact information.')
             ->columns([
                 ImageColumn::make('photo')
                     ->circular(),
@@ -56,6 +59,10 @@ class EmployeesTable
                 EditAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New Employee')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Guarantors\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\ImageColumn;
@@ -15,20 +16,26 @@ class GuarantorsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Guarantors')
+            ->description('Manage loan guarantors and their guarantee details.')
             ->columns([
                 ImageColumn::make('photo')
-                    ->circular(),
+                    ->circular()
+                    ->toggleable(),
                 TextColumn::make('full_name')
                     ->label('Name')
                     ->getStateUsing(fn($record) => "{$record->last_name} {$record->first_name}")
                     ->searchable(['first_name', 'last_name'])
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('customer_code')
                     ->label('Code')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('phone')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
@@ -37,14 +44,8 @@ class GuarantorsTable
                         'Blacklisted' => 'danger',
                         default => 'gray',
                     }),
-                TextColumn::make('province')
-                    ->sortable()
-                    ->toggleable(),
-                TextColumn::make('created_at')
-                    ->dateTime()
-                    ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->deferColumnManager()
             ->filters([
                 SelectFilter::make('status')
                     ->options([
@@ -57,6 +58,10 @@ class GuarantorsTable
                 EditAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New Guarantor')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

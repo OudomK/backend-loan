@@ -62,6 +62,7 @@ Route::get('/app/settings', function () {
         'company_name' => $dbSettings['company_name'] ?? Config::get('app.company_name', 'Company Name'),
         'company_logo' => isset($dbSettings['company_logo']) ? asset('storage/' . $dbSettings['company_logo']) : null,
         'default_language' => $dbSettings['default_language'] ?? 'EN',
+        'frontend_font_family' => $dbSettings['frontend_font_family'] ?? 'battambang',
         'copyright_text' => $dbSettings['copyright_text'] ?? ('© ' . date('Y') . ' ' . Config::get('app.company_name')),
         'exchange_rate' => $dbSettings['exchange_rate_khr_to_usd'] ?? $dbSettings['exchange_rate'] ?? 4000,
         'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,

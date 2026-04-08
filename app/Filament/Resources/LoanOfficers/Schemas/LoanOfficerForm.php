@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LoanOfficers\Schemas;
 
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
@@ -22,7 +23,9 @@ class LoanOfficerForm
                                 Select::make('employee_id')
                                     ->relationship('employee', 'name')
                                     ->searchable()
+                                    ->preload()
                                     ->required()
+                                    ->unique(ignoreRecord: true)
                                     ->reactive()
                                     ->afterStateUpdated(
                                         fn($state, callable $set) =>
@@ -38,11 +41,27 @@ class LoanOfficerForm
                                     ->tel(),
                                 Select::make('status')
                                     ->options([
-                                        'Active' => 'Active',
-                                        'Inactive' => 'Inactive',
+                                        'active' => 'Active',
+                                        'inactive' => 'Inactive',
                                     ])
-                                    ->default('Active')
+                                    ->default('active')
+                                    ->native(false)
                                     ->required(),
+                            ]),
+                        Grid::make(3)
+                            ->schema([
+                                Select::make('gender')
+                                    ->options([
+                                        'Male' => 'Male',
+                                        'Female' => 'Female',
+                                        'Other' => 'Other',
+                                    ])
+                                    ->native(false),
+                                DatePicker::make('start_date')
+                                    ->native(false),
+                                TextInput::make('max_loan_amount')
+                                    ->numeric()
+                                    ->prefix('$'),
                             ]),
                     ]),
             ]);

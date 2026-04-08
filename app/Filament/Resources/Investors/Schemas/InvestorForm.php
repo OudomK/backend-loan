@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Investors\Schemas;
 
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -64,10 +63,16 @@ class InvestorForm
                             ->schema([
                                 TextInput::make('phone')
                                     ->tel()
+                                    ->required()
+                                    ->maxLength(30)
                                     ->prefix('+855'),
-                                DatePicker::make('dob')
+                                TextInput::make('dob')
                                     ->label('Date of Birth')
-                                    ->native(false),
+                                    ->placeholder('dd/mm/yyyy')
+                                    ->helperText('Format: dd/mm/yyyy')
+                                    ->mask('99/99/9999')
+                                    ->rule('date_format:d/m/Y')
+                                    ->formatStateUsing(fn($state) => $state ? \Carbon\Carbon::parse($state)->format('d/m/Y') : null),
                             ]),
                         Grid::make(3)
                             ->schema([
@@ -77,9 +82,17 @@ class InvestorForm
                                         'Passport' => 'Passport',
                                         'Family Book' => 'Family Book',
                                     ]),
-                                TextInput::make('id_number'),
-                                DatePicker::make('id_expiry')
-                                    ->native(false),
+                                TextInput::make('id_number')
+                                    ->required()
+                                    ->unique(ignoreRecord: true)
+                                    ->maxLength(100),
+                                TextInput::make('id_expiry')
+                                    ->label('ID Expiry')
+                                    ->placeholder('dd/mm/yyyy')
+                                    ->helperText('Format: dd/mm/yyyy')
+                                    ->mask('99/99/9999')
+                                    ->rule('date_format:d/m/Y')
+                                    ->formatStateUsing(fn($state) => $state ? \Carbon\Carbon::parse($state)->format('d/m/Y') : null),
                             ]),
                     ]),
 

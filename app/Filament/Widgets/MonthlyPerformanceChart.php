@@ -80,18 +80,20 @@ class MonthlyPerformanceChart extends ChartWidget
                 [
                     'label' => 'Disbursements ($)',
                     'data' => $disbursementData,
-                    'backgroundColor' => '#f59e0b',
-                    'borderColor' => '#f59e0b',
-                    'borderRadius' => 8,
+                    'backgroundColor' => '#10b981', // Emerald 500
+                    'borderRadius' => 6,
+                    'borderWidth' => 0,
                     'maxBarThickness' => 30,
+                    'hoverBackgroundColor' => '#059669', // Emerald 600
                 ],
                 [
                     'label' => 'Collections ($)',
                     'data' => $collectionData,
-                    'backgroundColor' => '#3b82f6',
-                    'borderColor' => '#3b82f6',
-                    'borderRadius' => 8,
+                    'backgroundColor' => '#4f46e5', // Indigo 600
+                    'borderRadius' => 6,
+                    'borderWidth' => 0,
                     'maxBarThickness' => 30,
+                    'hoverBackgroundColor' => '#6366f1', // Indigo 500
                 ],
             ],
             'labels' => $labels,

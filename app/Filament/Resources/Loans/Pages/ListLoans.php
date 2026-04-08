@@ -5,24 +5,41 @@ namespace App\Filament\Resources\Loans\Pages;
 use App\Filament\Resources\Loans\LoanResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
+use Illuminate\Contracts\Support\Htmlable;
 
 class ListLoans extends ListRecords
 {
     protected static string $resource = LoanResource::class;
 
-    protected ?string $subheading = 'Manage loan records with quick access to status, rate, and duration details.';
+    public function getHeading(): string|Htmlable|null
+    {
+        return null;
+    }
+
+    public function getSubheading(): string|Htmlable|null
+    {
+        return null;
+    }
+
+    /**
+     * @return array<string>
+     */
+    public function getBreadcrumbs(): array
+    {
+        return [];
+    }
 
     protected function getHeaderActions(): array
     {
-        return [
-            CreateAction::make()
-                ->label('Create Loan')
-                ->icon('heroicon-m-plus-circle')
-                ->button(),
-        ];
+        return [];
     }
 
-    public function getMaxContentWidth(): string | null
+    protected function getTableHeaderActions(): array
+    {
+        return [];
+    }
+
+    public function getMaxContentWidth(): string|null
     {
         return 'full';
     }

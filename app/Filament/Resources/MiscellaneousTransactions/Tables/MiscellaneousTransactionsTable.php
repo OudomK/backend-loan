@@ -10,6 +10,7 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
+use Filament\Actions\CreateAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
@@ -20,6 +21,8 @@ class MiscellaneousTransactionsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Miscellaneous Transactions')
+            ->description('Log and track miscellaneous revenue, expenses, and one-off transactions.')
             ->defaultSort('transaction_date', 'desc')
             ->columns([
                 TextColumn::make('transaction_date')
@@ -65,6 +68,10 @@ class MiscellaneousTransactionsTable
                 ForceDeleteAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New Transaction')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     RestoreBulkAction::make(),

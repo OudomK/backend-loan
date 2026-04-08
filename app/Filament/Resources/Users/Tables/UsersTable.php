@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Users\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
@@ -14,6 +15,8 @@ class UsersTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Users')
+            ->description('Manage system users, their access credentials, and assigned roles.')
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
@@ -40,6 +43,10 @@ class UsersTable
                 EditAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New User')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

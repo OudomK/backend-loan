@@ -55,15 +55,15 @@ class DisbursementLineChart extends ChartWidget
                 [
                     'label' => 'Disbursements ($)',
                     'data' => $finalData,
-                    'borderColor' => '#f59e0b',
-                    'pointRadius' => 3,
-                    'pointHoverRadius' => 5,
-                    'pointBackgroundColor' => '#f59e0b',
-                    'pointBorderColor' => '#f59e0b',
-                    'borderWidth' => 3,
-                    'tension' => 0.35,
+                    'borderColor' => '#10b981', // Emerald 500
+                    'pointRadius' => 0,
+                    'pointHoverRadius' => 6,
+                    'pointBackgroundColor' => '#10b981',
+                    'pointBorderColor' => '#fff',
+                    'borderWidth' => 4,
+                    'tension' => 0.45,
                     'fill' => 'start',
-                    'backgroundColor' => 'rgba(245, 158, 11, 0.1)',
+                    'backgroundColor' => 'rgba(16, 185, 129, 0.15)', // Emerald transparent
                 ],
             ],
             'labels' => $labels,

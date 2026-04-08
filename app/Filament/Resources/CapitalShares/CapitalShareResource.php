@@ -29,7 +29,7 @@ class CapitalShareResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['account_no', 'lender.name'];
+        return ['account_no', 'lender.name', 'investor.first_name', 'investor.last_name', 'investor.customer_code'];
     }
 
     public static function form(Schema $schema): Schema
@@ -45,7 +45,7 @@ class CapitalShareResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->with(['lender']);
+            ->with(['lender', 'investor']);
     }
 
     public static function getRelations(): array

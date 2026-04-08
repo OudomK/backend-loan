@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 
 class Guarantor extends Model
@@ -30,23 +31,45 @@ class Guarantor extends Model
 
     public function setDobAttribute($value)
     {
-        if ($value) {
-            try {
-                $this->attributes['dob'] = \Carbon\Carbon::createFromFormat('d/m/Y', $value)->format('Y-m-d');
-            } catch (\Exception $e) {
-                $this->attributes['dob'] = null;
-            }
-        }
+        $this->attributes['dob'] = $this->normalizeDateInput($value);
     }
 
     public function setIdExpiryAttribute($value)
     {
-        if ($value) {
+        $this->attributes['id_expiry'] = $this->normalizeDateInput($value);
+    }
+
+    private function normalizeDateInput(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        if ($value instanceof \DateTimeInterface) {
+            return Carbon::instance($value)->format('Y-m-d');
+        }
+
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            return null;
+        }
+
+        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y'] as $format) {
             try {
-                $this->attributes['id_expiry'] = \Carbon\Carbon::createFromFormat('d/m/Y', $value)->format('Y-m-d');
-            } catch (\Exception $e) {
-                $this->attributes['id_expiry'] = null;
+                $parsed = Carbon::createFromFormat($format, $raw);
+            } catch (\Throwable) {
+                continue;
             }
+
+            if ($parsed !== false && $parsed->format($format) === $raw) {
+                return $parsed->format('Y-m-d');
+            }
+        }
+
+        try {
+            return Carbon::parse($raw)->format('Y-m-d');
+        } catch (\Throwable) {
+            return null;
         }
     }
 

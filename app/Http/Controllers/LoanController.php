@@ -73,7 +73,7 @@ class LoanController extends Controller
             'admin_fee_type' => 'nullable|string|in:one_time,monthly',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
-            'guarantor_id' => 'nullable|exists:co_borrowers,id', // Note: borrower relationship table
+            'guarantor_id' => 'nullable|exists:guarantors,id',
             'guarantor_relationship' => 'nullable|string',
             'product_id' => 'nullable|exists:loan_products,id',
             'collaterals' => 'nullable|array',

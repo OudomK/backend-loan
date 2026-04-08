@@ -14,8 +14,6 @@ use Illuminate\Support\Facades\Cache;
 class StatsOverview extends BaseWidget
 {
     protected static ?int $sort = 1;
-    protected ?string $heading = 'Executive Snapshot';
-    protected ?string $description = 'Real-time portfolio, disbursement, and collection highlights.';
 
     protected function getStats(): array
     {
@@ -36,18 +34,24 @@ class StatsOverview extends BaseWidget
                 ->description('Loan applications waiting for review')
                 ->descriptionIcon('heroicon-m-clock')
                 ->icon('heroicon-m-document-text')
+                ->chart([2, 5, 1, 6, 2, 3, 5])
+                ->extraAttributes(['class' => 'bg-white!'])
                 ->color('warning'),
 
             Stat::make('Portfolio Balance', '$' . number_format(Cache::remember('filament.stats.portfolio_balance', $ttl, fn () => (float) Loan::where('status', 'active')->sum('amount')), 2))
                 ->description('Active outstanding principal')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->icon('heroicon-m-wallet')
+                ->chart([1200, 1500, 1400, 1800, 1600, 2000, 1950])
+                ->extraAttributes(['class' => 'bg-white!'])
                 ->color('info'),
 
             Stat::make('Active Borrowers', Cache::remember('filament.stats.active_borrowers', $ttl, fn () => Borrower::whereHas('loans', fn ($q) => $q->where('status', 'active'))->count()))
                 ->description('Clients with active loans')
                 ->descriptionIcon('heroicon-m-user-group')
                 ->icon('heroicon-m-users')
+                ->chart([5, 8, 8, 12, 10, 15, 14])
+                ->extraAttributes(['class' => 'bg-white!'])
                 ->color('success'),
 
             Stat::make('MTD Disbursements', '$' . number_format(Cache::remember('filament.stats.mtd_disbursements', $ttl, fn () => (float) Loan::where('status', 'active')->whereMonth('start_date', now()->month)->whereYear('start_date', now()->year)->sum('amount')), 2))
@@ -55,6 +59,7 @@ class StatsOverview extends BaseWidget
                 ->descriptionIcon('heroicon-m-arrow-up-right')
                 ->icon('heroicon-m-arrow-trending-up')
                 ->chart($disbursementTrend)
+                ->extraAttributes(['class' => 'bg-white!'])
                 ->color('success'),
 
             Stat::make('MTD Collections', '$' . number_format(Cache::remember('filament.stats.mtd_collections', $ttl, fn () => (float) RepaymentTransaction::whereMonth('transaction_date', now()->month)->whereYear('transaction_date', now()->year)->sum('amount_paid')), 2))
@@ -62,12 +67,15 @@ class StatsOverview extends BaseWidget
                 ->descriptionIcon('heroicon-m-check-badge')
                 ->icon('heroicon-m-arrow-down-left')
                 ->chart($collectionTrend)
+                ->extraAttributes(['class' => 'bg-white!'])
                 ->color('info'),
 
             Stat::make('Total Borrowing', '$' . number_format(Cache::remember('filament.stats.total_borrowing', $ttl, fn () => (float) Borrowing::where('status', 'active')->sum('amount')), 2))
                 ->description('Active external funding')
                 ->descriptionIcon('heroicon-m-building-library')
                 ->icon('heroicon-m-building-library')
+                ->chart([1000, 1000, 2000, 2000, 1500, 1500])
+                ->extraAttributes(['class' => 'bg-white!'])
                 ->color('primary'),
         ];
     }

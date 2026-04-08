@@ -9,6 +9,21 @@ class LoanOfficer extends Model
 
     protected $fillable = ['employee_id', 'name', 'phone', 'status', 'start_date', 'max_loan_amount', 'gender'];
 
+    protected $casts = [
+        'start_date' => 'date',
+        'max_loan_amount' => 'decimal:2',
+    ];
+
+    public function setStatusAttribute($value): void
+    {
+        $this->attributes['status'] = $value === null ? null : strtolower((string) $value);
+    }
+
+    public function getStatusAttribute($value): ?string
+    {
+        return $value === null ? null : strtolower((string) $value);
+    }
+
     public function employee()
     {
         return $this->belongsTo(Employee::class);

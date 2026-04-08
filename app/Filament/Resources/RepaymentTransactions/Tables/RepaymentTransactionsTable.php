@@ -10,6 +10,7 @@ use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
+use Filament\Actions\CreateAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
@@ -19,6 +20,8 @@ class RepaymentTransactionsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Repayments')
+            ->description('Log and track all incoming loan repayments and transaction history.')
             ->defaultSort('transaction_date', 'desc')
             ->columns([
                 TextColumn::make('loan.loan_code')
@@ -58,6 +61,10 @@ class RepaymentTransactionsTable
                 ForceDeleteAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New Repayment')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     RestoreBulkAction::make(),

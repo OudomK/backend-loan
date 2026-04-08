@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Borrowers\Schemas;
 
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -44,9 +43,13 @@ class BorrowerForm
                             ]),
                         Grid::make(3)
                             ->schema([
-                                DatePicker::make('dob')
+                                TextInput::make('dob')
                                     ->label('Date of Birth')
-                                    ->native(false),
+                                    ->placeholder('dd/mm/yyyy')
+                                    ->helperText('Format: dd/mm/yyyy')
+                                    ->mask('99/99/9999')
+                                    ->rule('date_format:d/m/Y')
+                                    ->formatStateUsing(fn($state) => $state ? \Carbon\Carbon::parse($state)->format('d/m/Y') : null),
                                 TextInput::make('age')
                                     ->numeric()
                                     ->minValue(18)
@@ -71,10 +74,10 @@ class BorrowerForm
                                 Select::make('customer_type')
                                     ->options([
                                         'Borrower' => 'Borrower',
-                                        'Saver' => 'Saver',
-                                        'Investor' => 'Investor',
                                     ])
                                     ->default('Borrower')
+                                    ->disabled()
+                                    ->dehydrated(false)
                                     ->required(),
                                 Select::make('status')
                                     ->options([
@@ -95,10 +98,15 @@ class BorrowerForm
                                         'Family Book' => 'Family Book',
                                     ]),
                                 TextInput::make('id_number')
-                                    ->label('ID Number'),
-                                DatePicker::make('id_expiry')
+                                    ->label('ID Number')
+                                    ->unique(ignoreRecord: true),
+                                TextInput::make('id_expiry')
                                     ->label('ID Expiry Date')
-                                    ->native(false),
+                                    ->placeholder('dd/mm/yyyy')
+                                    ->helperText('Format: dd/mm/yyyy')
+                                    ->mask('99/99/9999')
+                                    ->rule('date_format:d/m/Y')
+                                    ->formatStateUsing(fn($state) => $state ? \Carbon\Carbon::parse($state)->format('d/m/Y') : null),
                             ]),
                     ]),
 

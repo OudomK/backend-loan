@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Borrowers\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\ImageColumn;
@@ -15,6 +16,8 @@ class BorrowersTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Borrowers')
+            ->description('Manage your borrowers and their customer profiles.')
             ->columns([
                 ImageColumn::make('photo')
                     ->circular(),
@@ -71,6 +74,10 @@ class BorrowersTable
                 EditAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New Borrower')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

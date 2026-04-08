@@ -28,7 +28,7 @@ class InvestorResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['first_name', 'last_name', 'investor_code', 'phone'];
+        return ['first_name', 'last_name', 'customer_code', 'phone'];
     }
 
     public static function form(Schema $schema): Schema

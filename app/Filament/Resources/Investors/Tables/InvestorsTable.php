@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Investors\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\ImageColumn;
@@ -53,9 +54,17 @@ class InvestorsTable
                 EditAction::make(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New Investor')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->headerActions([])
+            ->heading('Investors')
+            ->description('Manage and monitor all your fund investors in one place.');
+
     }
 }

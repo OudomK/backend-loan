@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Loans\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
@@ -24,11 +25,11 @@ class LoansTable
                     ->label('Code')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('borrower.id')
+                TextColumn::make('borrower.first_name')
                     ->label('Borrower')
                     ->getStateUsing(fn($record) => "{$record->borrower?->last_name} {$record->borrower?->first_name}")
-                    ->searchable(['borrower.first_name', 'borrower.last_name'])
-                    ->sortable(),
+                    ->searchable(['first_name', 'last_name'])
+                    ->sortable(['first_name', 'last_name']),
                 TextColumn::make('amount')
                     ->money(fn($record): string => str_starts_with(strtoupper((string) $record->currency), 'KHR') ? 'KHR' : 'USD')
                     ->sortable(),
@@ -75,6 +76,10 @@ class LoansTable
                     ->button(),
             ])
             ->toolbarActions([
+                CreateAction::make()
+                    ->label('New Loan')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
