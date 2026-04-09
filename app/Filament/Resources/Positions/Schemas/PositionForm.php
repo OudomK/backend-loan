@@ -24,7 +24,12 @@ class PositionForm
                                     ->required()
                                     ->maxLength(100),
                                 TextInput::make('code')
-                                    ->maxLength(50),
+                                    ->maxLength(50)
+                                    ->default(function () {
+                                        $latest = \App\Models\Position::orderBy('id', 'desc')->first();
+                                        $nextId = $latest ? $latest->id + 1 : 1;
+                                        return 'POS-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+                                    }),
                             ]),
                         Grid::make(3)
                             ->schema([

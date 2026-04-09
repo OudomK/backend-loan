@@ -37,6 +37,11 @@ class GuarantorPolicy
         return $authUser->can('Delete:Guarantor');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Guarantor');
+    }
+
     public function restore(AuthUser $authUser, Guarantor $guarantor): bool
     {
         return $authUser->can('Restore:Guarantor');

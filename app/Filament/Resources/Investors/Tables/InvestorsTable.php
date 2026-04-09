@@ -6,6 +6,11 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -44,6 +49,7 @@ class InvestorsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                \Filament\Tables\Filters\TrashedFilter::make(),
                 SelectFilter::make('status')
                     ->options([
                         'Active' => 'Active',
@@ -52,17 +58,23 @@ class InvestorsTable
             ])
             ->recordActions([
                 EditAction::make(),
+                DeleteAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make(),
             ])
-            ->toolbarActions([
+            ->headerActions([
                 CreateAction::make()
                     ->label('New Investor')
                     ->icon('heroicon-m-plus-circle')
                     ->button(),
+            ])
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
                 ]),
             ])
-            ->headerActions([])
             ->heading('Investors')
             ->description('Manage and monitor all your fund investors in one place.');
 

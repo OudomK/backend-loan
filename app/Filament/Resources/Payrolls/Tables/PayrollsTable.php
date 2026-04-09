@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Payrolls\Tables;
 
 use Filament\Actions\BulkActionGroup;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -20,6 +21,8 @@ class PayrollsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Payrolls')
+            ->description('Track salary runs, allowances, deductions, and payout status for each payroll period.')
             ->defaultSort('month_year', 'desc')
             ->columns([
                 TextColumn::make('month_year')
@@ -60,7 +63,13 @@ class PayrollsTable
                 RestoreAction::make(),
                 ForceDeleteAction::make(),
             ])
-            ->toolbarActions([
+            ->headerActions([
+                CreateAction::make()
+                    ->label('New Payroll')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
+            ])
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     RestoreBulkAction::make(),

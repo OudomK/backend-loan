@@ -4,9 +4,11 @@ namespace App\Models;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Investor extends Model
 {
+    use SoftDeletes;
 
     protected $table = 'investors';
 
@@ -69,9 +71,14 @@ class Investor extends Model
         }
 
         foreach (['Y-m-d', 'd/m/Y', 'd-m-Y'] as $format) {
-            $parsed = Carbon::createFromFormat($format, $raw);
-            if ($parsed !== false && $parsed->format($format) === $raw) {
-                return $parsed->format('Y-m-d');
+            try {
+                $parsed = Carbon::createFromFormat($format, $raw);
+
+                if ($parsed !== false && $parsed->format($format) === $raw) {
+                    return $parsed->format('Y-m-d');
+                }
+            } catch (\Throwable) {
+                continue;
             }
         }
 

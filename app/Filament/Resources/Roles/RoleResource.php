@@ -12,6 +12,7 @@ use App\Filament\Resources\Roles\Pages\ViewRole;
 use BezhanSalleh\FilamentShield\Support\Utils;
 use BezhanSalleh\FilamentShield\Traits\HasShieldFormComponents;
 use BezhanSalleh\PluginEssentials\Concerns\Resource as Essentials;
+use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -237,6 +238,9 @@ class RoleResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->heading('Roles')
+            ->description('Configure admin panel access and system UI permissions for each role.')
+            ->defaultSort('updated_at', 'desc')
             ->columns([
                 TextColumn::make('name')
                     ->weight(FontWeight::Medium)
@@ -287,6 +291,12 @@ class RoleResource extends Resource
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make(),
+            ])
+            ->headerActions([
+                CreateAction::make()
+                    ->label('New Role')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
             ])
             ->toolbarActions([
                 DeleteBulkAction::make(),

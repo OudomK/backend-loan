@@ -72,7 +72,12 @@ class GuarantorForm
                                     ->placeholder('Enter unique code')
                                     ->required()
                                     ->unique(ignoreRecord: true)
-                                    ->maxLength(255),
+                                    ->maxLength(255)
+                                    ->default(function () {
+                                        $latest = \App\Models\Guarantor::orderBy('id', 'desc')->first();
+                                        $nextId = $latest ? $latest->id + 1 : 1;
+                                        return 'QF-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+                                    }),
                                 Select::make('status')
                                     ->options([
                                         'Active' => 'Active',

@@ -37,6 +37,11 @@ class InvestorPolicy
         return $authUser->can('Delete:Investor');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Investor');
+    }
+
     public function restore(AuthUser $authUser, Investor $investor): bool
     {
         return $authUser->can('Restore:Investor');

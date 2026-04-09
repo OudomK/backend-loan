@@ -18,5 +18,9 @@ class CreateInvestor extends CreateRecord
     {
         return [];
     }
-}
 
+    protected function mutateFormDataBeforeCreate(array $data): array
+    {
+        return InvestorResource::normalizeInvestorData($data);
+    }
+}

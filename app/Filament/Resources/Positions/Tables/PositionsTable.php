@@ -47,11 +47,13 @@ class PositionsTable
             ->recordActions([
                 EditAction::make(),
             ])
-            ->toolbarActions([
+            ->headerActions([
                 CreateAction::make()
                     ->label('New Position')
                     ->icon('heroicon-m-plus-circle')
                     ->button(),
+            ])
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

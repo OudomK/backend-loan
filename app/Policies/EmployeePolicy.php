@@ -37,6 +37,11 @@ class EmployeePolicy
         return $authUser->can('Delete:Employee');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Employee');
+    }
+
     public function restore(AuthUser $authUser, Employee $employee): bool
     {
         return $authUser->can('Restore:Employee');

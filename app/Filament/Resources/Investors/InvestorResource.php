@@ -28,7 +28,7 @@ class InvestorResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['first_name', 'last_name', 'customer_code', 'phone'];
+        return ['first_name', 'last_name', 'customer_code', 'phone', 'id_number'];
     }
 
     public static function form(Schema $schema): Schema
@@ -39,6 +39,14 @@ class InvestorResource extends Resource
     public static function table(Table $table): Table
     {
         return InvestorsTable::configure($table);
+    }
+
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                \Illuminate\Database\Eloquent\SoftDeletingScope::class,
+            ]);
     }
 
     public static function getRelations(): array
@@ -55,6 +63,32 @@ class InvestorResource extends Resource
             'create' => CreateInvestor::route('/create'),
             'edit' => EditInvestor::route('/{record}/edit'),
         ];
+    }
+
+    public static function nextInvestorCode(): string
+    {
+        $lastCode = Investor::orderBy('id', 'desc')->first();
+        $nextNumber = $lastCode ? intval(substr((string) $lastCode->customer_code, 3)) + 1 : 1;
+
+        return 'INV' . str_pad((string) $nextNumber, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function normalizeInvestorData(array $data, ?Investor $record = null): array
+    {
+        if (blank($data['customer_code'] ?? null)) {
+            $data['customer_code'] = $record?->customer_code ?? static::nextInvestorCode();
+        }
+
+        $data['status'] = filled($data['status'] ?? null)
+            ? (string) $data['status']
+            : (string) ($record?->status ?? 'Active');
+        $data['customer_type'] = 'Investor';
+
+        return $data;
     }
 }
 

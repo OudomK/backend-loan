@@ -70,7 +70,12 @@ class BorrowerForm
                                 TextInput::make('customer_code')
                                     ->label('Customer Code')
                                     ->required()
-                                    ->unique(ignoreRecord: true),
+                                    ->unique(ignoreRecord: true)
+                                    ->default(function () {
+                                        $latest = \App\Models\Borrower::withoutGlobalScopes()->orderBy('id', 'desc')->first();
+                                        $nextId = $latest ? $latest->id + 1 : 1;
+                                        return 'QF-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+                                    }),
                                 Select::make('customer_type')
                                     ->options([
                                         'Borrower' => 'Borrower',

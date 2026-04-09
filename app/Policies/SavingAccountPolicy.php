@@ -37,6 +37,11 @@ class SavingAccountPolicy
         return $authUser->can('Delete:SavingAccount');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:SavingAccount');
+    }
+
     public function restore(AuthUser $authUser, SavingAccount $savingAccount): bool
     {
         return $authUser->can('Restore:SavingAccount');

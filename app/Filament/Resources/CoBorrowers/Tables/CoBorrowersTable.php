@@ -59,11 +59,13 @@ class CoBorrowersTable
             ->recordActions([
                 EditAction::make(),
             ])
-            ->toolbarActions([
+            ->headerActions([
                 CreateAction::make()
                     ->label('New Co-Borrower')
                     ->icon('heroicon-m-plus-circle')
                     ->button(),
+            ])
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),

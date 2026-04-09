@@ -37,6 +37,11 @@ class CapitalSharePolicy
         return $authUser->can('Delete:CapitalShare');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:CapitalShare');
+    }
+
     public function restore(AuthUser $authUser, CapitalShare $capitalShare): bool
     {
         return $authUser->can('Restore:CapitalShare');

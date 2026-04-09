@@ -58,16 +58,17 @@ class CapitalSharesTable
             ->recordActions([
                 EditAction::make(),
             ])
-            ->toolbarActions([
+            ->headerActions([
                 CreateAction::make()
                     ->label('New Capital Share')
                     ->icon('heroicon-m-plus-circle')
                     ->button(),
+            ])
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
             ])
-            ->headerActions([])
             ->heading('Capital Shares')
             ->description('Manage and monitor all your capital shares in one place.');
     }

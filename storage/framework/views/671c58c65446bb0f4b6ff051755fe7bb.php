@@ -99,8 +99,7 @@
                             state: $wire.<?php echo e($applyStateBindingModifiers("\$entangle('{$statePath}')")); ?>,
                         })"
                 wire:ignore
-                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processElementKey('{{ $livewireKey }}.{{
-                    substr(md5(serialize([
+                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = ''.e($livewireKey).'.'.e(substr(md5(serialize([
                         $disabledDates,
                         $isDisabled,
                         $isReadOnly,
@@ -109,8 +108,7 @@
                         $hasDate,
                         $hasTime,
                         $hasSeconds,
-                    ])), 0, 64)
-                }}', get_defined_vars()); ?>wire:key="<?php echo e($livewireKey); ?>.<?php echo e(substr(md5(serialize([
+                    ])), 0, 64)).''; ?>wire:key="<?php echo e($livewireKey); ?>.<?php echo e(substr(md5(serialize([
                         $disabledDates,
                         $isDisabled,
                         $isReadOnly,
@@ -162,7 +160,7 @@
                         <?php if($isDisabled): echo 'disabled'; endif; ?>
                         readonly
                         placeholder="<?php echo e($placeholder); ?>"
-                        <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processElementKey('{{ $livewireKey }}.display-text', get_defined_vars()); ?>wire:key="<?php echo e($livewireKey); ?>.display-text"
+                        <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = ''.e($livewireKey).'.display-text'; ?>wire:key="<?php echo e($livewireKey); ?>.display-text"
                         x-model="displayText"
                         <?php if($id = $getId()): ?> id="<?php echo e($id); ?>" <?php endif; ?>
                         class="<?php echo \Illuminate\Support\Arr::toCssClasses([
@@ -176,7 +174,7 @@
                     x-cloak
                     x-float.placement.bottom-start.offset.flip.shift="{ offset: 8 }"
                     wire:ignore
-                    <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processElementKey('{{ $livewireKey }}.panel', get_defined_vars()); ?>wire:key="<?php echo e($livewireKey); ?>.panel"
+                    <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = ''.e($livewireKey).'.panel'; ?>wire:key="<?php echo e($livewireKey); ?>.panel"
                     class="<?php echo \Illuminate\Support\Arr::toCssClasses([
                         'fi-fo-date-time-picker-panel',
                     ]); ?>"
@@ -308,7 +306,7 @@
 
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($datalistOptions): ?>
         <datalist id="<?php echo e($id); ?>-list">
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $datalistOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $option): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoop($loop->index); ?><?php endif; ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $datalistOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $option): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                 <option value="<?php echo e($option); ?>" />
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
         </datalist>

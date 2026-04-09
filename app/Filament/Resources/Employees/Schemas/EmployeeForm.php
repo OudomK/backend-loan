@@ -30,7 +30,12 @@ class EmployeeForm
                                 TextInput::make('employee_code')
                                     ->label('Code')
                                     ->required()
-                                    ->unique(ignoreRecord: true),
+                                    ->unique(ignoreRecord: true)
+                                    ->default(function () {
+                                        $latest = \App\Models\Employee::withoutGlobalScopes()->orderBy('id', 'desc')->first();
+                                        $nextId = $latest ? $latest->id + 1 : 1;
+                                        return 'EMP-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+                                    }),
                             ]),
                         Grid::make(3)
                             ->schema([

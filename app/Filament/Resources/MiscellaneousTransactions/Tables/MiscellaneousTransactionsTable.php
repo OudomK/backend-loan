@@ -67,11 +67,13 @@ class MiscellaneousTransactionsTable
                 RestoreAction::make(),
                 ForceDeleteAction::make(),
             ])
-            ->toolbarActions([
+            ->headerActions([
                 CreateAction::make()
                     ->label('New Transaction')
                     ->icon('heroicon-m-plus-circle')
                     ->button(),
+            ])
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                     RestoreBulkAction::make(),

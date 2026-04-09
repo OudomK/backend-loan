@@ -18,5 +18,12 @@ class EditInvestor extends EditRecord
     {
         return [];
     }
-}
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        /** @var \App\Models\Investor $record */
+        $record = $this->getRecord();
+
+        return InvestorResource::normalizeInvestorData($data, $record);
+    }
+}

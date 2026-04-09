@@ -37,6 +37,11 @@ class PayrollPolicy
         return $authUser->can('Delete:Payroll');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Payroll');
+    }
+
     public function restore(AuthUser $authUser, Payroll $payroll): bool
     {
         return $authUser->can('Restore:Payroll');

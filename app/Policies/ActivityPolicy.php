@@ -37,6 +37,11 @@ class ActivityPolicy
         return $authUser->can('Delete:Activity');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Activity');
+    }
+
     public function restore(AuthUser $authUser, Activity $activity): bool
     {
         return $authUser->can('Restore:Activity');

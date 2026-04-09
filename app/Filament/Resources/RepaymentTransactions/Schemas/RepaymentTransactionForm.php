@@ -2,12 +2,14 @@
 
 namespace App\Filament\Resources\RepaymentTransactions\Schemas;
 
+use App\Models\Loan;
+use App\Models\Payment;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Schema;
 
 class RepaymentTransactionForm
@@ -33,12 +35,15 @@ class RepaymentTransactionForm
                                                     ->getOptionLabelFromRecordUsing(fn($record) => "Loan: {$record->loan_code} - {$record->borrower?->last_name} {$record->borrower?->first_name}")
                                                     ->searchable()
                                                     ->preload()
+                                                    ->live()
+                                                    ->afterStateUpdated(fn($state, callable $set) => static::fillDueAmounts($state, $set))
                                                     ->required(),
                                                 Select::make('collector_id')
                                                     ->label('Collector')
                                                     ->relationship('collector', 'name')
                                                     ->searchable()
-                                                    ->preload(),
+                                                    ->preload()
+                                                    ->required(),
                                             ]),
                                     ]),
 
@@ -102,12 +107,16 @@ class RepaymentTransactionForm
                                                     ->prefix('$')
                                                     ->required()
                                                     ->placeholder('0.00')
+                                                    ->live()
+                                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                                 TextInput::make('interest_paid')
                                                     ->numeric()
                                                     ->prefix('$')
                                                     ->required()
                                                     ->placeholder('0.00')
+                                                    ->live()
+                                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                                 TextInput::make('penalty_paid')
                                                     ->numeric()
@@ -115,6 +124,8 @@ class RepaymentTransactionForm
                                                     ->default(0)
                                                     ->required()
                                                     ->placeholder('0.00')
+                                                    ->live()
+                                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                                 TextInput::make('fee_paid')
                                                     ->label('Fee paid')
@@ -122,6 +133,8 @@ class RepaymentTransactionForm
                                                     ->prefix('$')
                                                     ->default(0)
                                                     ->placeholder('0.00')
+                                                    ->live()
+                                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                             ]),
                                     ]),
@@ -129,5 +142,80 @@ class RepaymentTransactionForm
                             ->columnSpan(['default' => 12, 'xl' => 7]),
                     ]),
             ]);
+    }
+
+    protected static function fillDueAmounts(mixed $loanId, callable $set): void
+    {
+        if (blank($loanId)) {
+            static::setPaymentBreakdown($set, 0, 0, 0, 0);
+
+            return;
+        }
+
+        $loan = Loan::query()->find($loanId);
+
+        if (! $loan) {
+            static::setPaymentBreakdown($set, 0, 0, 0, 0);
+
+            return;
+        }
+
+        /** @var Payment|null $installment */
+        $installment = $loan->payments()
+            ->whereRaw('total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0) + COALESCE(fee_amount, 0) - 0.01)')
+            ->orderBy('payment_date', 'asc')
+            ->first();
+
+        if (! $installment) {
+            static::setPaymentBreakdown($set, 0, 0, 0, 0);
+
+            return;
+        }
+
+        $feePaidSoFar = (float) ($installment->fee_paid ?? 0);
+        $dueFee = max(0, (float) ($installment->fee_amount ?? 0) - $feePaidSoFar);
+
+        $alreadyPaidToPrincipalAndInterest = max(0, (float) ($installment->total_paid ?? 0) - $feePaidSoFar);
+        $interestAmount = (float) ($installment->interest_amount ?? 0);
+        $interestPaidSoFar = min($interestAmount, $alreadyPaidToPrincipalAndInterest);
+        $principalPaidSoFar = max(0, $alreadyPaidToPrincipalAndInterest - $interestPaidSoFar);
+
+        $duePrincipal = max(0, (float) ($installment->principal_amount ?? 0) - $principalPaidSoFar);
+        $dueInterest = max(0, $interestAmount - $interestPaidSoFar);
+
+        static::setPaymentBreakdown($set, $duePrincipal, $dueInterest, 0, $dueFee);
+    }
+
+    protected static function setPaymentBreakdown(callable $set, float $principal, float $interest, float $penalty, float $fee): void
+    {
+        $set('principal_paid', static::formatMoney($principal));
+        $set('interest_paid', static::formatMoney($interest));
+        $set('penalty_paid', static::formatMoney($penalty));
+        $set('fee_paid', static::formatMoney($fee));
+        $set('amount_paid', static::formatMoney($principal + $interest + $penalty + $fee));
+    }
+
+    protected static function syncTotalAmount(callable $set, callable $get): void
+    {
+        $principal = static::toFloat($get('principal_paid'));
+        $interest = static::toFloat($get('interest_paid'));
+        $penalty = static::toFloat($get('penalty_paid'));
+        $fee = static::toFloat($get('fee_paid'));
+
+        $set('amount_paid', static::formatMoney($principal + $interest + $penalty + $fee));
+    }
+
+    protected static function toFloat(mixed $value): float
+    {
+        if ($value === null || $value === '') {
+            return 0;
+        }
+
+        return (float) $value;
+    }
+
+    protected static function formatMoney(float $value): string
+    {
+        return number_format(round($value, 2), 2, '.', '');
     }
 }

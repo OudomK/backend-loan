@@ -37,6 +37,11 @@ class CoBorrowerPolicy
         return $authUser->can('Delete:CoBorrower');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:CoBorrower');
+    }
+
     public function restore(AuthUser $authUser, CoBorrower $coBorrower): bool
     {
         return $authUser->can('Restore:CoBorrower');

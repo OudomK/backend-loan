@@ -42,7 +42,7 @@ unset($__defined_vars, $__key, $__value); ?>
     dir="<?php echo e(__('filament-panels::layout.direction') ?? 'ltr'); ?>"
     class="<?php echo \Illuminate\Support\Arr::toCssClasses([
         'fi',
-        'dark' => filament()->hasDarkModeForced(),
+        'dark' => filament()->hasDarkMode() && filament()->hasDarkModeForced(),
     ]); ?>"
 >
     <head>
@@ -124,6 +124,10 @@ unset($__defined_vars, $__key, $__value); ?>
                 --collapsed-sidebar-width: <?php echo e(filament()->getCollapsedSidebarWidth()); ?>;
                 --default-theme-mode: <?php echo e(filament()->getDefaultThemeMode()->value); ?>;
             }
+
+            html.fi {
+                --livewire-progress-bar-color: var(--primary-500);
+            }
         </style>
 
         <?php echo $__env->yieldPushContent('styles'); ?>
@@ -185,16 +189,21 @@ $__split = function ($name, $params = []) {
 };
 [$__name, $__params] = $__split(Filament\Livewire\Notifications::class);
 
-$key = null;
+$__keyOuter = $__key ?? null;
+
+$__key = null;
 $__componentSlots = [];
 
-$key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-315349583-0', $key);
+$__key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-315349583-0', $__key);
 
-$__html = app('livewire')->mount($__name, $__params, $key, $__componentSlots);
+$__html = app('livewire')->mount($__name, $__params, $__key, $__componentSlots);
 
 echo $__html;
 
 unset($__html);
+unset($__key);
+$__key = $__keyOuter;
+unset($__keyOuter);
 unset($__name);
 unset($__params);
 unset($__componentSlots);

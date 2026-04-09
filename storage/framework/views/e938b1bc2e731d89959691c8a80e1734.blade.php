@@ -1,1 +1,0 @@
-{{ $this->getId() }}.table.record.{{ $recordKey }}.column.{{ $column->getName() }}

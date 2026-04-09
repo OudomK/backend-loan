@@ -35,7 +35,16 @@ class LoanForm
                                                     ->relationship('borrower', 'id')
                                                     ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name} ({$record->customer_code})")
                                                     ->searchable()
-                                                    ->required(),
+                                                    ->required()
+                                                    ->live()
+                                                    ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                                                        if (blank($state)) return;
+                                                        $borrower = \App\Models\Borrower::find($state);
+                                                        if ($borrower) {
+                                                            $cycle = $get('loan_cycle') ?? 1;
+                                                            $set('loan_code', "{$borrower->customer_code}-C{$cycle}");
+                                                        }
+                                                    }),
                                                 Select::make('status')
                                                     ->options([
                                                         'pending' => 'Pending',
@@ -53,7 +62,16 @@ class LoanForm
                                                 TextInput::make('loan_cycle')
                                                     ->numeric()
                                                     ->default(1)
-                                                    ->required(),
+                                                    ->required()
+                                                    ->live()
+                                                    ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                                                        $borrowerId = $get('borrower_id');
+                                                        if (blank($borrowerId)) return;
+                                                        $borrower = \App\Models\Borrower::find($borrowerId);
+                                                        if ($borrower) {
+                                                            $set('loan_code', "{$borrower->customer_code}-C{$state}");
+                                                        }
+                                                    }),
                                             ]),
                                     ]),
 

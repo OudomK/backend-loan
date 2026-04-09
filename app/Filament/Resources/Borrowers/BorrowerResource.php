@@ -41,6 +41,14 @@ class BorrowerResource extends Resource
         return BorrowersTable::configure($table);
     }
 
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                \Illuminate\Database\Eloquent\SoftDeletingScope::class,
+            ]);
+    }
+
     public static function getRelations(): array
     {
         return [

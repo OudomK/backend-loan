@@ -37,6 +37,11 @@ class RepaymentTransactionPolicy
         return $authUser->can('Delete:RepaymentTransaction');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:RepaymentTransaction');
+    }
+
     public function restore(AuthUser $authUser, RepaymentTransaction $repaymentTransaction): bool
     {
         return $authUser->can('Restore:RepaymentTransaction');

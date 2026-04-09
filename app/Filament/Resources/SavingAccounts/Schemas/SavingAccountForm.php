@@ -2,13 +2,16 @@
 
 namespace App\Filament\Resources\SavingAccounts\Schemas;
 
+use App\Models\Lender;
+use Carbon\Carbon;
 use Filament\Forms\Components\DatePicker;
-use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Split;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Builder;
 
 class SavingAccountForm
 {
@@ -16,178 +19,106 @@ class SavingAccountForm
     {
         return $schema
             ->components([
-                // Row 1: Borrowing Overview (full width)
-                Section::make('Borrowing Overview')
-                    ->description('Primary borrowing identification.')
-                    ->icon('heroicon-o-credit-card')
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                TextInput::make('account_number')
-                                    ->label('Borrowing Ref No')
-                                    ->required()
-                                    ->unique(ignoreRecord: true),
-                                Select::make('account_type')
-                                    ->label('Borrowing Plan')
-                                    ->options([
-                                        'Daily Saving' => 'Short term',
-                                        'Goal Saving'  => 'Mid term',
-                                        'Fixed Deposit' => 'Long term',
-                                    ])
-                                    ->required(),
-                                Select::make('status')
-                                    ->options([
-                                        'Active'  => 'Active',
-                                        'Dormant' => 'Dormant',
-                                        'Closed'  => 'Closed',
-                                    ])
-                                    ->default('Active')
-                                    ->required(),
-                            ]),
-                        Grid::make(3)
-                            ->schema([
-                                Select::make('category')
-                                    ->options([
-                                        'Real Capital' => 'Real capital',
-                                        'Loan Capital' => 'Loan capital',
-                                    ])
-                                    ->default('Loan Capital')
-                                    ->required(),
-                                TextInput::make('transaction_no')
-                                    ->label('Transaction No'),
-                                TextInput::make('contract_no')
-                                    ->label('Contract No'),
-                            ]),
-                        Grid::make(3)
-                            ->schema([
-                                Select::make('lender_id')
-                                    ->label('Lender')
-                                    ->relationship('lender', 'id')
-                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->name}")
-                                    ->searchable(),
-                                TextInput::make('loan_account')
-                                    ->label('Loan Account'),
-                                TextInput::make('account_no')
-                                    ->label('Account No (Secondary)'),
-                            ]),
-                        Grid::make(3)
-                            ->schema([
-                                TextInput::make('currency')
-                                    ->default('USD')
-                                    ->required()
-                                    ->columnSpan(1),
-                            ]),
-                    ]),
+                Hidden::make('category')
+                    ->default('Loan Capital'),
 
-                // Row 2: Related Parties (full width)
-                Section::make('Related Parties')
-                    ->description('Link this borrowing to related customers.')
-                    ->icon('heroicon-o-user-group')
+                Section::make('Borrowing Details')
+                    ->description('Use the same borrowing fields and defaults as the frontend dialog.')
+                    ->icon('heroicon-o-credit-card')
                     ->schema([
                         Grid::make(2)
                             ->schema([
-                                Select::make('saver_id')
-                                    ->label('Client')
-                                    ->relationship('saver', 'id')
-                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
-                                    ->searchable(),
-                                Select::make('borrower_id')
-                                    ->label('Borrower')
-                                    ->relationship('borrower', 'id')
-                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
-                                    ->searchable(),
+                                TextInput::make('transaction_no')
+                                    ->label('Transaction No')
+                                    ->maxLength(255),
+                                TextInput::make('loan_account')
+                                    ->label('Loan Account')
+                                    ->maxLength(255),
                             ]),
-                    ]),
-
-                // Row 3: Core Financials
-                Section::make('Core Financials')
-                    ->description('Principal amount, balance, and interest terms.')
-                    ->icon('heroicon-o-banknotes')
-                    ->schema([
-                        Grid::make(3)
+                        Grid::make(1)
+                            ->schema([
+                                Select::make('lender_id')
+                                    ->label('Lender')
+                                    ->relationship('lender', 'name', fn (Builder $query) => $query->orderBy('name'))
+                                    ->getOptionLabelFromRecordUsing(fn ($record) => trim(($record->lender_code ? "{$record->lender_code} - " : '') . $record->name))
+                                    ->searchable(['name', 'lender_code'])
+                                    ->preload()
+                                    ->default(fn () => Lender::query()->orderBy('name')->value('id'))
+                                    ->required(),
+                            ]),
+                        Grid::make(2)
+                            ->schema([
+                                TextInput::make('account_no')
+                                    ->label('Account No')
+                                    ->maxLength(255),
+                                TextInput::make('contract_no')
+                                    ->label('Contract No')
+                                    ->maxLength(255),
+                            ]),
+                        Grid::make(1)
+                            ->schema([
+                                Select::make('currency')
+                                    ->options([
+                                        'USD' => 'USD',
+                                        'KHR' => 'KHR',
+                                    ])
+                                    ->default('USD')
+                                    ->required()
+                                    ->native(false),
+                            ]),
+                        Grid::make(2)
                             ->schema([
                                 TextInput::make('amount')
+                                    ->label('Amount')
                                     ->numeric()
                                     ->prefix('$')
                                     ->required(),
-                                TextInput::make('balance')
+                                TextInput::make('term_months')
+                                    ->label('Term (Months)')
                                     ->numeric()
-                                    ->prefix('$')
-                                    ->required(),
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(function ($state, callable $set, callable $get): void {
+                                        self::syncMaturityDate($set, $get);
+                                    }),
+                            ]),
+                        Grid::make(2)
+                            ->schema([
                                 TextInput::make('interest_rate')
                                     ->label('Interest Rate (%)')
                                     ->numeric()
                                     ->suffix('%')
                                     ->required(),
-                            ]),
-                        Grid::make(3)
-                            ->schema([
-                                TextInput::make('term_months')
-                                    ->label('Term (Months)')
-                                    ->numeric()
-                                    ->required(),
-                                DatePicker::make('borrowing_date')
-                                    ->native(false),
-                                DatePicker::make('maturity_date')
-                                    ->native(false),
-                            ]),
-                    ]),
-
-                // Row 4: Deposits & Withdrawals
-                Section::make('Deposits & Withdrawals')
-                    ->description('Track total deposits, withdrawals, and earned interest.')
-                    ->icon('heroicon-o-arrows-right-left')
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                TextInput::make('total_deposits')
-                                    ->label('Total Deposits')
-                                    ->numeric()
-                                    ->prefix('$'),
-                                TextInput::make('total_withdrawals')
-                                    ->label('Total Withdrawals')
-                                    ->numeric()
-                                    ->prefix('$'),
-                                TextInput::make('interest_earned')
-                                    ->label('Interest Earned')
-                                    ->numeric()
-                                    ->prefix('$'),
-                            ]),
-                    ]),
-
-                // Row 5: Payment Settings
-                Section::make('Payment Settings')
-                    ->description('Configure payment method, schedule, and fees.')
-                    ->icon('heroicon-o-calendar-days')
-                    ->schema([
-                        Grid::make(3)
-                            ->schema([
-                                TextInput::make('payment_method')
-                                    ->label('Payment Method'),
-                                DatePicker::make('first_pay_date')
-                                    ->label('First Pay Date')
-                                    ->native(false),
-                                TextInput::make('int_pay_mode')
-                                    ->label('Interest Pay Mode'),
-                            ]),
-                        Grid::make(3)
-                            ->schema([
                                 TextInput::make('fee')
+                                    ->label('Fee')
                                     ->numeric()
                                     ->prefix('$')
                                     ->default(0),
-                                TextInput::make('term')
-                                    ->label('Term'),
-                                TextInput::make('sl_term')
-                                    ->label('SL Term'),
                             ]),
-                    ]),
-
-                // Row 6: Late Fees & Loan Interest
-                Section::make('Late Fees & Loan Interest')
-                    ->description('Outstanding penalties and accrued loan interest.')
-                    ->icon('heroicon-o-exclamation-triangle')
-                    ->schema([
+                        Grid::make(2)
+                            ->schema([
+                                TextInput::make('int_pay_mode')
+                                    ->label('Int Pay Mode')
+                                    ->maxLength(255),
+                                TextInput::make('sl_term')
+                                    ->label('S/L Term')
+                                    ->default('Short Term')
+                                    ->maxLength(255),
+                            ]),
+                        Grid::make(2)
+                            ->schema([
+                                DatePicker::make('first_pay_date')
+                                    ->label('1st Pay Date')
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y')
+                                    ->default(fn () => Carbon::today()->addMonth()->toDateString()),
+                                DatePicker::make('maturity_date')
+                                    ->label('Maturity Date (Auto)')
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y')
+                                    ->disabled()
+                                    ->dehydrated(),
+                            ]),
                         Grid::make(2)
                             ->schema([
                                 TextInput::make('late_principal')
@@ -196,12 +127,79 @@ class SavingAccountForm
                                     ->prefix('$')
                                     ->default(0),
                                 TextInput::make('loan_interest')
-                                    ->label('Loan Interest')
+                                    ->label('Late Interest')
                                     ->numeric()
                                     ->prefix('$')
                                     ->default(0),
                             ]),
+                        Grid::make(1)
+                            ->schema([
+                                Select::make('payment_method')
+                                    ->label('Payment Method')
+                                    ->options([
+                                        'Balloon' => 'Balloon',
+                                        'Declining' => 'Declining',
+                                        'Negotiable' => 'Negotiable',
+                                    ])
+                                    ->default('Balloon')
+                                    ->required()
+                                    ->native(false),
+                            ]),
+                        Grid::make(1)
+                            ->schema([
+                                DatePicker::make('borrowing_date')
+                                    ->label('Borrowing Date')
+                                    ->native(false)
+                                    ->displayFormat('d/m/Y')
+                                    ->default(fn () => Carbon::today()->toDateString())
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(function ($state, callable $set, callable $get): void {
+                                        self::syncFirstPayDate($state, $set);
+                                        self::syncMaturityDate($set, $get);
+                                    }),
+                            ]),
                     ]),
             ]);
+    }
+
+    private static function syncFirstPayDate(mixed $borrowingDate, callable $set): void
+    {
+        $parsedDate = self::parseDate($borrowingDate);
+
+        if (!$parsedDate) {
+            $set('first_pay_date', null);
+
+            return;
+        }
+
+        $set('first_pay_date', $parsedDate->copy()->addMonth()->toDateString());
+    }
+
+    private static function syncMaturityDate(callable $set, callable $get): void
+    {
+        $borrowingDate = self::parseDate($get('borrowing_date'));
+        $termMonths = (int) ($get('term_months') ?: 0);
+
+        if (!$borrowingDate || $termMonths <= 0) {
+            $set('maturity_date', null);
+
+            return;
+        }
+
+        $set('maturity_date', $borrowingDate->copy()->addMonthsNoOverflow($termMonths)->toDateString());
+    }
+
+    private static function parseDate(mixed $value): ?Carbon
+    {
+        if (blank($value)) {
+            return null;
+        }
+
+        try {
+            return Carbon::parse((string) $value);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

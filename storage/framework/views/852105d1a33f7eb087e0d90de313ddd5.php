@@ -15,11 +15,11 @@
 ?>
 
 
-            <?php $content = (function ($args) {
-                return function ($logo, $isDarkMode = false) use ($args) {
-                    extract($args, EXTR_SKIP);
-                    ob_start(); ?>
-        
+                <?php $content = (function ($args) {
+                    return function ($logo, $isDarkMode = false) use ($args) {
+                        extract($args, EXTR_SKIP);
+                        ob_start(); ?>
+            
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($logo instanceof \Illuminate\Contracts\Support\Htmlable): ?>
         <div
             <?php echo e($attributes
@@ -51,9 +51,9 @@
         </div>
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
-            <?php return new \Illuminate\Support\HtmlString(ob_get_clean()); };
-                })(get_defined_vars()); ?>
-        
+                <?php return new \Illuminate\Support\HtmlString(ob_get_clean()); };
+                    })(get_defined_vars()); ?>
+            
 
 <?php echo e($content($brandLogo)); ?>
 

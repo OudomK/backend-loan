@@ -37,6 +37,11 @@ class PositionPolicy
         return $authUser->can('Delete:Position');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:Position');
+    }
+
     public function restore(AuthUser $authUser, Position $position): bool
     {
         return $authUser->can('Restore:Position');

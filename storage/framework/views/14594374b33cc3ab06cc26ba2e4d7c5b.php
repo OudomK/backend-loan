@@ -93,7 +93,7 @@ unset($__defined_vars, $__key, $__value); ?>
             x-transition:leave-end="fi-opacity-0"
             <?php if($attributes->has('wire:key')): ?>
                 wire:ignore.self
-                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processElementKey('{{ $attributes->get(\'wire:key\') }}.panel', get_defined_vars()); ?>wire:key="<?php echo e($attributes->get('wire:key')); ?>.panel"
+                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = ''.e($attributes->get('wire:key')).'.panel'; ?>wire:key="<?php echo e($attributes->get('wire:key')); ?>.panel"
             <?php endif; ?>
             class="<?php echo \Illuminate\Support\Arr::toCssClasses([
                 'fi-dropdown-panel',

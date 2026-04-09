@@ -1,1 +1,0 @@
-<?php echo e($attributes->get('wire:key')); ?>.panel<?php /**PATH D:\Real Project\backend\storage\framework\views/54af8791c17331894ee3a123c6d45978.blade.php ENDPATH**/ ?>

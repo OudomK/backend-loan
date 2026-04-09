@@ -1,1 +1,0 @@
-{{ $livewireKey }}.display-text

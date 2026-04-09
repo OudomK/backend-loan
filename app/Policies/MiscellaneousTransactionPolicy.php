@@ -37,6 +37,11 @@ class MiscellaneousTransactionPolicy
         return $authUser->can('Delete:MiscellaneousTransaction');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:MiscellaneousTransaction');
+    }
+
     public function restore(AuthUser $authUser, MiscellaneousTransaction $miscellaneousTransaction): bool
     {
         return $authUser->can('Restore:MiscellaneousTransaction');

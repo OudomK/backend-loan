@@ -37,6 +37,11 @@ class LoanOfficerPolicy
         return $authUser->can('Delete:LoanOfficer');
     }
 
+    public function deleteAny(AuthUser $authUser): bool
+    {
+        return $authUser->can('DeleteAny:LoanOfficer');
+    }
+
     public function restore(AuthUser $authUser, LoanOfficer $loanOfficer): bool
     {
         return $authUser->can('Restore:LoanOfficer');

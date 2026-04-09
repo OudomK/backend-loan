@@ -1,1 +1,0 @@
-<?php echo e($this->getId()); ?>.table.record.<?php echo e($recordKey); ?>.column.<?php echo e($column->getName()); ?><?php /**PATH D:\Real Project\backend\storage\framework\views/e938b1bc2e731d89959691c8a80e1734.blade.php ENDPATH**/ ?>
