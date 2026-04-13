@@ -11,7 +11,7 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('repayment_transactions', function (Blueprint $table) {
-            //
+            $table->decimal('prepayment_paid', 15, 2)->default(0)->after('penalty_paid');
         });
     }
 
