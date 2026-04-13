@@ -119,15 +119,11 @@ class EmployeeForm
                                 TextInput::make('emergency_contact_name'),
                                 TextInput::make('emergency_contact_phone')
                                     ->tel(),
+                                FileUpload::make('photo')
+                                    ->image()
+                                    ->directory('employees/photos')
+                                    ->columnSpanFull(),
                             ]),
-                    ]),
-
-                Section::make('Media')
-                    ->collapsible()
-                    ->schema([
-                        FileUpload::make('photo')
-                            ->image()
-                            ->directory('employees/photos'),
                     ]),
             ]);
     }

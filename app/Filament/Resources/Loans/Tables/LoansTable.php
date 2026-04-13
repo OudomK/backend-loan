@@ -24,7 +24,6 @@ class LoansTable
             ->description('Review disbursements, interest terms, and repayment status across all loan records.')
             ->defaultSort('start_date', 'desc')
             ->persistSortInSession()
-            ->striped()
             ->columns([
                 TextColumn::make('loan_code')
                     ->label('Code')
@@ -65,7 +64,6 @@ class LoansTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                \Filament\Tables\Filters\TrashedFilter::make(),
                 SelectFilter::make('status')
                     ->options([
                         'pending' => 'Pending',
@@ -80,9 +78,6 @@ class LoansTable
                     ->icon('heroicon-m-pencil-square')
                     ->color('warning')
                     ->button(),
-                DeleteAction::make(),
-                RestoreAction::make(),
-                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -92,9 +87,7 @@ class LoansTable
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
+                    //
                 ]),
             ]);
     }

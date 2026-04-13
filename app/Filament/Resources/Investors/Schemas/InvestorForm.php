@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Investors\Schemas;
 
 use App\Filament\Resources\Investors\InvestorResource;
 use Carbon\Carbon;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -145,6 +146,12 @@ class InvestorForm
                                 TextInput::make('province')
                                     ->label('Province')
                                     ->maxLength(255),
+                                FileUpload::make('photo')
+                                    ->image()
+                                    ->imageEditor()
+                                    ->directory('investors/photos')
+                                    ->visibility('public')
+                                    ->columnSpanFull(),
                             ]),
                     ]),
             ]);

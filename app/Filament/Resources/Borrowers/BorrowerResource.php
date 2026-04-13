@@ -28,7 +28,20 @@ class BorrowerResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['first_name', 'last_name', 'phone', 'customer_code'];
+        return ['first_name', 'last_name', 'phone', 'customer_code', 'id_number'];
+    }
+
+    public static function getGlobalSearchResultTitle(\Illuminate\Database\Eloquent\Model $record): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return "{$record->last_name} {$record->first_name} ({$record->customer_code})";
+    }
+
+    public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array
+    {
+        return [
+            'Phone' => $record->phone,
+            'ID' => "{$record->id_type}: {$record->id_number}",
+        ];
     }
 
     public static function form(Schema $schema): Schema

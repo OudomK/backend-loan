@@ -33,10 +33,14 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            ->brandLogo(asset('images/logo.jpg'))
+            ->darkModeBrandLogo(asset('images/dark_logo.png'))
+            ->brandLogoHeight('4rem')
+            ->favicon(asset('images/logo.jpg'))
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->spa()
-            ->login()
-            ->defaultThemeMode(ThemeMode::Light)
+            ->login(\App\Filament\Pages\Auth\Login::class)
+            ->defaultThemeMode(ThemeMode::Dark)
             ->font(
                 family: 'Kantumruy Pro',
                 provider: LocalFontProvider::class,
@@ -47,7 +51,12 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn(): HtmlString => new HtmlString($this->renderAdminFontStyle()),
+                fn(): HtmlString => new HtmlString(
+                    $this->renderAdminFontStyle() . '
+                    <link rel="icon" href="' . asset('images/logo.jpg') . '" media="(prefers-color-scheme: light)">
+                    <link rel="icon" href="' . asset('images/dark_logo.png') . '" media="(prefers-color-scheme: dark)">
+                '
+                ),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
@@ -311,7 +320,10 @@ class AdminPanelProvider extends PanelProvider
     private function renderAdminFontStyle(): string
     {
         return sprintf(
-            '<style id="admin-font-family-override">:root{--font-family:%s;}</style>',
+            '<style id="admin-font-family-override">
+                :root{--font-family:%s;}
+                .fi-logo, .fi-sidebar-header img, .fi-sidebar-header a img { border-radius: 0.70rem !important; overflow: hidden !important; }
+            </style>',
             $this->resolveAdminFontStack(),
         );
     }

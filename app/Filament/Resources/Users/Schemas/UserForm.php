@@ -28,6 +28,10 @@ class UserForm
                                     ->email()
                                     ->required()
                                     ->unique(ignoreRecord: true),
+                                TextInput::make('username')
+                                    ->label('Username')
+                                    ->required()
+                                    ->unique(ignoreRecord: true),
                             ]),
                         Grid::make(2)
                             ->schema([

@@ -21,10 +21,10 @@ class GuarantorForm
                     ->schema([
                         Grid::make(4)
                             ->schema([
-                                TextInput::make('first_name')
+                                TextInput::make('last_name')
                                     ->required()
                                     ->maxLength(255),
-                                TextInput::make('last_name')
+                                TextInput::make('first_name')
                                     ->required()
                                     ->maxLength(255),
                                 Select::make('gender')
@@ -121,17 +121,13 @@ class GuarantorForm
                                 TextInput::make('commune'),
                                 TextInput::make('district'),
                                 TextInput::make('province'),
+                                FileUpload::make('photo')
+                                    ->image()
+                                    ->imageEditor()
+                                    ->directory('guarantors/photos')
+                                    ->visibility('public')
+                                    ->columnSpanFull(),
                             ]),
-                    ]),
-
-                Section::make('Media')
-                    ->collapsible()
-                    ->schema([
-                        FileUpload::make('photo')
-                            ->image()
-                            ->imageEditor()
-                            ->directory('guarantors/photos')
-                            ->visibility('public'),
                     ]),
             ]);
     }
