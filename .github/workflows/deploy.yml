@@ -28,6 +28,7 @@ jobs:
 
             echo "⬇️ Pulling latest code..."
             git pull origin soun
+            git log -1 --stat
 
             echo "📦 Installing PHP dependencies..."
             composer install --no-dev --optimize-autoloader
@@ -41,14 +42,13 @@ jobs:
             echo "🗄️ Running migrations..."
             php artisan migrate --force
 
-            echo "🧹 Clearing cache..."
-            php artisan cache:clear
-            php artisan config:clear
-            php artisan route:clear
-            php artisan view:clear
+            echo "🧹 Thoroughly clearing all caches..."
+            php artisan optimize:clear
 
-            echo "⚡ Optimizing..."
+            echo "⚡ Re-optimizing..."
             php artisan config:cache
             php artisan route:cache
+            php artisan view:cache
+            php artisan event:cache
 
             echo "✅ Deploy success!"
