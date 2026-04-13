@@ -1,0 +1,54 @@
+name: 🚀 Deploy to Cloudways
+
+on:
+  push:
+    branches: [ soun ]  # deploy នៅពេល push ទៅ branch "soun"
+
+jobs:
+  deploy:
+    name: Deploy via SSH
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout code
+      - name: ✅ Checkout Code
+        uses: actions/checkout@v3
+
+      # Step 2: SSH ចូល Server ហើយ Deploy
+      - name: 🚀 Deploy to Server
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.SSH_PASS }}
+          port: 22
+          script: |
+            echo "📂 Moving to project folder..."
+            cd ~/applications/csqbtcfrsu/public_html
+
+            echo "⬇️ Pulling latest code..."
+            git pull origin soun
+
+            echo "📦 Installing PHP dependencies..."
+            composer install --no-dev --optimize-autoloader
+
+            echo "📦 Installing Node dependencies..."
+            npm install
+
+            echo "🏗️ Building assets..."
+            npm run build
+
+            echo "🗄️ Running migrations..."
+            php artisan migrate --force
+
+            echo "🧹 Clearing cache..."
+            php artisan cache:clear
+            php artisan config:clear
+            php artisan route:clear
+            php artisan view:clear
+
+            echo "⚡ Optimizing..."
+            php artisan config:cache
+            php artisan route:cache
+
+            echo "✅ Deploy success!"
