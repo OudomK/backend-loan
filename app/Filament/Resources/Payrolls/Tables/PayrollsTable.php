@@ -39,10 +39,14 @@ class PayrollsTable
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        'Paid' => 'success',
-                        'Pending' => 'warning',
+                        'paid' => 'success',
+                        'pending' => 'warning',
+                        'cancelled' => 'danger',
                         default => 'gray',
                     }),
+                TextColumn::make('payment_method')
+                    ->searchable()
+                    ->toggleable(),
                 TextColumn::make('payment_date')
                     ->date()
                     ->toggleable(),
@@ -52,16 +56,15 @@ class PayrollsTable
                     ->relationship('employee', 'name'),
                 SelectFilter::make('status')
                     ->options([
-                        'Paid' => 'Paid',
-                        'Pending' => 'Pending',
+                        'paid' => 'Paid',
+                        'pending' => 'Pending',
+                        'cancelled' => 'Cancelled',
                     ]),
                 TrashedFilter::make(),
             ])
             ->recordActions([
                 EditAction::make(),
-                DeleteAction::make(),
                 RestoreAction::make(),
-                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()

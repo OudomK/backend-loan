@@ -269,5 +269,7 @@ class ManageSettings extends Page implements HasForms
             ->title('Settings saved successfully')
             ->success()
             ->send();
+
+        $this->redirect('/admin');
     }
 }

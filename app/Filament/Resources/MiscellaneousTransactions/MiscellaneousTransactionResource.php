@@ -12,9 +12,10 @@ use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
-use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
 
 class MiscellaneousTransactionResource extends Resource
 {
@@ -30,7 +31,7 @@ class MiscellaneousTransactionResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['description', 'category', 'amount'];
+        return ['description', 'category', 'currency', 'amount'];
     }
 
     public static function form(Schema $schema): Schema
@@ -65,6 +66,55 @@ class MiscellaneousTransactionResource extends Resource
             'create' => CreateMiscellaneousTransaction::route('/create'),
             'edit' => EditMiscellaneousTransaction::route('/{record}/edit'),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function normalizeTransactionData(array $data): array
+    {
+        $type = strtolower((string) ($data['type'] ?? ''));
+        if ($type === 'income') {
+            $type = 'revenue';
+        }
+
+        if (!in_array($type, ['revenue', 'expense'], true)) {
+            throw ValidationException::withMessages([
+                'type' => 'Transaction type must be Revenue or Expense.',
+            ]);
+        }
+
+        $category = trim((string) ($data['category'] ?? ''));
+        if ($category === '') {
+            throw ValidationException::withMessages([
+                'category' => 'Category / Name is required.',
+            ]);
+        }
+
+        $amount = round((float) ($data['amount'] ?? 0), 2);
+        if ($amount <= 0) {
+            throw ValidationException::withMessages([
+                'amount' => 'Amount must be greater than 0.',
+            ]);
+        }
+
+        $currency = strtoupper(trim((string) ($data['currency'] ?? 'USD')));
+        if (!in_array($currency, ['USD', 'KHR'], true)) {
+            throw ValidationException::withMessages([
+                'currency' => 'Currency must be USD or KHR.',
+            ]);
+        }
+
+        return array_merge($data, [
+            'type' => $type,
+            'category' => $category,
+            'amount' => $amount,
+            'currency' => $currency,
+            'description' => blank($data['description'] ?? null)
+                ? null
+                : trim((string) $data['description']),
+        ]);
     }
 }
 

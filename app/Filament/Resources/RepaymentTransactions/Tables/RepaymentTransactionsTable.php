@@ -56,9 +56,7 @@ class RepaymentTransactionsTable
             ])
             ->recordActions([
                 EditAction::make(),
-                DeleteAction::make(),
                 RestoreAction::make(),
-                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()

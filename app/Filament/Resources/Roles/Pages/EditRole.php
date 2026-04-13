@@ -17,7 +17,7 @@ class EditRole extends EditRecord
 
     protected static string $resource = RoleResource::class;
 
-    protected function getActions(): array
+    protected function getHeaderActions(): array
     {
         return [
             DeleteAction::make(),
@@ -80,5 +80,10 @@ class EditRole extends EditRecord
 
         // @phpstan-ignore-next-line
         $this->record->syncPermissions($permissionModels);
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
     }
 }

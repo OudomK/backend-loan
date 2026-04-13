@@ -21,14 +21,11 @@ class InvestorForm
                 Hidden::make('customer_type')
                     ->default('Investor'),
 
-                Hidden::make('status')
-                    ->default('Active'),
-
-                Section::make('Investor Registration')
-                    ->description('Use the same fields, order, and defaults as the frontend investor registration flow.')
+                Section::make('Investor Profile')
+                    ->description('Manage the investor identity and contact information from one place.')
                     ->icon('heroicon-o-user')
                     ->schema([
-                        Grid::make(1)
+                        Grid::make(2)
                             ->schema([
                                 TextInput::make('customer_code')
                                     ->label('Customer Code')
@@ -37,6 +34,15 @@ class InvestorForm
                                     ->dehydrateStateUsing(fn ($state) => blank($state) ? null : trim((string) $state))
                                     ->unique(ignoreRecord: true)
                                     ->maxLength(255),
+                                Select::make('status')
+                                    ->label('Status')
+                                    ->native(false)
+                                    ->options([
+                                        'Active' => 'Active',
+                                        'Inactive' => 'Inactive',
+                                    ])
+                                    ->default('Active')
+                                    ->required(),
                             ]),
                         Grid::make(2)
                             ->schema([
@@ -126,6 +132,13 @@ class InvestorForm
                                 TextInput::make('occupation')
                                     ->label('Occupation')
                                     ->maxLength(255),
+                                FileUpload::make('photo')
+                                    ->label('Photo')
+                                    ->image()
+                                    ->imageEditor()
+                                    ->directory('investors/photos')
+                                    ->visibility('public')
+                                    ->columnSpanFull(),
                             ]),
                     ]),
 
@@ -146,12 +159,6 @@ class InvestorForm
                                 TextInput::make('province')
                                     ->label('Province')
                                     ->maxLength(255),
-                                FileUpload::make('photo')
-                                    ->image()
-                                    ->imageEditor()
-                                    ->directory('investors/photos')
-                                    ->visibility('public')
-                                    ->columnSpanFull(),
                             ]),
                     ]),
             ]);

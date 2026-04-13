@@ -22,7 +22,8 @@ class BorrowersTable
     {
         return $table
             ->heading('Borrowers')
-            ->description('Manage your borrowers and their customer profiles.')
+            ->description('Create, update, deactivate, blacklist, delete, and restore borrower records with full profile control.')
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 ImageColumn::make('photo')
                     ->circular()
@@ -42,16 +43,22 @@ class BorrowersTable
                     ->label('Code')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('customer_type')
-                    ->badge()
-                    ->color(fn(string $state): string => match ($state) {
-                        'Borrower' => 'info',
-                        'Saver' => 'success',
-                        'Investor' => 'warning',
-                        default => 'gray',
-                    }),
                 TextColumn::make('phone')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('id_number')
+                    ->label('ID Number')
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('gender')
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('marital_status')
+                    ->label('Marital')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('occupation')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
@@ -67,15 +74,13 @@ class BorrowersTable
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 \Filament\Tables\Filters\TrashedFilter::make(),
-                SelectFilter::make('customer_type')
-                    ->options([
-                        'Borrower' => 'Borrower',
-                        'Saver' => 'Saver',
-                        'Investor' => 'Investor',
-                    ]),
                 SelectFilter::make('status')
                     ->options([
                         'Active' => 'Active',
@@ -85,9 +90,7 @@ class BorrowersTable
             ])
             ->recordActions([
                 EditAction::make(),
-                DeleteAction::make(),
                 RestoreAction::make(),
-                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()

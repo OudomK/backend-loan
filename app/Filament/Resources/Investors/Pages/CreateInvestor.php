@@ -23,4 +23,14 @@ class CreateInvestor extends CreateRecord
     {
         return InvestorResource::normalizeInvestorData($data);
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+
+    public function canCreateAnother(): bool
+    {
+        return false;
+    }
 }

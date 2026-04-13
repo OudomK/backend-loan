@@ -29,19 +29,24 @@ class PositionsTable
                 TextColumn::make('base_salary')
                     ->money('USD')
                     ->sortable(),
+                TextColumn::make('reportingTo.name')
+                    ->label('Reports To')
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        'Active' => 'success',
-                        'Inactive' => 'warning',
+                        'active' => 'success',
+                        'inactive' => 'warning',
                         default => 'gray',
                     }),
             ])
             ->filters([
                 SelectFilter::make('status')
                     ->options([
-                        'Active' => 'Active',
-                        'Inactive' => 'Inactive',
+                        'active' => 'Active',
+                        'inactive' => 'Inactive',
                     ]),
             ])
             ->recordActions([

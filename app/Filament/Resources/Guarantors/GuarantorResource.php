@@ -13,9 +13,12 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
 
 class GuarantorResource extends Resource
 {
+    protected static ?string $model = Guarantor::class;
+
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Client Management';
@@ -66,6 +69,36 @@ class GuarantorResource extends Resource
             'create' => CreateGuarantor::route('/create'),
             'edit' => EditGuarantor::route('/{record}/edit'),
         ];
+    }
+
+    public static function nextGuarantorCode(): string
+    {
+        $latest = Guarantor::orderBy('id', 'desc')->first();
+        $nextId = $latest ? $latest->id + 1 : 1;
+
+        return 'GU-' . str_pad((string) $nextId, 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function normalizeGuarantorData(array $data, ?Guarantor $record = null): array
+    {
+        if (blank($data['customer_code'] ?? null)) {
+            $data['customer_code'] = $record?->customer_code ?? static::nextGuarantorCode();
+        }
+
+        $status = (string) ($data['status'] ?? $record?->status ?? 'Active');
+        if (!in_array($status, ['Active', 'Inactive', 'Blacklisted'], true)) {
+            throw ValidationException::withMessages([
+                'status' => 'Invalid guarantor status.',
+            ]);
+        }
+
+        $data['status'] = $status;
+
+        return $data;
     }
 }
 

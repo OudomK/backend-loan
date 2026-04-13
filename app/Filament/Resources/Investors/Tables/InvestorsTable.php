@@ -21,6 +21,9 @@ class InvestorsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Investors')
+            ->description('Create, update, deactivate, delete, and restore investor records with full profile control.')
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 ImageColumn::make('photo')
                     ->circular()
@@ -38,9 +41,24 @@ class InvestorsTable
                     ->sortable(),
                 TextColumn::make('customer_code')
                     ->label('Code')
-                    ->searchable(),
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('phone')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('id_number')
+                    ->label('ID Number')
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('gender')
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('marital_status')
+                    ->label('Marital')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('occupation')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
@@ -49,8 +67,13 @@ class InvestorsTable
                         default => 'gray',
                     }),
                 TextColumn::make('province')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -65,9 +88,7 @@ class InvestorsTable
             ])
             ->recordActions([
                 EditAction::make(),
-                DeleteAction::make(),
                 RestoreAction::make(),
-                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -81,9 +102,7 @@ class InvestorsTable
                     RestoreBulkAction::make(),
                     ForceDeleteBulkAction::make(),
                 ]),
-            ])
-            ->heading('Investors')
-            ->description('Manage and monitor all your fund investors in one place.');
+            ]);
 
     }
 }

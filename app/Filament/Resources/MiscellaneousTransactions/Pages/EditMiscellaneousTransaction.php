@@ -12,6 +12,11 @@ class EditMiscellaneousTransaction extends EditRecord
 {
     protected static string $resource = MiscellaneousTransactionResource::class;
 
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        return MiscellaneousTransactionResource::normalizeTransactionData($data);
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -19,5 +24,10 @@ class EditMiscellaneousTransaction extends EditRecord
             RestoreAction::make(),
             ForceDeleteAction::make(),
         ];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
     }
 }

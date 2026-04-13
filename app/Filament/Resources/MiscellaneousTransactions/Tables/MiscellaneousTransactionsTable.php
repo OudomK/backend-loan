@@ -22,11 +22,12 @@ class MiscellaneousTransactionsTable
     {
         return $table
             ->heading('Miscellaneous Transactions')
-            ->description('Log and track miscellaneous revenue, expenses, and one-off transactions.')
+            ->description('Create, review, edit, and soft-delete miscellaneous revenue and expense records with proper currency tracking.')
             ->defaultSort('transaction_date', 'desc')
             ->columns([
                 TextColumn::make('transaction_date')
-                    ->date()
+                    ->label('Date')
+                    ->date('d/m/Y')
                     ->sortable(),
                 TextColumn::make('type')
                     ->badge()
@@ -43,29 +44,46 @@ class MiscellaneousTransactionsTable
                         default => 'gray',
                     }),
                 TextColumn::make('category')
-                    ->searchable(),
+                    ->label('Category / Name')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('currency')
+                    ->toggleable(),
                 TextColumn::make('amount')
-                    ->money('USD')
+                    ->label('Amount')
+                    ->formatStateUsing(fn ($state, $record): string => trim(sprintf(
+                        '%s %s',
+                        strtoupper((string) ($record->currency ?? 'USD')),
+                        number_format((float) $state, 2)
+                    )))
+                    ->alignEnd()
                     ->sortable(),
                 TextColumn::make('description')
+                    ->label('Description / Memo')
                     ->limit(50)
+                    ->searchable()
                     ->toggleable(),
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('type')
                     ->options([
                         'revenue' => 'Revenue',
                         'expense' => 'Expense',
-                        'Income' => 'Revenue (Legacy)',
-                        'Expense' => 'Expense (Legacy)',
+                    ]),
+                SelectFilter::make('currency')
+                    ->options([
+                        'USD' => 'USD',
+                        'KHR' => 'KHR',
                     ]),
                 TrashedFilter::make(),
             ])
             ->recordActions([
                 EditAction::make(),
-                DeleteAction::make(),
                 RestoreAction::make(),
-                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()

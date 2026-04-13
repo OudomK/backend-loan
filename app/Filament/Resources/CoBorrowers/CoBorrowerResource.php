@@ -13,9 +13,12 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
 
 class CoBorrowerResource extends Resource
 {
+    protected static ?string $model = CoBorrower::class;
+
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-users';
 
     protected static string|\UnitEnum|null $navigationGroup = 'Client Management';
@@ -66,6 +69,36 @@ class CoBorrowerResource extends Resource
             'create' => CreateCoBorrower::route('/create'),
             'edit' => EditCoBorrower::route('/{record}/edit'),
         ];
+    }
+
+    public static function nextCoBorrowerCode(): string
+    {
+        $latest = CoBorrower::orderBy('id', 'desc')->first();
+        $nextId = $latest ? $latest->id + 1 : 1;
+
+        return 'CB-' . str_pad((string) $nextId, 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function normalizeCoBorrowerData(array $data, ?CoBorrower $record = null): array
+    {
+        if (blank($data['customer_code'] ?? null)) {
+            $data['customer_code'] = $record?->customer_code ?? static::nextCoBorrowerCode();
+        }
+
+        $status = (string) ($data['status'] ?? $record?->status ?? 'Active');
+        if (!in_array($status, ['Active', 'Inactive', 'Blacklisted'], true)) {
+            throw ValidationException::withMessages([
+                'status' => 'Invalid co-borrower status.',
+            ]);
+        }
+
+        $data['status'] = $status;
+
+        return $data;
     }
 }
 

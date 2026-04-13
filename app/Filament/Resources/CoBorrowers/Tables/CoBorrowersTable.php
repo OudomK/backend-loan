@@ -17,7 +17,8 @@ class CoBorrowersTable
     {
         return $table
             ->heading('Co-Borrowers')
-            ->description('Manage additional borrowers on loan accounts.')
+            ->description('Create, update, deactivate, blacklist, and review co-borrower records with full profile control.')
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 ImageColumn::make('photo')
                     ->circular()
@@ -38,7 +39,21 @@ class CoBorrowersTable
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('phone')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('id_number')
+                    ->label('ID Number')
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('gender')
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('marital_status')
+                    ->label('Marital')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('occupation')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
@@ -51,6 +66,10 @@ class CoBorrowersTable
                     ->sortable()
                     ->toggleable(),
                 TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),

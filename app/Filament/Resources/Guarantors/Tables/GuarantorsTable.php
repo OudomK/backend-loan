@@ -17,7 +17,8 @@ class GuarantorsTable
     {
         return $table
             ->heading('Guarantors')
-            ->description('Manage loan guarantors and their guarantee details.')
+            ->description('Create, update, deactivate, blacklist, and review guarantor records with full profile control.')
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 ImageColumn::make('photo')
                     ->circular()
@@ -43,6 +44,22 @@ class GuarantorsTable
                 TextColumn::make('phone')
                     ->searchable()
                     ->toggleable(),
+                TextColumn::make('id_number')
+                    ->label('ID Number')
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('gender')
+                    ->badge()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('marital_status')
+                    ->label('Marital')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('occupation')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('province')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
@@ -51,8 +68,15 @@ class GuarantorsTable
                         'Blacklisted' => 'danger',
                         default => 'gray',
                     }),
+                TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->deferColumnManager()
             ->filters([
                 SelectFilter::make('status')
                     ->options([

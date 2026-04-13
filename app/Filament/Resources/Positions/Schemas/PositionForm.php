@@ -41,16 +41,30 @@ class PositionForm
                                     ->numeric()
                                     ->prefix('$'),
                             ]),
+                        Grid::make(3)
+                            ->schema([
+                                Select::make('reporting_to_id')
+                                    ->label('Reporting To')
+                                    ->relationship('reportingTo', 'name')
+                                    ->searchable(),
+                                TextInput::make('min_headcount')
+                                    ->numeric()
+                                    ->default(0),
+                                TextInput::make('max_headcount')
+                                    ->numeric(),
+                            ]),
                         Select::make('status')
                             ->options([
-                                'Active' => 'Active',
-                                'Inactive' => 'Inactive',
+                                'active' => 'Active',
+                                'inactive' => 'Inactive',
                             ])
-                            ->default('Active')
+                            ->default('active')
                             ->required(),
                         Textarea::make('description')
+                            ->rows(3)
                             ->columnSpanFull(),
                         Textarea::make('requirements')
+                            ->rows(3)
                             ->columnSpanFull(),
                     ]),
             ]);

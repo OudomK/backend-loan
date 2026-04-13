@@ -290,7 +290,6 @@ class RoleResource extends Resource
             ])
             ->recordActions([
                 EditAction::make(),
-                DeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()

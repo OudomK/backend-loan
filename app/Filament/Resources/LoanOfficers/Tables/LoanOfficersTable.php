@@ -5,6 +5,7 @@ namespace App\Filament\Resources\LoanOfficers\Tables;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -17,11 +18,17 @@ class LoanOfficersTable
     {
         return $table
             ->heading('Loan Officers')
-            ->description('Manage loan officers, their assigned cases, and performance.')
+            ->description('Create, update, deactivate, and review loan officers together with their employee link and lending authority.')
+            ->defaultSort('created_at', 'desc')
             ->columns([
                 TextColumn::make('name')
+                    ->label('Name')
                     ->searchable()
                     ->sortable()
+                    ->toggleable(),
+                TextColumn::make('employee.name')
+                    ->label('Linked Employee')
+                    ->searchable()
                     ->toggleable(),
                 TextColumn::make('employee.employee_code')
                     ->label('Emp Code')
@@ -56,8 +63,11 @@ class LoanOfficersTable
                     ->label('Active Loans')
                     ->sortable()
                     ->toggleable(),
+                TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->deferColumnManager()
             ->filters([
                 SelectFilter::make('status')
                     ->options([

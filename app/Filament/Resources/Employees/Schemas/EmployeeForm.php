@@ -42,25 +42,6 @@ class EmployeeForm
                                 Select::make('gender')
                                     ->options([
                                         'Male' => 'Male',
-                                        'Female' => 'Female',
-                                        'Other' => 'Other',
-                                    ]),
-                                DatePicker::make('dob')
-                                    ->label('Date of Birth')
-                                    ->native(false),
-                                Select::make('status')
-                                    ->options([
-                                        'Active' => 'Active',
-                                        'Inactive' => 'Inactive',
-                                        'Resigned' => 'Resigned',
-                                    ])
-                                    ->default('Active')
-                                    ->required(),
-                                Select::make('marital_status')
-                                    ->options([
-                                        'Single' => 'Single',
-                                        'Married' => 'Married',
-                                        'Divorced' => 'Divorced',
                                         'Widowed' => 'Widowed',
                                     ]),
                                 TextInput::make('number_of_children')

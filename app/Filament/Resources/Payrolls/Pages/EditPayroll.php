@@ -20,4 +20,9 @@ class EditPayroll extends EditRecord
             ForceDeleteAction::make(),
         ];
     }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
 }

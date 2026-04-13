@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Validation\ValidationException;
 
 class BorrowerResource extends Resource
 {
@@ -76,6 +77,37 @@ class BorrowerResource extends Resource
             'create' => CreateBorrower::route('/create'),
             'edit' => EditBorrower::route('/{record}/edit'),
         ];
+    }
+
+    public static function nextBorrowerCode(): string
+    {
+        $latest = Borrower::withoutGlobalScopes()->orderBy('id', 'desc')->first();
+        $nextId = $latest ? $latest->id + 1 : 1;
+
+        return 'QF-' . str_pad((string) $nextId, 3, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    public static function normalizeBorrowerData(array $data, ?Borrower $record = null): array
+    {
+        if (blank($data['customer_code'] ?? null)) {
+            $data['customer_code'] = $record?->customer_code ?? static::nextBorrowerCode();
+        }
+
+        $status = (string) ($data['status'] ?? $record?->status ?? 'Active');
+        if (!in_array($status, ['Active', 'Inactive', 'Blacklisted'], true)) {
+            throw ValidationException::withMessages([
+                'status' => 'Invalid borrower status.',
+            ]);
+        }
+
+        $data['status'] = $status;
+        $data['customer_type'] = 'Borrower';
+
+        return $data;
     }
 }
 

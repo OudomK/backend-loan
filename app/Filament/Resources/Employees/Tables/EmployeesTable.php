@@ -45,9 +45,9 @@ class EmployeesTable
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
-                        'Active' => 'success',
-                        'Inactive' => 'warning',
-                        'Resigned' => 'danger',
+                        'active' => 'success',
+                        'inactive' => 'warning',
+                        'resigned' => 'danger',
                         default => 'gray',
                     }),
                 TextColumn::make('salary')
@@ -63,16 +63,14 @@ class EmployeesTable
                     ->relationship('position', 'name'),
                 SelectFilter::make('status')
                     ->options([
-                        'Active' => 'Active',
-                        'Inactive' => 'Inactive',
-                        'Resigned' => 'Resigned',
+                        'active' => 'Active',
+                        'inactive' => 'Inactive',
+                        'resigned' => 'Resigned',
                     ]),
             ])
             ->recordActions([
                 EditAction::make(),
-                DeleteAction::make(),
                 RestoreAction::make(),
-                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()

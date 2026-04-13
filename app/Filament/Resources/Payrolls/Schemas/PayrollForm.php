@@ -24,52 +24,95 @@ class PayrollForm
                                     ->relationship('employee', 'name')
                                     ->searchable()
                                     ->required()
-                                    ->reactive()
-                                    ->afterStateUpdated(
-                                        fn($state, callable $set) =>
-                                        $set('salary', \App\Models\Employee::find($state)?->salary)
-                                    ),
-                                TextInput::make('month_year')
-                                    ->placeholder('e.g. 05-2024')
-                                    ->required(),
+                                    ->live()
+                                    ->afterStateUpdated(function ($state, $set) {
+                                        $employee = \App\Models\Employee::find($state);
+                                        if ($employee) {
+                                            $set('salary', $employee->salary);
+                                            // Trigger total calculation
+                                            $set('total_payable', $employee->salary);
+                                        }
+                                    }),
+                                DatePicker::make('month_year')
+                                    ->label('Month/Year')
+                                    ->format('Y-m-01')
+                                    ->displayFormat('M Y')
+                                    ->native(false)
+                                    ->required()
+                                    ->unique(modifyRuleUsing: function (\Illuminate\Validation\Rules\Unique $rule, $get) {
+                                        return $rule->where('employee_id', $get('employee_id'));
+                                    }, ignoreRecord: true)
+                                    ->validationAttribute('Payroll for this month')
+                                    ->helperText('Only one payroll record per employee per month.'),
                             ]),
                         Grid::make(4)
                             ->schema([
                                 TextInput::make('salary')
                                     ->numeric()
                                     ->prefix('$')
-                                    ->required(),
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
                                 TextInput::make('allowance')
                                     ->numeric()
                                     ->prefix('$')
-                                    ->default(0),
+                                    ->default(0)
+                                    ->live()
+                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
                                 TextInput::make('bonus')
                                     ->numeric()
                                     ->prefix('$')
-                                    ->default(0),
+                                    ->default(0)
+                                    ->live()
+                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
                                 TextInput::make('deduction')
                                     ->numeric()
                                     ->prefix('$')
-                                    ->default(0),
+                                    ->default(0)
+                                    ->live()
+                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
                             ]),
-                        Grid::make(3)
+                        Grid::make(2)
                             ->schema([
                                 TextInput::make('total_payable')
                                     ->numeric()
                                     ->prefix('$')
-                                    ->disabled()
-                                    ->placeholder('Auto-calculated'),
-                                DatePicker::make('payment_date')
-                                    ->native(false),
+                                    ->readOnly()
+                                    ->placeholder('Auto-calculated')
+                                    ->extraInputAttributes(['class' => 'font-bold text-primary-600']),
                                 Select::make('status')
                                     ->options([
-                                        'Pending' => 'Pending',
-                                        'Paid' => 'Paid',
+                                        'pending' => 'Pending',
+                                        'paid' => 'Paid',
+                                        'cancelled' => 'Cancelled',
                                     ])
-                                    ->default('Pending')
+                                    ->default('pending')
                                     ->required(),
+                            ]),
+                        Grid::make(2)
+                            ->schema([
+                                DatePicker::make('payment_date')
+                                    ->native(false),
+                                Select::make('payment_method')
+                                    ->options([
+                                        'Cash' => 'Cash',
+                                        'Bank Transfer' => 'Bank Transfer',
+                                        'Cheque' => 'Cheque',
+                                        'Other' => 'Other',
+                                    ])
+                                    ->searchable(),
                             ]),
                     ]),
             ]);
+    }
+
+    protected static function calculateTotal($get, $set): void
+    {
+        $salary = (float) ($get('salary') ?? 0);
+        $allowance = (float) ($get('allowance') ?? 0);
+        $bonus = (float) ($get('bonus') ?? 0);
+        $deduction = (float) ($get('deduction') ?? 0);
+
+        $set('total_payable', $salary + $allowance + $bonus - $deduction);
     }
 }

@@ -41,6 +41,16 @@ class CreateLoan extends CreateRecord
         return $data;
     }
 
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
+    }
+
+    public function canCreateAnother(): bool
+    {
+        return false;
+    }
+
     protected function afterCreate(): void
     {
         if (!$this->record instanceof Loan) {
