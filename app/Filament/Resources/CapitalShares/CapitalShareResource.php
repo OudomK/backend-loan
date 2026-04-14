@@ -14,6 +14,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Validation\ValidationException;
 
 class CapitalShareResource extends Resource
@@ -151,4 +152,5 @@ class CapitalShareResource extends Resource
             ->exists();
     }
 }
+
 

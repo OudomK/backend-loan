@@ -3,10 +3,18 @@
 namespace App\Filament\Resources\CapitalShares\Tables;
 
 use Carbon\Carbon;
+use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class CapitalSharesTable
@@ -20,8 +28,8 @@ class CapitalSharesTable
             ->columns([
                 TextColumn::make('borrowing_date')
                     ->label('Date')
-                    ->getStateUsing(fn ($record) => $record->borrowing_date ?? $record->created_at)
-                    ->formatStateUsing(fn ($state) => $state ? Carbon::parse((string) $state)->format('d/m/Y') : '-')
+                    ->getStateUsing(fn($record) => $record->borrowing_date ?? $record->created_at)
+                    ->formatStateUsing(fn($state) => $state ? Carbon::parse((string) $state)->format('d/m/Y') : '-')
                     ->sortable(),
                 TextColumn::make('account_no')
                     ->label('Account Code')
@@ -30,10 +38,10 @@ class CapitalSharesTable
                 TextColumn::make('investor.customer_code')
                     ->label('Investor Code')
                     ->searchable()
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('owner_name')
                     ->label('Name')
-                    ->getStateUsing(fn ($record) => $record->investor
+                    ->getStateUsing(fn($record) => $record->investor
                         ? trim("{$record->investor->last_name} {$record->investor->first_name}")
                         : '-')
                     ->searchable(['investor.first_name', 'investor.last_name'])
@@ -41,38 +49,41 @@ class CapitalSharesTable
                     ->sortable(),
                 TextColumn::make('category')
                     ->badge()
-                    ->color('success'),
+                    ->color('success')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('currency')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('share_qty')
                     ->label('Share Qty')
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('amount')
                     ->label('Invested Amount')
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
                     ->alignEnd()
                     ->sortable(),
                 TextColumn::make('balance')
                     ->label('Balance')
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
                     ->alignEnd()
                     ->sortable(),
                 TextColumn::make('dividends')
                     ->label('Dividends (Acc)')
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2))
-                    ->alignEnd(),
+                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->alignEnd()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('total_dividend_paid')
                     ->label('Total Div. Paid')
-                    ->formatStateUsing(fn ($state) => number_format((float) $state, 2))
-                    ->alignEnd(),
+                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->alignEnd()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('last_dividend_date')
                     ->label('Last Div. Date')
                     ->date('d/m/Y')
-                    ->toggleable(),
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('status')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'Active' => 'success',
                         'Withdrawn' => 'danger',
                         default => 'gray',
@@ -80,6 +91,7 @@ class CapitalSharesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                TrashedFilter::make(),
                 SelectFilter::make('status')
                     ->options([
                         'Active' => 'Active',
@@ -93,6 +105,8 @@ class CapitalSharesTable
             ])
             ->recordActions([
                 EditAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -100,6 +114,12 @@ class CapitalSharesTable
                     ->icon('heroicon-m-plus-circle')
                     ->button(),
             ])
-            ->bulkActions([]);
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
+                ]),
+            ]);
     }
 }

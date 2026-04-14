@@ -4,10 +4,16 @@ namespace App\Filament\Resources\Positions\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class PositionsTable
@@ -43,6 +49,7 @@ class PositionsTable
                     }),
             ])
             ->filters([
+                TrashedFilter::make(),
                 SelectFilter::make('status')
                     ->options([
                         'active' => 'Active',
@@ -51,6 +58,8 @@ class PositionsTable
             ])
             ->recordActions([
                 EditAction::make(),
+                RestoreAction::make(),
+                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -61,6 +70,8 @@ class PositionsTable
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
                 ]),
             ]);
     }

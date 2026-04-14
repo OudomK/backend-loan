@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Illuminate\Validation\ValidationException;
 
 class CoBorrowerResource extends Resource
@@ -101,4 +102,5 @@ class CoBorrowerResource extends Resource
         return $data;
     }
 }
+
 

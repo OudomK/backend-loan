@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class LoanOfficer extends Model
 {
+    use SoftDeletes;
+
 
     protected $fillable = ['employee_id', 'name', 'phone', 'status', 'start_date', 'max_loan_amount', 'gender'];
 
