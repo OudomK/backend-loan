@@ -12,10 +12,7 @@ jobs:
     steps:
       # Step 1: Checkout code
       - name: ✅ Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Force JavaScript to Node 24
-        run: echo "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24=true" >> $GITHUB_ENV
+        uses: actions/checkout@v4.2.2
 
       # Step 2: SSH ចូល Server ហើយ Deploy
       - name: 🚀 Deploy to Server
