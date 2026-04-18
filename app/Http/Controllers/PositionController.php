@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Position;
+use App\Support\CurrencyHelper;
 use Illuminate\Http\Request;
 
 class PositionController extends Controller
@@ -28,6 +29,7 @@ class PositionController extends Controller
             'department' => 'nullable|string',
             'type' => 'required|string',
             'base_salary' => 'required|numeric',
+            'currency' => 'nullable|string|in:USD,KHR',
             'description' => 'nullable|string',
             'requirements' => 'nullable|string',
             'status' => 'required|string',
@@ -35,6 +37,8 @@ class PositionController extends Controller
             'min_headcount' => 'nullable|integer|min:0',
             'max_headcount' => 'nullable|integer|min:0',
         ]);
+
+        $validated['currency'] = CurrencyHelper::normalize($validated['currency'] ?? CurrencyHelper::USD);
 
         $position = Position::create($validated);
         $position->load('reportingTo');
@@ -52,6 +56,7 @@ class PositionController extends Controller
             'department' => 'nullable|string',
             'type' => 'sometimes|string',
             'base_salary' => 'sometimes|numeric',
+            'currency' => 'nullable|string|in:USD,KHR',
             'description' => 'nullable|string',
             'requirements' => 'nullable|string',
             'status' => 'sometimes|string',
@@ -59,6 +64,10 @@ class PositionController extends Controller
             'min_headcount' => 'nullable|integer|min:0',
             'max_headcount' => 'nullable|integer|min:0',
         ]);
+
+        if (array_key_exists('currency', $validated)) {
+            $validated['currency'] = CurrencyHelper::normalize($validated['currency']);
+        }
 
         $position->update($validated);
         $position->load('reportingTo');

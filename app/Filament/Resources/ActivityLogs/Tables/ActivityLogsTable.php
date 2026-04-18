@@ -13,6 +13,7 @@ class ActivityLogsTable
         return $table
             ->heading('Audit Logs')
             ->description('Review who changed what across the system, along with the affected records and timestamps.')
+            ->persistFiltersInSession()
             ->columns([
                 TextColumn::make('log_name')
                     ->label('Channel')
@@ -20,38 +21,45 @@ class ActivityLogsTable
                     ->color('gray')
                     ->searchable()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('description')
                     ->wrap()
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => filled($record->causer?->name) ? 'User ' . $record->causer->name : null),
                 TextColumn::make('subject_type')
                     ->label('Type')
                     ->badge()
                     ->color('info')
                     ->formatStateUsing(fn($state) => filled($state) ? class_basename($state) : '-')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('subject_id')
                     ->label('ID')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('2xl'),
                 TextColumn::make('causer.name')
                     ->label('User')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
 
                 TextColumn::make('created_at')
                     ->label('Logged At')
                     ->dateTime('M j, Y g:i:s A')
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
                 //
             ])
             ->recordActions([
-                ViewAction::make(),
+                ViewAction::make()
+                    ->iconButton()
+                    ->tooltip('View log'),
             ])
             ->bulkActions([
                 // Logs are usually audit trails, deletion might not be desired but keeping it if they want.

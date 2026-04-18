@@ -8,6 +8,7 @@ use App\Filament\Resources\CapitalShares\Pages\ListCapitalShares;
 use App\Filament\Resources\CapitalShares\Schemas\CapitalShareForm;
 use App\Filament\Resources\CapitalShares\Tables\CapitalSharesTable;
 use App\Models\CapitalShare;
+use App\Support\CurrencyHelper;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Resources\Resource;
@@ -139,7 +140,7 @@ class CapitalShareResource extends Resource
             'total_capital' => $amount,
             'balance' => $amount,
             'dividends' => round((float) ($data['dividends'] ?? $record?->dividends ?? 0), 2),
-            'currency' => strtoupper((string) ($data['currency'] ?? $record?->currency ?? 'USD')),
+            'currency' => CurrencyHelper::normalize($data['currency'] ?? $record?->currency ?? CurrencyHelper::USD),
             'status' => (string) ($record?->status ?? 'Active'),
             'borrowing_date' => $borrowingDate,
         ]);
@@ -152,5 +153,4 @@ class CapitalShareResource extends Resource
             ->exists();
     }
 }
-
 

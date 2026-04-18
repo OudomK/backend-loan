@@ -2,11 +2,10 @@
 
 namespace App\Filament\Resources\MiscellaneousTransactions\Tables;
 
+use App\Support\CurrencyHelper;
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\RestoreBulkAction;
@@ -24,11 +23,15 @@ class MiscellaneousTransactionsTable
             ->heading('Miscellaneous Transactions')
             ->description('Create, review, edit, and soft-delete miscellaneous revenue and expense records with proper currency tracking.')
             ->defaultSort('transaction_date', 'desc')
+            ->persistFiltersInSession()
             ->columns([
                 TextColumn::make('transaction_date')
                     ->label('Date')
                     ->date('d/m/Y')
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => filled($record->type)
+                        ? ucfirst(strtolower((string) $record->type))
+                        : null),
                 TextColumn::make('type')
                     ->badge()
                     ->formatStateUsing(function (?string $state): string {
@@ -40,29 +43,30 @@ class MiscellaneousTransactionsTable
                     })
                     ->color(fn(?string $state): string => match (strtolower((string) $state)) {
                         'revenue', 'income' => 'success',
-                        'expense' => 'danger',
-                        default => 'gray',
-                    }),
+                            'expense' => 'danger',
+                            default => 'gray',
+                        })
+                    ->visibleFrom('xl'),
                 TextColumn::make('category')
                     ->label('Category / Name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => filled($record->description)
+                        ? \Illuminate\Support\Str::limit((string) $record->description, 42)
+                        : null),
                 TextColumn::make('currency')
-                    ->toggleable(),
+                    ->formatStateUsing(fn ($state): string => CurrencyHelper::normalize($state))
+                    ->visibleFrom('2xl'),
                 TextColumn::make('amount')
                     ->label('Amount')
-                    ->formatStateUsing(fn ($state, $record): string => trim(sprintf(
-                        '%s %s',
-                        strtoupper((string) ($record->currency ?? 'USD')),
-                        number_format((float) $state, 2)
-                    )))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
                     ->alignEnd()
                     ->sortable(),
                 TextColumn::make('description')
                     ->label('Description / Memo')
                     ->limit(50)
                     ->searchable()
-                    ->toggleable(),
+                    ->visibleFrom('xl'),
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
@@ -75,14 +79,13 @@ class MiscellaneousTransactionsTable
                         'expense' => 'Expense',
                     ]),
                 SelectFilter::make('currency')
-                    ->options([
-                        'USD' => 'USD',
-                        'KHR' => 'KHR',
-                    ]),
+                    ->options(CurrencyHelper::options()),
                 TrashedFilter::make(),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Manage transaction'),
                 RestoreAction::make(),
             ])
             ->headerActions([

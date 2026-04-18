@@ -2,12 +2,11 @@
 
 namespace App\Filament\Resources\Employees\Tables;
 
+use App\Support\CurrencyHelper;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -23,6 +22,7 @@ class EmployeesTable
         return $table
             ->heading('Employees')
             ->description('Manage staff records, positions, and contact information.')
+            ->persistFiltersInSession()
             ->columns([
                 ImageColumn::make('photo')
                     ->circular()
@@ -35,13 +35,23 @@ class EmployeesTable
                     }),
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->employee_code) ? $record->employee_code : null,
+                        filled($record->phone) ? $record->phone : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('employee_code')
                     ->label('Code')
-                    ->searchable(),
-                TextColumn::make('position.name')
                     ->searchable()
-                    ->sortable(),
+                    ->visibleFrom('xl'),
+                TextColumn::make('position.name')
+                    ->label('Position')
+                    ->searchable()
+                    ->sortable()
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->employment_type) ? $record->employment_type : null,
+                        filled($record->date_joined) ? 'Start ' . self::formatDate($record->date_joined) : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn(string $state): string => match ($state) {
@@ -51,11 +61,17 @@ class EmployeesTable
                         default => 'gray',
                     }),
                 TextColumn::make('salary')
-                    ->money('USD')
+                    ->money(fn ($record): string => CurrencyHelper::normalize($record->currency ?? CurrencyHelper::USD))
                     ->sortable()
-                    ->toggleable(),
+                    ->description(fn ($record): ?string => filled($record->currency)
+                        ? CurrencyHelper::normalize((string) $record->currency)
+                        : null),
+                TextColumn::make('currency')
+                    ->formatStateUsing(fn ($state): string => CurrencyHelper::normalize($state))
+                    ->visibleFrom('2xl'),
                 TextColumn::make('phone')
-                    ->searchable(),
+                    ->searchable()
+                    ->visibleFrom('2xl'),
             ])
             ->filters([
                 \Filament\Tables\Filters\TrashedFilter::make(),
@@ -67,9 +83,13 @@ class EmployeesTable
                         'inactive' => 'Inactive',
                         'resigned' => 'Resigned',
                     ]),
+                SelectFilter::make('currency')
+                    ->options(CurrencyHelper::options()),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Manage employee'),
                 RestoreAction::make(),
             ])
             ->headerActions([
@@ -85,5 +105,18 @@ class EmployeesTable
                     ForceDeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    private static function formatDate(?string $date): ?string
+    {
+        if (blank($date)) {
+            return null;
+        }
+
+        try {
+            return \Carbon\Carbon::parse($date)->format('d M Y');
+        } catch (\Throwable) {
+            return $date;
+        }
     }
 }

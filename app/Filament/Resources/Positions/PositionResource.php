@@ -12,6 +12,7 @@ use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
+use Illuminate\Database\Eloquent\Builder;
 use Filament\Tables\Table;
 
 class PositionResource extends Resource
@@ -41,6 +42,12 @@ class PositionResource extends Resource
         return PositionsTable::configure($table);
     }
 
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->with(['reportingTo']);
+    }
+
     public static function getRelations(): array
     {
         return [
@@ -57,4 +64,3 @@ class PositionResource extends Resource
         ];
     }
 }
-

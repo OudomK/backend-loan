@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Employee;
+use App\Support\CurrencyHelper;
 use Illuminate\Http\Request;
 
 class PayrollController extends Controller
@@ -16,12 +18,13 @@ class PayrollController extends Controller
         return response()->json(\App\Models\Payroll::with('employee.position')->findOrFail($id));
     }
 
-    public function store(\Illuminate\Http\Request $request)
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'employee_id' => 'required|exists:employees,id',
             'month_year' => 'required|date',
             'salary' => 'required|numeric',
+            'currency' => 'nullable|string|in:USD,KHR',
             'allowance' => 'nullable|numeric',
             'bonus' => 'nullable|numeric',
             'deduction' => 'nullable|numeric',
@@ -31,6 +34,15 @@ class PayrollController extends Controller
         ]);
 
         // ── Duplicate Payroll Guard ─────────────────────────────────────────────
+        if (empty($validated['currency'])) {
+            $employeeCurrency = Employee::query()
+                ->whereKey($validated['employee_id'])
+                ->value('currency');
+            $validated['currency'] = CurrencyHelper::normalize($employeeCurrency ?? CurrencyHelper::USD);
+        } else {
+            $validated['currency'] = CurrencyHelper::normalize($validated['currency']);
+        }
+
         $exists = \App\Models\Payroll::where('employee_id', $validated['employee_id'])
             ->whereRaw("DATE_FORMAT(month_year, '%Y-%m') = DATE_FORMAT(?, '%Y-%m')", [$validated['month_year']])
             ->exists();
@@ -51,13 +63,14 @@ class PayrollController extends Controller
         return response()->json($payroll->load('employee.position'), 201);
     }
 
-    public function update(\Illuminate\Http\Request $request, $id)
+    public function update(Request $request, $id)
     {
         $payroll = \App\Models\Payroll::findOrFail($id);
         $validated = $request->validate([
             'employee_id' => 'sometimes|exists:employees,id',
             'month_year' => 'sometimes|date',
             'salary' => 'sometimes|numeric',
+            'currency' => 'nullable|string|in:USD,KHR',
             'allowance' => 'nullable|numeric',
             'bonus' => 'nullable|numeric',
             'deduction' => 'nullable|numeric',
@@ -65,6 +78,10 @@ class PayrollController extends Controller
             'payment_date' => 'nullable|date',
             'payment_method' => 'nullable|string',
         ]);
+
+        if (array_key_exists('currency', $validated)) {
+            $validated['currency'] = CurrencyHelper::normalize($validated['currency']);
+        }
 
         $salary = $validated['salary'] ?? $payroll->salary;
         $allowance = $validated['allowance'] ?? $payroll->allowance;

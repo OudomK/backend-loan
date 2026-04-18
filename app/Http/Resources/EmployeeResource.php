@@ -33,6 +33,7 @@ class EmployeeResource extends JsonResource
             'contract_end_date' => $this->contract_end_date,
             'working_days_per_week' => $this->working_days_per_week,
             'salary' => $this->salary,
+            'currency' => $this->currency,
             'bank_name' => $this->bank_name,
             'bank_account_number' => $this->bank_account_number,
             'nssf_id' => $this->nssf_id,

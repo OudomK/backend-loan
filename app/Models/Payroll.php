@@ -23,6 +23,7 @@ class Payroll extends Model
         'employee_id',
         'month_year',
         'salary',
+        'currency',
         'allowance',
         'bonus',
         'deduction',

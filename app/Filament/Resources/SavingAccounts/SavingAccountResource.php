@@ -8,6 +8,7 @@ use App\Filament\Resources\SavingAccounts\Pages\ListSavingAccounts;
 use App\Filament\Resources\SavingAccounts\Schemas\SavingAccountForm;
 use App\Filament\Resources\SavingAccounts\Tables\SavingAccountsTable;
 use App\Models\Borrowing;
+use App\Support\CurrencyHelper;
 use BackedEnum;
 use Carbon\Carbon;
 use Filament\Resources\Resource;
@@ -116,11 +117,10 @@ class SavingAccountResource extends Resource
         $data['interest_rate'] = round((float) ($data['interest_rate'] ?? 0), 2);
         $data['late_principal'] = round((float) ($data['late_principal'] ?? 0), 2);
         $data['loan_interest'] = round((float) ($data['loan_interest'] ?? 0), 2);
-        $data['currency'] = strtoupper((string) ($data['currency'] ?? 'USD'));
+        $data['currency'] = CurrencyHelper::normalize($data['currency'] ?? CurrencyHelper::USD);
         $data['category'] = (string) ($data['category'] ?? $record?->category ?? 'Loan Capital');
         $data['status'] = $record && $principalPaidTotal + 0.001 >= $amount ? 'completed' : 'active';
 
         return $data;
     }
 }
-

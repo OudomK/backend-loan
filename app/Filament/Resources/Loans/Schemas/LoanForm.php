@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Loans\Schemas;
 
+use App\Support\CurrencyHelper;
 use Filament\Forms\Components\DatePicker;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
@@ -16,7 +17,10 @@ class LoanForm
     {
         return $schema
             ->components([
-                Grid::make(2)
+                Grid::make([
+                    'default' => 1,
+                    '2xl' => 2,
+                ])
                     ->columnSpan('full')
                     ->schema([
                         Group::make()
@@ -25,7 +29,11 @@ class LoanForm
                                     ->description('Essential loan information.')
                                     ->icon('heroicon-o-banknotes')
                                     ->schema([
-                                        Grid::make(3)
+                                        Grid::make([
+                                            'default' => 1,
+                                            'md' => 2,
+                                            'xl' => 3,
+                                        ])
                                             ->schema([
                                                 TextInput::make('loan_code')
                                                     ->label('Loan Code')
@@ -34,7 +42,7 @@ class LoanForm
                                                 Select::make('borrower_id')
                                                     ->relationship('borrower', 'id')
                                                     ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name} ({$record->customer_code})")
-                                                    ->searchable()
+                                                    ->searchable(['first_name', 'last_name', 'customer_code', 'phone'])
                                                     ->required()
                                                     ->live()
                                                     ->afterStateUpdated(function ($state, callable $set, callable $get) {
@@ -57,7 +65,7 @@ class LoanForm
                                                 Select::make('loan_officer_id')
                                                     ->relationship('officer', 'id')
                                                     ->getOptionLabelFromRecordUsing(fn($record) => "{$record->name}")
-                                                    ->searchable()
+                                                    ->searchable(['name', 'phone'])
                                                     ->required(),
                                                 TextInput::make('loan_cycle')
                                                     ->numeric()
@@ -81,17 +89,20 @@ class LoanForm
                                     ->collapsible()
                                     ->collapsed()
                                     ->schema([
-                                        Grid::make(2)
+                                        Grid::make([
+                                            'default' => 1,
+                                            'md' => 2,
+                                        ])
                                             ->schema([
                                                 Select::make('co_borrower_id')
                                                     ->relationship('coBorrower', 'id')
-                                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
-                                                    ->searchable(),
+                                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name} ({$record->customer_code})")
+                                                    ->searchable(['first_name', 'last_name', 'customer_code', 'phone']),
                                                 TextInput::make('co_borrower_relationship'),
                                                 Select::make('guarantor_id')
                                                     ->relationship('guarantor', 'id')
-                                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
-                                                    ->searchable(),
+                                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name} ({$record->customer_code})")
+                                                    ->searchable(['first_name', 'last_name', 'customer_code', 'phone']),
                                                 TextInput::make('guarantor_relationship'),
                                             ]),
                                     ]),
@@ -102,22 +113,26 @@ class LoanForm
                                     ->collapsible()
                                     ->collapsed()
                                     ->schema([
-                                        Grid::make(3)
+                                        Grid::make([
+                                            'default' => 1,
+                                            'md' => 2,
+                                            'xl' => 3,
+                                        ])
                                             ->schema([
                                                 Select::make('refinanced_from_loan_id')
                                                     ->relationship('refinancedFrom', 'loan_code')
                                                     ->searchable(),
                                                 TextInput::make('refinance_fee')
                                                     ->numeric()
-                                                    ->prefix('$')
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
                                                     ->default(0),
                                                 TextInput::make('refinanced_amount')
                                                     ->numeric()
-                                                    ->prefix('$')
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
                                                     ->default(0),
                                             ]),
                                     ]),
-                            ])->columnSpan(['default' => 2, 'lg' => 1]),
+                            ])->columnSpan(1),
 
                         Group::make()
                             ->schema([
@@ -125,19 +140,21 @@ class LoanForm
                                     ->description('Amount, rates, and repayment schedule.')
                                     ->icon('heroicon-o-calculator')
                                     ->schema([
-                                        Grid::make(3)
+                                        Grid::make([
+                                            'default' => 1,
+                                            'md' => 2,
+                                            'xl' => 3,
+                                        ])
                                             ->schema([
                                                 TextInput::make('amount')
                                                     ->numeric()
-                                                    ->prefix('$')
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
                                                     ->required(),
                                                 Select::make('currency')
-                                                    ->options([
-                                                        'USD' => 'USD',
-                                                        'KHR' => 'KHR',
-                                                    ])
-                                                    ->default('USD')
+                                                    ->options(CurrencyHelper::options())
+                                                    ->default(CurrencyHelper::USD)
                                                     ->native(false)
+                                                    ->live()
                                                     ->required(),
                                                 TextInput::make('interest_rate')
                                                     ->label('Interest Rate (%)')
@@ -146,10 +163,14 @@ class LoanForm
                                                     ->required(),
                                                 TextInput::make('admin_fee')
                                                     ->numeric()
-                                                    ->prefix('$')
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
                                                     ->default(0),
                                             ]),
-                                        Grid::make(3)
+                                        Grid::make([
+                                            'default' => 1,
+                                            'md' => 2,
+                                            'xl' => 3,
+                                        ])
                                             ->schema([
                                                 TextInput::make('duration_months')
                                                     ->label('Duration (Months)')
@@ -177,7 +198,11 @@ class LoanForm
                                                     ->native(false)
                                                     ->required(),
                                             ]),
-                                        Grid::make(3)
+                                        Grid::make([
+                                            'default' => 1,
+                                            'md' => 2,
+                                            'xl' => 3,
+                                        ])
                                             ->schema([
                                                 DatePicker::make('start_date')
                                                     ->required()
@@ -186,7 +211,7 @@ class LoanForm
                                                     ->native(false),
                                                 TextInput::make('monthly_payment')
                                                     ->numeric()
-                                                    ->prefix('$'),
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency'))),
                                             ]),
                                     ]),
 
@@ -196,26 +221,31 @@ class LoanForm
                                     ->collapsible()
                                     ->collapsed()
                                     ->schema([
-                                        Grid::make(2)
+                                        Grid::make([
+                                            'default' => 1,
+                                            'md' => 2,
+                                        ])
                                             ->schema([
                                                 DatePicker::make('written_off_at')
                                                     ->native(false),
                                                 TextInput::make('write_off_reason'),
                                                 TextInput::make('write_off_balance')
                                                     ->numeric()
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
                                                     ->default(0),
                                                 TextInput::make('recovery_amount')
                                                     ->numeric()
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
                                                     ->default(0),
                                                 Select::make('disbursed_by_officer_id')
                                                     ->relationship('disburseOfficer', 'id')
                                                     ->getOptionLabelFromRecordUsing(fn($record) => "{$record->name}")
-                                                    ->searchable(),
+                                                    ->searchable(['name', 'phone']),
                                                 TextInput::make('classify_wo')
                                                     ->label('WO Classification'),
                                             ]),
                                     ]),
-                            ])->columnSpan(['default' => 2, 'lg' => 1]),
+                            ])->columnSpan(1),
                     ]),
             ]);
     }

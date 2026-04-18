@@ -21,7 +21,10 @@ class LoanOfficerForm
                     ->description('Manage loan officer identity, employee link, lending authority, and status from one place.')
                     ->icon('heroicon-o-user')
                     ->schema([
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 Select::make('employee_id')
                                     ->label('Link to Employee')
@@ -62,7 +65,10 @@ class LoanOfficerForm
                                     ->required()
                                     ->maxLength(255),
                             ]),
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 TextInput::make('phone')
                                     ->label('Phone')
@@ -78,7 +84,11 @@ class LoanOfficerForm
                                     ->native(false)
                                     ->required(),
                             ]),
-                        Grid::make(3)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ])
                             ->schema([
                                 Select::make('gender')
                                     ->label('Gender')

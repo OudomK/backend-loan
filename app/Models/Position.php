@@ -15,6 +15,7 @@ class Position extends Model
         'department',
         'type',
         'base_salary',
+        'currency',
         'description',
         'requirements',
         'status',

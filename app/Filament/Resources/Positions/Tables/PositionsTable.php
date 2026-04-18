@@ -2,9 +2,9 @@
 
 namespace App\Filament\Resources\Positions\Tables;
 
+use App\Support\CurrencyHelper;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -23,25 +23,40 @@ class PositionsTable
         return $table
             ->heading('Positions')
             ->description('Define and manage organization roles, departments, and base salary scales.')
+            ->persistFiltersInSession()
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->code) ? $record->code : null,
+                        filled($record->department) ? $record->department : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('code')
-                    ->searchable(),
+                    ->searchable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('department')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('base_salary')
-                    ->money('USD')
-                    ->sortable(),
+                    ->money(fn ($record): string => CurrencyHelper::normalize($record->currency ?? CurrencyHelper::USD))
+                    ->sortable()
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->type) ? $record->type : null,
+                        filled($record->reportingTo?->name) ? 'Reports to ' . $record->reportingTo->name : null,
+                    ])->filter()->implode(' • ')),
+                TextColumn::make('currency')
+                    ->formatStateUsing(fn ($state): string => CurrencyHelper::normalize($state))
+                    ->visibleFrom('2xl'),
                 TextColumn::make('reportingTo.name')
                     ->label('Reports To')
                     ->searchable()
                     ->sortable()
-                    ->toggleable(),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('status')
                     ->badge()
+                    ->sortable()
                     ->color(fn(string $state): string => match ($state) {
                         'active' => 'success',
                         'inactive' => 'warning',
@@ -55,9 +70,13 @@ class PositionsTable
                         'active' => 'Active',
                         'inactive' => 'Inactive',
                     ]),
+                SelectFilter::make('currency')
+                    ->options(CurrencyHelper::options()),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Manage position'),
                 RestoreAction::make(),
                 ForceDeleteAction::make(),
             ])

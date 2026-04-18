@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Positions\Schemas;
 
+use App\Support\CurrencyHelper;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
@@ -18,7 +19,10 @@ class PositionForm
                 Section::make('Position Details')
                     ->icon('heroicon-o-briefcase')
                     ->schema([
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 TextInput::make('name')
                                     ->required()
@@ -31,7 +35,11 @@ class PositionForm
                                         return 'POS-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
                                     }),
                             ]),
-                        Grid::make(3)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 4,
+                        ])
                             ->schema([
                                 TextInput::make('department')
                                     ->maxLength(100),
@@ -39,9 +47,18 @@ class PositionForm
                                     ->placeholder('e.g. Full-time'),
                                 TextInput::make('base_salary')
                                     ->numeric()
-                                    ->prefix('$'),
+                                    ->prefix(fn ($get): string => CurrencyHelper::symbol($get('currency'))),
+                                Select::make('currency')
+                                    ->options(CurrencyHelper::options())
+                                    ->default(CurrencyHelper::USD)
+                                    ->required()
+                                    ->native(false),
                             ]),
-                        Grid::make(3)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ])
                             ->schema([
                                 Select::make('reporting_to_id')
                                     ->label('Reporting To')

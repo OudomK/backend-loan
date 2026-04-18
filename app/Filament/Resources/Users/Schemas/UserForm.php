@@ -18,7 +18,10 @@ class UserForm
                     ->description('Account credentials and identity.')
                     ->icon('heroicon-o-user-circle')
                     ->schema([
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 TextInput::make('name')
                                     ->required()
@@ -33,7 +36,10 @@ class UserForm
                                     ->required()
                                     ->unique(ignoreRecord: true),
                             ]),
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 Select::make('roles')
                                     ->relationship('roles', 'name')

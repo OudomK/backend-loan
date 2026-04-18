@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateEmployeeRequest;
 use App\Http\Resources\EmployeeResource;
 use App\Models\Employee;
 use App\Services\EmployeeService;
+use App\Support\CurrencyHelper;
 use Illuminate\Http\Request;
 
 class EmployeeController extends Controller
@@ -27,7 +28,10 @@ class EmployeeController extends Controller
 
     public function store(StoreEmployeeRequest $request)
     {
-        $employee = Employee::create($request->validated());
+        $data = $request->validated();
+        $data['currency'] = CurrencyHelper::normalize($data['currency'] ?? CurrencyHelper::USD);
+
+        $employee = Employee::create($data);
 
         $this->employeeService->syncWithLoanOfficer($employee);
 
@@ -44,7 +48,12 @@ class EmployeeController extends Controller
 
     public function update(UpdateEmployeeRequest $request, Employee $employee)
     {
-        $employee->update($request->validated());
+        $data = $request->validated();
+        if (array_key_exists('currency', $data)) {
+            $data['currency'] = CurrencyHelper::normalize($data['currency']);
+        }
+
+        $employee->update($data);
 
         $this->employeeService->syncWithLoanOfficer($employee);
 

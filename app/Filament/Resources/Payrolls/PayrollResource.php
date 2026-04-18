@@ -44,7 +44,7 @@ class PayrollResource extends Resource
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ])
-            ->with(['employee']);
+            ->with(['employee.position']);
     }
 
     public static function getRelations(): array

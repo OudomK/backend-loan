@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Payrolls\Schemas;
 
+use App\Support\CurrencyHelper;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -18,7 +19,10 @@ class PayrollForm
                 Section::make('Payroll Entry')
                     ->icon('heroicon-o-banknotes')
                     ->schema([
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 Select::make('employee_id')
                                     ->relationship('employee', 'name')
@@ -29,6 +33,7 @@ class PayrollForm
                                         $employee = \App\Models\Employee::find($state);
                                         if ($employee) {
                                             $set('salary', $employee->salary);
+                                            $set('currency', CurrencyHelper::normalize($employee->currency ?? CurrencyHelper::USD));
                                             // Trigger total calculation
                                             $set('total_payable', $employee->salary);
                                         }
@@ -45,41 +50,16 @@ class PayrollForm
                                     ->validationAttribute('Payroll for this month')
                                     ->helperText('Only one payroll record per employee per month.'),
                             ]),
-                        Grid::make(4)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 3,
+                        ])
                             ->schema([
-                                TextInput::make('salary')
-                                    ->numeric()
-                                    ->prefix('$')
+                                Select::make('currency')
+                                    ->options(CurrencyHelper::options())
+                                    ->default(CurrencyHelper::USD)
                                     ->required()
-                                    ->live()
-                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
-                                TextInput::make('allowance')
-                                    ->numeric()
-                                    ->prefix('$')
-                                    ->default(0)
-                                    ->live()
-                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
-                                TextInput::make('bonus')
-                                    ->numeric()
-                                    ->prefix('$')
-                                    ->default(0)
-                                    ->live()
-                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
-                                TextInput::make('deduction')
-                                    ->numeric()
-                                    ->prefix('$')
-                                    ->default(0)
-                                    ->live()
-                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
-                            ]),
-                        Grid::make(2)
-                            ->schema([
-                                TextInput::make('total_payable')
-                                    ->numeric()
-                                    ->prefix('$')
-                                    ->readOnly()
-                                    ->placeholder('Auto-calculated')
-                                    ->extraInputAttributes(['class' => 'font-bold text-primary-600']),
+                                    ->native(false),
                                 Select::make('status')
                                     ->options([
                                         'pending' => 'Pending',
@@ -88,11 +68,6 @@ class PayrollForm
                                     ])
                                     ->default('pending')
                                     ->required(),
-                            ]),
-                        Grid::make(2)
-                            ->schema([
-                                DatePicker::make('payment_date')
-                                    ->native(false),
                                 Select::make('payment_method')
                                     ->options([
                                         'Cash' => 'Cash',
@@ -101,6 +76,51 @@ class PayrollForm
                                         'Other' => 'Other',
                                     ])
                                     ->searchable(),
+                            ]),
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 4,
+                        ])
+                            ->schema([
+                                TextInput::make('salary')
+                                    ->numeric()
+                                    ->prefix(fn ($get): string => CurrencyHelper::symbol($get('currency')))
+                                    ->required()
+                                    ->live()
+                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
+                                TextInput::make('allowance')
+                                    ->numeric()
+                                    ->prefix(fn ($get): string => CurrencyHelper::symbol($get('currency')))
+                                    ->default(0)
+                                    ->live()
+                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
+                                TextInput::make('bonus')
+                                    ->numeric()
+                                    ->prefix(fn ($get): string => CurrencyHelper::symbol($get('currency')))
+                                    ->default(0)
+                                    ->live()
+                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
+                                TextInput::make('deduction')
+                                    ->numeric()
+                                    ->prefix(fn ($get): string => CurrencyHelper::symbol($get('currency')))
+                                    ->default(0)
+                                    ->live()
+                                    ->afterStateUpdated(fn ($get, $set) => self::calculateTotal($get, $set)),
+                            ]),
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
+                            ->schema([
+                                TextInput::make('total_payable')
+                                    ->numeric()
+                                    ->prefix(fn ($get): string => CurrencyHelper::symbol($get('currency')))
+                                    ->readOnly()
+                                    ->placeholder('Auto-calculated')
+                                    ->extraInputAttributes(['class' => 'font-bold text-primary-600']),
+                                DatePicker::make('payment_date')
+                                    ->native(false),
                             ]),
                     ]),
             ]);

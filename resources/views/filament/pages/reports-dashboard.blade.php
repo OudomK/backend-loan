@@ -339,6 +339,29 @@
             }
         }
 
+        @media (max-width: 1180px) {
+            .rd-hero {
+                padding: 1.15rem;
+            }
+
+            .rd-title-wrap {
+                max-width: 100%;
+            }
+
+            .rd-stats {
+                width: 100%;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .rd-group-head {
+                padding: 0.85rem;
+            }
+
+            .rd-list {
+                padding: 0.85rem;
+            }
+        }
+
         @media (max-width: 900px) {
             .rd-stats {
                 grid-template-columns: repeat(2, minmax(0, 1fr));

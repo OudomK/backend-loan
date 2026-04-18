@@ -34,6 +34,7 @@ class StoreEmployeeRequest extends FormRequest
             'contract_end_date' => 'nullable|date',
             'working_days_per_week' => 'nullable|integer|min:1|max:7',
             'salary' => 'required|numeric|min:0',
+            'currency' => 'nullable|string|in:USD,KHR',
             'bank_name' => 'nullable|string|max:100',
             'bank_account_number' => 'nullable|string|max:50',
             'nssf_id' => 'nullable|string|max:50',

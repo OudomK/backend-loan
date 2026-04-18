@@ -4,7 +4,6 @@ namespace App\Filament\Resources\LoanOfficers\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -25,36 +24,40 @@ class LoanOfficersTable
             ->heading('Loan Officers')
             ->description('Create, update, deactivate, and review loan officers together with their employee link and lending authority.')
             ->defaultSort('created_at', 'desc')
+            ->persistFiltersInSession()
             ->columns([
                 TextColumn::make('name')
                     ->label('Name')
                     ->searchable()
                     ->sortable()
-                    ->toggleable(),
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->employee?->employee_code) ? $record->employee->employee_code : null,
+                        filled($record->phone) ? $record->phone : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('employee.name')
                     ->label('Linked Employee')
                     ->searchable()
-                    ->toggleable(),
+                    ->visibleFrom('xl'),
                 TextColumn::make('employee.employee_code')
                     ->label('Emp Code')
                     ->searchable()
-                    ->toggleable(),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('phone')
                     ->searchable()
-                    ->toggleable(),
+                    ->visibleFrom('xl'),
                 TextColumn::make('gender')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('start_date')
                     ->label('Start Date')
                     ->date('d/m/Y')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('max_loan_amount')
                     ->label('Max Loan Amount')
                     ->formatStateUsing(fn($state): string => $state !== null ? '$' . number_format((float) $state, 2) : '-')
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->visibleFrom('xl'),
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn(?string $state): string => ucfirst(strtolower((string) $state)))
@@ -63,11 +66,10 @@ class LoanOfficersTable
                         'inactive' => 'warning',
                         default => 'gray',
                     })
-                    ->toggleable(),
+                    ->sortable(),
                 TextColumn::make('active_loans_count')
                     ->label('Active Loans')
-                    ->sortable()
-                    ->toggleable(),
+                    ->sortable(),
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()
@@ -90,7 +92,9 @@ class LoanOfficersTable
                     }),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Manage loan officer'),
                 RestoreAction::make(),
                 ForceDeleteAction::make(),
             ])

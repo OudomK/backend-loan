@@ -2,10 +2,10 @@
 
 namespace App\Filament\Resources\CapitalShares\Tables;
 
+use App\Support\CurrencyHelper;
 use Carbon\Carbon;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -25,20 +25,23 @@ class CapitalSharesTable
             ->heading('Capital & Share')
             ->description('Monitor real capital investor accounts using the same structure as the frontend capital/share page.')
             ->defaultSort('borrowing_date', 'desc')
+            ->persistFiltersInSession()
             ->columns([
                 TextColumn::make('borrowing_date')
                     ->label('Date')
-                    ->getStateUsing(fn($record) => $record->borrowing_date ?? $record->created_at)
-                    ->formatStateUsing(fn($state) => $state ? Carbon::parse((string) $state)->format('d/m/Y') : '-')
-                    ->sortable(),
+                    ->getStateUsing(fn ($record) => $record->borrowing_date ?? $record->created_at)
+                    ->formatStateUsing(fn ($state) => $state ? Carbon::parse((string) $state)->format('d/m/Y') : '-')
+                    ->sortable()
+                    ->description(fn ($record): ?string => filled($record->account_no) ? $record->account_no : null),
                 TextColumn::make('account_no')
                     ->label('Account Code')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('investor.customer_code')
                     ->label('Investor Code')
                     ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('owner_name')
                     ->label('Name')
                     ->getStateUsing(fn($record) => $record->investor
@@ -46,35 +49,46 @@ class CapitalSharesTable
                         : '-')
                     ->searchable(['investor.first_name', 'investor.last_name'])
                     ->wrap()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->investor?->customer_code) ? $record->investor->customer_code : null,
+                        filled($record->currency) ? CurrencyHelper::normalize($record->currency) : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('category')
                     ->badge()
                     ->color('success')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('currency')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->formatStateUsing(fn ($state): string => CurrencyHelper::normalize($state))
+                    ->visibleFrom('2xl'),
                 TextColumn::make('share_qty')
                     ->label('Share Qty')
                     ->numeric()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('amount')
                     ->label('Invested Amount')
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
                     ->alignEnd()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->balance) ? 'Balance ' . CurrencyHelper::format($record->balance, $record->currency, true, 2) : null,
+                        filled($record->share_qty) ? 'Qty ' . number_format((float) $record->share_qty, 0) : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('balance')
                     ->label('Balance')
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
                     ->alignEnd()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('dividends')
                     ->label('Dividends (Acc)')
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('total_dividend_paid')
                     ->label('Total Div. Paid')
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('last_dividend_date')
@@ -98,13 +112,12 @@ class CapitalSharesTable
                         'Withdrawn' => 'Withdrawn',
                     ]),
                 SelectFilter::make('currency')
-                    ->options([
-                        'USD' => 'USD',
-                        'KHR' => 'KHR',
-                    ]),
+                    ->options(CurrencyHelper::options()),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Manage capital share'),
                 RestoreAction::make(),
                 ForceDeleteAction::make(),
             ])

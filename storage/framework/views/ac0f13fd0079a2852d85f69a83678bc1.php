@@ -37,6 +37,10 @@
             border-radius: 0.75rem;
             padding: 0.75rem;
             border: 1px solid #e5e7eb;
+            position: sticky;
+            top: 1rem;
+            max-height: calc(100vh - 8rem);
+            overflow-y: auto;
         }
         .dark .settings-sidebar {
             background: #1f2937;
@@ -94,6 +98,55 @@
             height: 1.125rem;
             flex-shrink: 0;
         }
+        .settings-actions {
+            margin-top: 1.25rem;
+            display: flex;
+            justify-content: flex-end;
+        }
+        @media (max-width: 1180px) {
+            .settings-layout {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            .settings-sidebar {
+                width: 100%;
+                position: static;
+                max-height: none;
+                overflow-x: auto;
+                overflow-y: hidden;
+                flex-direction: row;
+                gap: 0.5rem;
+                padding: 0.55rem;
+                scrollbar-width: none;
+            }
+            .settings-sidebar::-webkit-scrollbar {
+                display: none;
+            }
+            .settings-nav-btn {
+                width: auto;
+                min-width: max-content;
+                flex: 0 0 auto;
+                padding: 0.75rem 0.95rem;
+                white-space: nowrap;
+            }
+        }
+        @media (min-width: 768px) and (max-width: 1180px) {
+            .settings-sidebar {
+                border-radius: 1rem;
+                padding: 0.65rem;
+            }
+            .settings-nav-btn {
+                font-size: 0.92rem;
+            }
+        }
+        @media (max-width: 767px) {
+            .settings-actions {
+                justify-content: stretch;
+            }
+            .settings-actions .fi-btn {
+                width: 100%;
+            }
+        }
     </style>
 
     <div class="settings-layout">
@@ -142,7 +195,7 @@
                 <?php echo e($this->form); ?>
 
 
-                <div class="mt-4 flex justify-end">
+                <div class="settings-actions">
                     <?php if (isset($component)) { $__componentOriginal6330f08526bbb3ce2a0da37da512a11f = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal6330f08526bbb3ce2a0da37da512a11f = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'filament::components.button.index','data' => ['type' => 'submit']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

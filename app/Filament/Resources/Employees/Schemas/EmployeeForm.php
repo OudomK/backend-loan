@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Employees\Schemas;
 
+use App\Support\CurrencyHelper;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
@@ -19,7 +20,11 @@ class EmployeeForm
                 Section::make('Basic Information')
                     ->icon('heroicon-o-user')
                     ->schema([
-                        Grid::make(3)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ])
                             ->schema([
                                 TextInput::make('name')
                                     ->required()
@@ -37,11 +42,38 @@ class EmployeeForm
                                         return 'EMP-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
                                     }),
                             ]),
-                        Grid::make(3)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ])
                             ->schema([
                                 Select::make('gender')
+                                    ->native(false)
                                     ->options([
                                         'Male' => 'Male',
+                                        'Female' => 'Female',
+                                        'Other' => 'Other',
+                                    ]),
+                                DatePicker::make('dob')
+                                    ->label('Date of Birth')
+                                    ->native(false),
+                                Select::make('status')
+                                    ->native(false)
+                                    ->options([
+                                        'active' => 'Active',
+                                        'inactive' => 'Inactive',
+                                        'resigned' => 'Resigned',
+                                    ])
+                                    ->default('active')
+                                    ->required(),
+                                Select::make('marital_status')
+                                    ->label('Marital Status')
+                                    ->native(false)
+                                    ->options([
+                                        'Single' => 'Single',
+                                        'Married' => 'Married',
+                                        'Divorced' => 'Divorced',
                                         'Widowed' => 'Widowed',
                                     ]),
                                 TextInput::make('number_of_children')
@@ -55,20 +87,46 @@ class EmployeeForm
                 Section::make('Employment Details')
                     ->icon('heroicon-o-briefcase')
                     ->schema([
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 Select::make('position_id')
                                     ->relationship('position', 'name')
+                                    ->live()
+                                    ->afterStateUpdated(function ($state, callable $set): void {
+                                        if (blank($state)) {
+                                            return;
+                                        }
+
+                                        $position = \App\Models\Position::query()->find($state);
+                                        if (! $position) {
+                                            return;
+                                        }
+
+                                        $set('currency', CurrencyHelper::normalize($position->currency ?? CurrencyHelper::USD));
+                                        $set('salary', $position->base_salary);
+                                    })
                                     ->searchable()
                                     ->required(),
                                 TextInput::make('employment_type')
                                     ->placeholder('e.g. Full-time, Contract'),
                             ]),
-                        Grid::make(3)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ])
                             ->schema([
                                 TextInput::make('salary')
                                     ->numeric()
-                                    ->prefix('$'),
+                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency'))),
+                                Select::make('currency')
+                                    ->options(CurrencyHelper::options())
+                                    ->default(CurrencyHelper::USD)
+                                    ->required()
+                                    ->native(false),
                                 DatePicker::make('date_joined')
                                     ->native(false),
                                 DatePicker::make('contract_end_date')
@@ -84,14 +142,21 @@ class EmployeeForm
                 Section::make('Contact & Banking')
                     ->icon('heroicon-o-phone')
                     ->schema([
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 TextInput::make('phone')
-                                    ->tel(),
+                                    ->tel()
+                                    ->required(),
                                 TextInput::make('email')
                                     ->email(),
                             ]),
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 TextInput::make('bank_name'),
                                 TextInput::make('bank_account_number'),

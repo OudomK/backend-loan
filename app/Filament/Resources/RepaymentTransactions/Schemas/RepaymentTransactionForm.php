@@ -4,6 +4,7 @@ namespace App\Filament\Resources\RepaymentTransactions\Schemas;
 
 use App\Models\Loan;
 use App\Models\Payment;
+use App\Support\CurrencyHelper;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -27,7 +28,10 @@ class RepaymentTransactionForm
                                     ->description('Link the repayment to a loan and collector.')
                                     ->icon('heroicon-o-link')
                                     ->schema([
-                                        Grid::make(1)
+                                        Grid::make([
+                                            'default' => 1,
+                                            'md' => 2,
+                                        ])
                                             ->schema([
                                                 Select::make('loan_id')
                                                     ->label('Loan')
@@ -50,7 +54,11 @@ class RepaymentTransactionForm
                                 Section::make('Metadata')
                                     ->icon('heroicon-o-information-circle')
                                     ->schema([
-                                        Grid::make(1)
+                                        Grid::make([
+                                            'default' => 1,
+                                            'md' => 2,
+                                            '2xl' => 3,
+                                        ])
                                             ->schema([
                                                 Select::make('payment_method')
                                                     ->options([
@@ -97,14 +105,14 @@ class RepaymentTransactionForm
                                                 TextInput::make('amount_paid')
                                                     ->label('Total Amount Paid')
                                                     ->numeric()
-                                                    ->prefix('$')
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
                                                     ->required()
                                                     ->placeholder('0.00')
                                                     ->helperText('Total should match principal + interest + penalty + fee.')
                                                     ->columnSpan(12),
                                                 TextInput::make('principal_paid')
                                                     ->numeric()
-                                                    ->prefix('$')
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
                                                     ->required()
                                                     ->placeholder('0.00')
                                                     ->live()
@@ -112,7 +120,7 @@ class RepaymentTransactionForm
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                                 TextInput::make('interest_paid')
                                                     ->numeric()
-                                                    ->prefix('$')
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
                                                     ->required()
                                                     ->placeholder('0.00')
                                                     ->live()
@@ -120,7 +128,7 @@ class RepaymentTransactionForm
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                                 TextInput::make('penalty_paid')
                                                     ->numeric()
-                                                    ->prefix('$')
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
                                                     ->default(0)
                                                     ->required()
                                                     ->placeholder('0.00')
@@ -130,7 +138,7 @@ class RepaymentTransactionForm
                                                 TextInput::make('fee_paid')
                                                     ->label('Fee paid')
                                                     ->numeric()
-                                                    ->prefix('$')
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
                                                     ->default(0)
                                                     ->placeholder('0.00')
                                                     ->live()
@@ -142,6 +150,15 @@ class RepaymentTransactionForm
                             ->columnSpan(['default' => 12, 'xl' => 7]),
                     ]),
             ]);
+    }
+
+    protected static function loanCurrency(mixed $loanId): string
+    {
+        if (blank($loanId)) {
+            return CurrencyHelper::USD;
+        }
+
+        return CurrencyHelper::normalize(Loan::query()->whereKey($loanId)->value('currency'));
     }
 
     protected static function fillDueAmounts(mixed $loanId, callable $set): void

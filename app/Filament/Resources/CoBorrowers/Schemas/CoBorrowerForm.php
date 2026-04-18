@@ -21,7 +21,10 @@ class CoBorrowerForm
                     ->description('Manage the co-borrower identity, status, and contact information from one place.')
                     ->icon('heroicon-o-user')
                     ->schema([
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 TextInput::make('customer_code')
                                     ->label('Customer Code')
@@ -41,7 +44,11 @@ class CoBorrowerForm
                                     ->required()
                                     ->default('Active'),
                             ]),
-                        Grid::make(4)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 4,
+                        ])
                             ->schema([
                                 TextInput::make('last_name')
                                     ->label('Last Name')
@@ -68,7 +75,11 @@ class CoBorrowerForm
                                         'Widowed' => 'Widowed',
                                     ]),
                             ]),
-                        Grid::make(3)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ])
                             ->schema([
                                 TextInput::make('dob')
                                     ->label('DOB')
@@ -87,7 +98,11 @@ class CoBorrowerForm
                                     ->tel()
                                     ->maxLength(30),
                             ]),
-                        Grid::make(3)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                            'xl' => 3,
+                        ])
                             ->schema([
                                 Select::make('id_type')
                                     ->label('ID Type')
@@ -111,7 +126,10 @@ class CoBorrowerForm
                                     ->rule('date_format:d/m/Y')
                                     ->formatStateUsing(fn ($state) => $state ? Carbon::parse($state)->format('d/m/Y') : null),
                             ]),
-                        Grid::make(1)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 TextInput::make('occupation')
                                     ->label('Occupation')
@@ -129,7 +147,10 @@ class CoBorrowerForm
                 Section::make('Address')
                     ->icon('heroicon-o-map-pin')
                     ->schema([
-                        Grid::make(1)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 TextInput::make('village'),
                                 TextInput::make('commune'),

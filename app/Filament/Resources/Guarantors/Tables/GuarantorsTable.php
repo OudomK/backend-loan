@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Guarantors\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -25,6 +24,7 @@ class GuarantorsTable
             ->heading('Guarantors')
             ->description('Create, update, deactivate, blacklist, and review guarantor records with full profile control.')
             ->defaultSort('created_at', 'desc')
+            ->persistFiltersInSession()
             ->columns([
                 ImageColumn::make('photo')
                     ->circular()
@@ -38,25 +38,29 @@ class GuarantorsTable
                     ->toggleable(),
                 TextColumn::make('full_name')
                     ->label('Name')
-                    ->getStateUsing(fn($record) => "{$record->last_name} {$record->first_name}")
+                    ->getStateUsing(fn ($record) => "{$record->last_name} {$record->first_name}")
                     ->searchable(['first_name', 'last_name'])
                     ->sortable()
-                    ->toggleable(),
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->customer_code) ? $record->customer_code : null,
+                        filled($record->phone) ? $record->phone : null,
+                        filled($record->id_number) ? 'ID ' . $record->id_number : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('customer_code')
                     ->label('Code')
                     ->searchable()
                     ->sortable()
-                    ->toggleable(),
+                    ->visibleFrom('xl'),
                 TextColumn::make('phone')
                     ->searchable()
-                    ->toggleable(),
+                    ->visibleFrom('xl'),
                 TextColumn::make('id_number')
                     ->label('ID Number')
                     ->searchable()
-                    ->toggleable(),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('gender')
                     ->badge()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('marital_status')
                     ->label('Marital')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -65,9 +69,10 @@ class GuarantorsTable
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('province')
                     ->sortable()
-                    ->toggleable(),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('status')
                     ->badge()
+                    ->sortable()
                     ->color(fn(string $state): string => match ($state) {
                         'Active' => 'success',
                         'Inactive' => 'warning',
@@ -93,7 +98,9 @@ class GuarantorsTable
                     ]),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Manage guarantor'),
                 RestoreAction::make(),
                 ForceDeleteAction::make(),
             ])

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MiscellaneousTransactions\Schemas;
 
+use App\Support\CurrencyHelper;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -20,7 +21,10 @@ class MiscellaneousTransactionForm
                     ->description('Use the same core fields as the frontend miscellaneous transaction dialog.')
                     ->icon('heroicon-o-credit-card')
                     ->schema([
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 Select::make('type')
                                     ->label('Type')
@@ -42,24 +46,28 @@ class MiscellaneousTransactionForm
                                     ->maxLength(100)
                                     ->placeholder('e.g. Rent, Utilities, Fees'),
                             ]),
-                        Grid::make(2)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 TextInput::make('amount')
                                     ->label('Amount')
                                     ->numeric()
                                     ->required()
-                                    ->prefix('$'),
+                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency'))),
                                 Select::make('currency')
                                     ->label('Currency')
                                     ->native(false)
-                                    ->options([
-                                        'USD' => 'USD',
-                                        'KHR' => 'KHR',
-                                    ])
-                                    ->default('USD')
+                                    ->options(CurrencyHelper::options())
+                                    ->default(CurrencyHelper::USD)
+                                    ->live()
                                     ->required(),
                             ]),
-                        Grid::make(1)
+                        Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])
                             ->schema([
                                 DatePicker::make('transaction_date')
                                     ->label('Transaction Date')

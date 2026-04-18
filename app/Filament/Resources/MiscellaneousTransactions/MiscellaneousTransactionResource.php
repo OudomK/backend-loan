@@ -8,6 +8,7 @@ use App\Filament\Resources\MiscellaneousTransactions\Pages\ListMiscellaneousTran
 use App\Filament\Resources\MiscellaneousTransactions\Schemas\MiscellaneousTransactionForm;
 use App\Filament\Resources\MiscellaneousTransactions\Tables\MiscellaneousTransactionsTable;
 use App\Models\MiscellaneousTransaction;
+use App\Support\CurrencyHelper;
 use BackedEnum;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
@@ -99,12 +100,13 @@ class MiscellaneousTransactionResource extends Resource
             ]);
         }
 
-        $currency = strtoupper(trim((string) ($data['currency'] ?? 'USD')));
-        if (!in_array($currency, ['USD', 'KHR'], true)) {
+        $rawCurrency = $data['currency'] ?? CurrencyHelper::USD;
+        if (! CurrencyHelper::isSupported($rawCurrency)) {
             throw ValidationException::withMessages([
                 'currency' => 'Currency must be USD or KHR.',
             ]);
         }
+        $currency = CurrencyHelper::normalize($rawCurrency);
 
         return array_merge($data, [
             'type' => $type,

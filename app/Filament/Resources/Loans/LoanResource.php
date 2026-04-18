@@ -48,7 +48,7 @@ class LoanResource extends Resource
             ->withoutGlobalScopes([
                 \Illuminate\Database\Eloquent\SoftDeletingScope::class,
             ])
-            ->with(['borrower']);
+            ->with(['borrower', 'officer']);
     }
 
     public static function getRelations(): array

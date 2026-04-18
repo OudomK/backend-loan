@@ -4,7 +4,6 @@ namespace App\Filament\Resources\Users\Tables;
 
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -23,27 +22,35 @@ class UsersTable
         return $table
             ->heading('Users')
             ->description('Manage system users, their access credentials, and assigned roles.')
+            ->persistFiltersInSession()
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->username) ? $record->username : null,
+                        filled($record->email) ? $record->email : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('email')
                     ->label('Email Address')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('username')
                     ->label('Username')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('roles.name')
                     ->label('Roles')
                     ->badge()
                     ->color('info')
-                    ->searchable(),
+                    ->searchable()
+                    ->description(fn ($record): ?string => filled($record->created_at) ? $record->created_at->format('d M Y') : null),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->visibleFrom('2xl'),
             ])
             ->filters([
                 TrashedFilter::make(),
@@ -51,7 +58,9 @@ class UsersTable
                     ->relationship('roles', 'name'),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Manage user'),
                 RestoreAction::make(),
                 ForceDeleteAction::make(),
             ])

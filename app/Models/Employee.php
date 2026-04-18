@@ -27,6 +27,7 @@ class Employee extends Model
         'contract_end_date',
         'working_days_per_week',
         'salary',
+        'currency',
         'bank_name',
         'bank_account_number',
         'nssf_id', // National Social Security Fund ID

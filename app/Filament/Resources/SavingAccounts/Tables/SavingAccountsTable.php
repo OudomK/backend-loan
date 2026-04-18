@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\SavingAccounts\Tables;
 
+use App\Support\CurrencyHelper;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -18,23 +19,30 @@ class SavingAccountsTable
             ->heading('Borrowings')
             ->description('Monitor borrowing records with the same structure used in the frontend borrowing page.')
             ->defaultSort('borrowing_date', 'desc')
+            ->persistFiltersInSession()
             ->columns([
                 TextColumn::make('borrowing_date')
                     ->label('Date')
                     ->date('d/m/Y')
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => filled($record->account_no) ? $record->account_no : null),
                 TextColumn::make('account_no')
                     ->label('Account Code')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('lender.lender_code')
                     ->label('Lender Code')
                     ->searchable()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->visibleFrom('2xl'),
                 TextColumn::make('lender.name')
                     ->label('Lender')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->lender?->lender_code) ? $record->lender->lender_code : null,
+                        filled($record->payment_method) ? $record->payment_method : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('lender.lender_type')
                     ->label('Lender Type')
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -54,24 +62,33 @@ class SavingAccountsTable
                     ->date('d/m/Y')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('currency')
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->formatStateUsing(fn ($state): string => CurrencyHelper::normalize($state))
+                    ->visibleFrom('2xl'),
                 TextColumn::make('term_months')
                     ->label('Term')
                     ->numeric()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('xl'),
                 TextColumn::make('amount')
                     ->label('Loan Amount')
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
                     ->alignEnd()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn ($record): ?string => collect([
+                        filled($record->interest_rate) ? 'Rate ' . number_format((float) $record->interest_rate, 2) . '%' : null,
+                        filled($record->balance)
+                            ? 'Balance ' . CurrencyHelper::format(max(round((float) $record->amount - (float) ($record->principal_paid_total ?? 0), 2), 0), $record->currency, true, 2)
+                            : null,
+                    ])->filter()->implode(' • ')),
                 TextColumn::make('interest_rate')
                     ->label('Interest Rate')
                     ->formatStateUsing(fn($state) => number_format((float) $state, 2))
                     ->suffix('%')
                     ->alignEnd()
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('2xl'),
                 TextColumn::make('fee')
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('maturity_date')
@@ -84,10 +101,12 @@ class SavingAccountsTable
                 TextColumn::make('balance')
                     ->label('Balance')
                     ->state(fn($record) => max(round((float) $record->amount - (float) ($record->principal_paid_total ?? 0), 2), 0))
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
-                    ->alignEnd(),
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
+                    ->alignEnd()
+                    ->visibleFrom('xl'),
                 TextColumn::make('status')
                     ->badge()
+                    ->sortable()
                     ->color(fn(string $state): string => match ($state) {
                         'active' => 'success',
                         'completed' => 'gray',
@@ -95,12 +114,12 @@ class SavingAccountsTable
                     }),
                 TextColumn::make('late_principal')
                     ->label('Late Principal')
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('loan_interest')
                     ->label('Late Interest')
-                    ->formatStateUsing(fn($state) => number_format((float) $state, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
                     ->alignEnd()
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('transaction_no')
@@ -123,10 +142,7 @@ class SavingAccountsTable
                         'completed' => 'Completed',
                     ]),
                 SelectFilter::make('currency')
-                    ->options([
-                        'USD' => 'USD',
-                        'KHR' => 'KHR',
-                    ]),
+                    ->options(CurrencyHelper::options()),
                 SelectFilter::make('payment_method')
                     ->options([
                         'Balloon' => 'Balloon',
@@ -135,7 +151,9 @@ class SavingAccountsTable
                     ]),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Manage borrowing'),
                 RestoreAction::make(),
                 ForceDeleteAction::make(),
             ])
