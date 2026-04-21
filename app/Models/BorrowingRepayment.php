@@ -22,16 +22,28 @@ class BorrowingRepayment extends Model
 
     protected $fillable = [
         'borrowing_id',
+        'schedule_id',
+        'receipt_no',
         'payment_date',
         'principal_paid',
         'interest_paid',
+        'penalty_paid',
         'total_paid',
+        'balance_after_payment',
+        'received_by',
         'payment_method',
+        'reference_no',
+        'payment_status',
         'remarks'
     ];
 
     public function borrowing(): BelongsTo
     {
         return $this->belongsTo(Borrowing::class);
+    }
+
+    public function receivedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'received_by');
     }
 }

@@ -52,11 +52,24 @@ class StatsOverview extends BaseWidget
 
         // ── Core KPIs (Row 1) ────────────────────────────────────────────
 
-        $pendingApprovals = Cache::remember('filament.stats.pending_loans', $ttl, fn () => Loan::where('status', 'pending')->count());
+        $pendingLoansData = Cache::remember('filament.stats.pending_loans_data', $ttl, function() {
+            return [
+                'count' => Loan::where('status', 'pending')->count(),
+                'usd' => Loan::where('status', 'pending')->where('currency', 'LIKE', 'USD%')->sum('amount'),
+                'khr' => Loan::where('status', 'pending')->where('currency', 'LIKE', 'KHR%')->sum('amount'),
+            ];
+        });
 
         $activeBorrowers = Cache::remember('filament.stats.active_borrowers', $ttl, fn () => Borrower::whereHas('loans', fn ($q) => $q->where('status', 'active'))->count());
 
-        $writtenOffLoans = Cache::remember('filament.stats.written_off_loans', $ttl, fn () => Loan::whereNotNull('written_off_at')->count());
+        $writtenOffData = Cache::remember('filament.stats.written_off_data', $ttl, function() {
+            return [
+                'count' => Loan::whereNotNull('written_off_at')->count(),
+                'usd' => Loan::whereNotNull('written_off_at')->where('currency', 'LIKE', 'USD%')->sum('amount'),
+                'khr' => Loan::whereNotNull('written_off_at')->where('currency', 'LIKE', 'KHR%')->sum('amount'),
+            ];
+        });
+
         $totalInvestors = Cache::remember('filament.stats.total_investors', $ttl, fn () => Investor::count());
 
         // Dynamic Portfolio and PAR calculations
@@ -175,63 +188,101 @@ class StatsOverview extends BaseWidget
             return ['usd' => $usd, 'khr' => $khr];
         });
 
+        // ── Trends ───────────────────────────────────────────────────────
+        
+        $pendingTrend = Cache::remember('filament.stats.trend.pending_count', $ttl, fn() => $this->buildMonthlyCountSeries(Loan::where('status', 'pending'), 'created_at'));
+        
+        $portfolioTrend = Cache::remember('filament.stats.trend.portfolio_balance', $ttl, fn() => $this->buildMonthlySeries(
+            Loan::query()->where('status', 'active'),
+            'start_date',
+            'amount',
+            false
+        ));
+
+        $borrowersTrend = Cache::remember('filament.stats.trend.borrowers_count', $ttl, fn() => $this->buildMonthlyCountSeries(Borrower::query(), 'created_at'));
+        
+        $borrowingTrend = Cache::remember('filament.stats.trend.borrowing_sum', $ttl, fn() => $this->buildMonthlySeries(
+            Borrowing::query()->where('status', 'active'),
+            'created_at',
+            'amount',
+            false
+        ));
+
+        $overdueTrend = Cache::remember('filament.stats.trend.overdue_count', $ttl, fn() => $this->buildMonthlyCountSeries(Loan::where('status', 'active')->where('aging', '>', 0), 'updated_at'));
+        
+        $writtenOffTrend = Cache::remember('filament.stats.trend.written_off_sum', $ttl, fn() => $this->buildMonthlySeries(
+            Loan::query()->whereNotNull('written_off_at'),
+            'written_off_at',
+            'amount',
+            false
+        ));
+
+        $investorsTrend = Cache::remember('filament.stats.trend.investors_count', $ttl, fn() => $this->buildMonthlyCountSeries(Investor::query(), 'created_at'));
+        
+        $capitalTrend = Cache::remember('filament.stats.trend.capital_sum', $ttl, fn() => $this->buildMonthlySeries(
+            CapitalShare::query()->where('status', 'active'),
+            'created_at',
+            'total_capital',
+            false
+        ));
+
         return [
             // ── Row 1: Core KPIs ─────────────────────────────────────────
-            Stat::make('Pending Approvals', $pendingApprovals)
-                ->description('Loan applications waiting for review')
+            Stat::make('Pending Approvals', new \Illuminate\Support\HtmlString($pendingLoansData['count'] . ' <span class="text-sm font-normal text-gray-500">| $' . number_format($pendingLoansData['usd'], 0) . '</span>'))
+                ->description('Applications waiting for review')
                 ->descriptionIcon('heroicon-m-clock')
                 ->icon('heroicon-m-document-text')
-                ->chart([2, 5, 1, 6, 2, 3, 5])
+                ->chart($pendingTrend)
                 ->color('warning'),
 
-            Stat::make('Portfolio Balance', new \Illuminate\Support\HtmlString('$' . number_format($outstandingUSD, 2) . ' <span class="text-sm">| ៛' . number_format($outstandingKHR, 0) . '</span>'))
+            Stat::make('Portfolio Balance', new \Illuminate\Support\HtmlString('$' . number_format($outstandingUSD, 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($outstandingKHR, 0) . '</span>'))
                 ->description('Active outstanding principal')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->icon('heroicon-m-wallet')
-                ->chart([1200, 1500, 1400, 1800, 1600, 2000, 1950])
+                ->chart($portfolioTrend)
                 ->color('info'),
 
             Stat::make('Active Borrowers', $activeBorrowers)
                 ->description('Clients with active loans')
                 ->descriptionIcon('heroicon-m-user-group')
                 ->icon('heroicon-m-users')
-                ->chart([5, 8, 8, 12, 10, 15, 14])
+                ->chart($borrowersTrend)
                 ->color('success'),
 
-            Stat::make('MTD Disbursements', new \Illuminate\Support\HtmlString('$' . number_format($disbursements['usd'], 2) . ' <span class="text-sm">| ៛' . number_format($disbursements['khr'], 0) . '</span>'))
+            Stat::make('MTD Disbursements', new \Illuminate\Support\HtmlString('$' . number_format($disbursements['usd'], 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($disbursements['khr'], 0) . '</span>'))
                 ->description('Disbursed this month')
                 ->descriptionIcon('heroicon-m-arrow-up-right')
                 ->icon('heroicon-m-arrow-trending-up')
                 ->chart($disbursementTrend)
                 ->color('success'),
 
-            Stat::make('MTD Collections', new \Illuminate\Support\HtmlString('$' . number_format($collections['usd'], 2) . ' <span class="text-sm">| ៛' . number_format($collections['khr'], 0) . '</span>'))
+            Stat::make('MTD Collections', new \Illuminate\Support\HtmlString('$' . number_format($collections['usd'], 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($collections['khr'], 0) . '</span>'))
                 ->description('Repayments this month')
                 ->descriptionIcon('heroicon-m-check-badge')
                 ->icon('heroicon-m-arrow-down-left')
                 ->chart($collectionTrend)
                 ->color('info'),
 
-            Stat::make('Total Borrowing', new \Illuminate\Support\HtmlString('$' . number_format($borrowing['usd'], 2) . ' <span class="text-sm">| ៛' . number_format($borrowing['khr'], 0) . '</span>'))
+            Stat::make('Total Borrowing', new \Illuminate\Support\HtmlString('$' . number_format($borrowing['usd'], 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($borrowing['khr'], 0) . '</span>'))
                 ->description('Active external funding')
                 ->descriptionIcon('heroicon-m-building-library')
                 ->icon('heroicon-m-building-library')
-                ->chart([1000, 1000, 2000, 2000, 1500, 1500])
-                ->color('primary'),
+                ->chart($borrowingTrend)
+                ->color('gray'),
 
             // ── Row 2: Risk & Fund Metrics ───────────────────────────────
             Stat::make('Portfolio At Risk (PAR%)', $parPercentage . '%')
-                ->description(new \Illuminate\Support\HtmlString('$' . number_format($parAmountUSD, 2) . ' &bull; ៛' . number_format($parAmountKHR, 0) . ' at risk'))
+                ->description(new \Illuminate\Support\HtmlString('$' . number_format($parAmountUSD, 0) . ' &bull; ៛' . number_format($parAmountKHR, 0) . ' at risk'))
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->icon('heroicon-m-shield-exclamation')
                 ->chart([3, 5, 4, 6, 5, 7, $parPercentage])
                 ->color($parPercentage > 5 ? 'danger' : ($parPercentage > 2 ? 'warning' : 'success')),
 
-            Stat::make('Overdue Loans', $overdueLoans)
+            Stat::make('Overdue Loans', new \Illuminate\Support\HtmlString($overdueLoans . ' <span class="text-sm font-normal text-gray-500">| $' . number_format($parAmountUSD, 0) . '</span>'))
                 ->description('Loans past due date')
                 ->descriptionIcon('heroicon-m-bell-alert')
                 ->icon('heroicon-m-bell-alert')
-                ->chart([2, 3, 1, 4, 2, 3, $overdueLoans])
+                ->chart($overdueTrend)
                 ->color($overdueLoans > 0 ? 'danger' : 'success'),
 
             Stat::make('Collection Rate', $collectionRate . '%')
@@ -241,22 +292,25 @@ class StatsOverview extends BaseWidget
                 ->chart([85, 90, 88, 92, 87, 91, $collectionRate])
                 ->color($collectionRate >= 90 ? 'success' : ($collectionRate >= 70 ? 'warning' : 'danger')),
 
-            Stat::make('Written-Off', $writtenOffLoans)
+            Stat::make('Written-Off', new \Illuminate\Support\HtmlString($writtenOffData['count'] . ' <span class="text-sm font-normal text-gray-500">| $' . number_format($writtenOffData['usd'], 0) . '</span>'))
                 ->description('Total loans written off')
                 ->descriptionIcon('heroicon-m-x-circle')
-                ->icon('heroicon-m-x-circle')
-                ->color('gray'),
+                ->icon('heroicon-m-trash')
+                ->chart($writtenOffTrend)
+                ->color('danger'),
 
             Stat::make('Investors', $totalInvestors)
                 ->description('Registered investors')
                 ->descriptionIcon('heroicon-m-user-plus')
-                ->icon('heroicon-m-user-plus')
+                ->icon('heroicon-m-briefcase')
+                ->chart($investorsTrend)
                 ->color('primary'),
 
-            Stat::make('Capital Shares', new \Illuminate\Support\HtmlString('$' . number_format($capital['usd'], 2) . ' <span class="text-sm">| ៛' . number_format($capital['khr'], 0) . '</span>'))
+            Stat::make('Capital Shares', new \Illuminate\Support\HtmlString('$' . number_format($capital['usd'], 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($capital['khr'], 0) . '</span>'))
                 ->description('Active share capital')
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->icon('heroicon-m-banknotes')
+                ->chart($capitalTrend)
                 ->color('info'),
         ];
     }
@@ -296,4 +350,25 @@ class StatsOverview extends BaseWidget
 
         return collect($monthlyData)->values()->map(fn($v) => round($v, 2))->all();
     }
+
+    private function buildMonthlyCountSeries(Builder $query, string $dateColumn, int $months = 6): array
+    {
+        $from = now()->copy()->subMonths($months - 1)->startOfMonth();
+        $records = (clone $query)->where($dateColumn, '>=', $from)->get();
+
+        $monthlyData = [];
+        foreach (range($months - 1, 0) as $offset) {
+            $monthlyData[now()->subMonths($offset)->format('Y-m')] = 0;
+        }
+
+        foreach ($records as $record) {
+            $month = Carbon::parse($record->{$dateColumn})->format('Y-m');
+            if (isset($monthlyData[$month])) {
+                $monthlyData[$month]++;
+            }
+        }
+
+        return collect($monthlyData)->values()->all();
+    }
 }
+

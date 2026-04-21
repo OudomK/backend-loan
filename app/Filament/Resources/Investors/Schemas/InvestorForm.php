@@ -55,12 +55,12 @@ class InvestorForm
 
                                         Grid::make(2)
                                             ->schema([
-                                                TextInput::make('last_name')
-                                                    ->label('Last Name')
-                                                    ->required()
-                                                    ->maxLength(255),
                                                 TextInput::make('first_name')
                                                     ->label('First Name')
+                                                    ->required()
+                                                    ->maxLength(255),
+                                                TextInput::make('last_name')
+                                                    ->label('Last Name')
                                                     ->required()
                                                     ->maxLength(255),
                                             ]),
@@ -92,10 +92,23 @@ class InvestorForm
                                                     ->placeholder('DD/MM/YYYY')
                                                     ->mask('99/99/9999')
                                                     ->rule('date_format:d/m/Y')
-                                                    ->formatStateUsing(fn ($state) => self::formatDateForDisplay($state)),
+                                                    ->formatStateUsing(fn ($state) => self::formatDateForDisplay($state))
+                                                    ->live(onBlur: true)
+                                                    ->afterStateUpdated(function ($state, callable $set) {
+                                                        if (blank($state) || strlen($state) < 10) {
+                                                            return;
+                                                        }
+
+                                                        try {
+                                                            $date = Carbon::createFromFormat('d/m/Y', $state);
+                                                            $set('age', $date->age);
+                                                        } catch (\Exception $e) {
+                                                        }
+                                                    }),
                                                 TextInput::make('age')
                                                     ->label('Age')
-                                                    ->numeric(),
+                                                    ->numeric()
+                                                    ->readOnly(),
                                                 TextInput::make('phone')
                                                     ->label('Phone')
                                                     ->tel()

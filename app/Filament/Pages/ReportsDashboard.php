@@ -16,14 +16,15 @@ class ReportsDashboard extends Page
 
     public function getReportGroups(): array
     {
-        $appUrl = rtrim((string) config('app.url'), '/');
-        $baseUrl = $appUrl . '/api/reports';
-        $exportUrl = $appUrl . '/api/export';
+        // Use request-aware URLs so links keep the current host (e.g. 127.0.0.1 vs localhost)
+        // and preserve session auth for Sanctum-protected report endpoints.
+        $baseUrl = url('/api/reports');
+        $exportUrl = url('/api/export');
 
         return [
             'operational' => [
                 'label' => 'Operational',
-                'description' => 'Daily loan management and portfolio tracking.',
+                'description' => 'Management and portfolio tracking.',
                 'icon' => 'heroicon-o-briefcase',
                 'color' => 'primary',
                 'reports' => [
@@ -60,6 +61,14 @@ class ReportsDashboard extends Page
                         'color' => 'warning',
                     ],
                     [
+                        'name' => 'Repayment Schedule',
+                        'description' => 'Upcoming loan installments.',
+                        'url' => $baseUrl . '/repayment-schedule',
+                        'type' => 'API',
+                        'icon' => 'heroicon-o-calendar-days',
+                        'color' => 'success',
+                    ],
+                    [
                         'name' => 'Repayment Collection',
                         'description' => 'All collected repayments.',
                         'url' => $baseUrl . '/repayment',
@@ -94,7 +103,7 @@ class ReportsDashboard extends Page
                     [
                         'name' => 'Income Statement',
                         'description' => 'Profit & Loss (P&L).',
-                        'url' => $appUrl . '/api/reports/income-statement',
+                        'url' => url('/api/reports/income-statement'),
                         'type' => 'PDF',
                         'icon' => 'heroicon-o-document-chart-bar',
                         'color' => 'primary',
@@ -102,7 +111,7 @@ class ReportsDashboard extends Page
                     [
                         'name' => 'Dividend History',
                         'description' => 'Payouts and declarations.',
-                        'url' => $appUrl . '/api/dividends-report',
+                        'url' => url('/api/dividends-report'),
                         'type' => 'API',
                         'icon' => 'heroicon-o-chart-pie',
                         'color' => 'indigo',
@@ -142,7 +151,7 @@ class ReportsDashboard extends Page
                     [
                         'name' => 'Audit Logs',
                         'description' => 'System activity and audit trails.',
-                        'url' => $appUrl . '/admin/activity-logs',
+                        'url' => url('/admin/activity-logs'),
                         'type' => 'API',
                         'icon' => 'heroicon-o-clipboard-document-check',
                         'color' => 'indigo',
@@ -170,4 +179,3 @@ class ReportsDashboard extends Page
         ];
     }
 }
-

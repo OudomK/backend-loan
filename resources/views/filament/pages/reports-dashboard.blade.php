@@ -446,7 +446,7 @@
                                     default => '',
                                 };
                             @endphp
-                            <a href="{{ $report['url'] }}" target="_blank" rel="noopener noreferrer" class="rd-item">
+                            <a href="{{ $report['url'] }}" target="_blank" rel="noopener" class="rd-item">
                                 <div class="rd-item-row">
                                     <div class="rd-item-left">
                                         <span class="rd-item-icon {{ $toneClass }}">

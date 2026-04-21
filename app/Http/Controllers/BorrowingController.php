@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Borrowing;
 use App\Models\BorrowingRepayment;
 use App\Models\Lender;
+use App\Models\Investor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -111,7 +112,8 @@ class BorrowingController extends Controller
         $borrowing = Borrowing::with('repayments')->findOrFail($id);
 
         $validated = $request->validate([
-            'lender_id' => 'required|exists:lenders,id',
+            'lender_id' => 'required_without:investor_id|nullable|exists:lenders,id',
+            'investor_id' => 'nullable|exists:investors,id',
             'transaction_no' => 'nullable|string',
             'loan_account' => 'nullable|string',
             'category' => 'required|in:Real Capital,Loan Capital',
@@ -131,6 +133,10 @@ class BorrowingController extends Controller
             'late_principal' => 'nullable|numeric|min:0',
             'loan_interest' => 'nullable|numeric|min:0',
         ]);
+
+        if (empty($validated['lender_id']) && !empty($validated['investor_id'])) {
+            $validated['lender_id'] = $this->getOrCreateLenderFromInvestor($validated['investor_id']);
+        }
 
         $totalPrincipalPaid = (float) $borrowing->repayments->sum('principal_paid');
         $newAmount = (float) $validated['amount'];
@@ -152,7 +158,8 @@ class BorrowingController extends Controller
         $this->ensurePermission($request, 'ui:savings:create');
 
         $validated = $request->validate([
-            'lender_id' => 'required|exists:lenders,id',
+            'lender_id' => 'required_without:investor_id|nullable|exists:lenders,id',
+            'investor_id' => 'nullable|exists:investors,id',
             'transaction_no' => 'nullable|string',
             'loan_account' => 'nullable|string',
             'category' => 'required|in:Real Capital,Loan Capital',
@@ -173,10 +180,36 @@ class BorrowingController extends Controller
             'loan_interest' => 'nullable|numeric|min:0',
         ]);
 
+        if (empty($validated['lender_id']) && !empty($validated['investor_id'])) {
+            $validated['lender_id'] = $this->getOrCreateLenderFromInvestor($validated['investor_id']);
+        }
+
         $validated['status'] = 'active';
 
         $borrowing = Borrowing::create($validated);
         return response()->json($borrowing);
+    }
+
+    private function getOrCreateLenderFromInvestor($investorId)
+    {
+        $investor = Investor::findOrFail($investorId);
+
+        // Check if a lender already exists for this investor
+        $lender = Lender::where('investor_id', $investor->id)->first();
+
+        if (!$lender) {
+            // Create a new lender record linked to this investor
+            $lender = Lender::create([
+                'investor_id' => $investor->id,
+                'lender_code' => $investor->customer_code,
+                'name' => trim($investor->first_name . ' ' . $investor->last_name),
+                'lender_type' => 'Individual', // Default type for investors
+                'phone' => $investor->phone,
+                'address' => trim(($investor->village ?? '') . ' ' . ($investor->commune ?? '') . ' ' . ($investor->district ?? '') . ' ' . ($investor->province ?? '')),
+            ]);
+        }
+
+        return $lender->id;
     }
 
     public function repayBorrowing(Request $request)
@@ -188,11 +221,14 @@ class BorrowingController extends Controller
             'payment_date' => 'required|date',
             'principal_paid' => 'required|numeric|min:0',
             'interest_paid' => 'required|numeric|min:0',
+            'penalty_paid' => 'nullable|numeric|min:0',
             'payment_method' => 'required',
+            'reference_no' => 'nullable',
             'remarks' => 'nullable',
         ]);
 
-        $validated['total_paid'] = $validated['principal_paid'] + $validated['interest_paid'];
+        $validated['penalty_paid'] = $validated['penalty_paid'] ?? 0;
+        $validated['total_paid'] = $validated['principal_paid'] + $validated['interest_paid'] + $validated['penalty_paid'];
 
         return DB::transaction(function () use ($validated) {
             $borrowing = Borrowing::with('repayments')->findOrFail($validated['borrowing_id']);
@@ -211,6 +247,67 @@ class BorrowingController extends Controller
                 ], 422);
             }
 
+            // Standard Fields
+            $validated['balance_after_payment'] = round($remainingBalance - (float) $validated['principal_paid'], 2);
+            $validated['received_by'] = auth()->id();
+            
+            // Generate Receipt No: BR-YYYYMMDD-COUNT
+            $todayCount = BorrowingRepayment::whereDate('created_at', now())->count();
+            $validated['receipt_no'] = 'BR-' . now()->format('Ymd') . '-' . str_pad($todayCount + 1, 3, '0', STR_PAD_LEFT);
+
+            // Sync with schedule
+            $schedules = $borrowing->schedules()->where('status', '!=', 'paid')->orderBy('installment_no')->get();
+            $pLeft = (float) $validated['principal_paid'];
+            $iLeft = (float) $validated['interest_paid'];
+            $penLeft = (float) $validated['penalty_paid'];
+
+            $firstScheduleId = null;
+
+            foreach ($schedules as $sch) {
+                if ($iLeft <= 0 && $pLeft <= 0 && $penLeft <= 0) break;
+
+                if (!$firstScheduleId) $firstScheduleId = $sch->id;
+
+                $schInterestDue = (float) $sch->interest_due - (float) $sch->interest_paid;
+                $schPrincipalDue = (float) $sch->principal_due - (float) $sch->principal_paid;
+
+                // 1. Allocate Penalty (if any) - We assume penalty pays off current row first
+                if ($penLeft > 0) {
+                    $sch->penalty_paid += $penLeft;
+                    $penLeft = 0; // Simplified: apply all penalty to the first unpaid row encountered
+                }
+
+                // 2. Allocate Interest
+                if ($iLeft > 0 && $schInterestDue > 0) {
+                    $iAlloc = min($iLeft, $schInterestDue);
+                    $sch->interest_paid += $iAlloc;
+                    $iLeft -= $iAlloc;
+                }
+
+                // 3. Allocate Principal
+                if ($pLeft > 0 && $schPrincipalDue > 0) {
+                    $pAlloc = min($pLeft, $schPrincipalDue);
+                    $sch->principal_paid += $pAlloc;
+                    $pLeft -= $pAlloc;
+                }
+
+                // Update Status
+                $totalDue = (float) $sch->total_due;
+                $totalPaid = (float) $sch->principal_paid + (float) $sch->interest_paid;
+                
+                $sch->last_payment_date = $validated['payment_date'];
+
+                if ($totalPaid >= $totalDue - 0.001) {
+                    $sch->status = 'paid';
+                    $sch->paid_date = $validated['payment_date'];
+                } elseif ($totalPaid > 0.001) {
+                    $sch->status = 'partially_paid';
+                }
+
+                $sch->save();
+            }
+
+            $validated['schedule_id'] = $firstScheduleId;
             $repayment = BorrowingRepayment::create($validated);
 
             $totalPrincipalPaid = $alreadyPaid + (float) $validated['principal_paid'];
@@ -220,5 +317,43 @@ class BorrowingController extends Controller
 
             return response()->json($repayment);
         });
+    }
+
+    public function getSchedule($id)
+    {
+        $borrowing = Borrowing::with(['schedules' => function ($q) {
+            $q->orderBy('installment_no', 'asc');
+        }])->findOrFail($id);
+
+        $today = now()->startOfDay();
+
+        $schedule = $borrowing->schedules->map(function ($sch) use ($today) {
+            $dueDate = \Carbon\Carbon::parse($sch->due_date)->startOfDay();
+            $daysLate = 0;
+
+            if ($sch->status === 'paid' && $sch->paid_date) {
+                $paidDate = \Carbon\Carbon::parse($sch->paid_date)->startOfDay();
+                if ($paidDate->gt($dueDate)) {
+                    $daysLate = $paidDate->diffInDays($dueDate);
+                }
+            } elseif ($sch->status !== 'paid' && $today->gt($dueDate)) {
+                $daysLate = $today->diffInDays($dueDate);
+            }
+
+            $sch->days_late = $daysLate;
+            return $sch;
+        });
+
+        return response()->json($schedule);
+    }
+
+    public function getRepayments($id)
+    {
+        $repayments = BorrowingRepayment::with('receivedByUser')
+            ->where('borrowing_id', $id)
+            ->orderBy('payment_date', 'desc')
+            ->get();
+
+        return response()->json($repayments);
     }
 }

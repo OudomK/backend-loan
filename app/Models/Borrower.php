@@ -45,6 +45,19 @@ class Borrower extends Model
         'customer_type'
     ];
 
+    public function getAgeAttribute()
+    {
+        if (blank($this->dob)) {
+            return $this->attributes['age'] ?? null;
+        }
+
+        try {
+            return Carbon::parse($this->dob)->age;
+        } catch (\Exception $e) {
+            return $this->attributes['age'] ?? null;
+        }
+    }
+
     public function setDobAttribute($value)
     {
         $this->attributes['dob'] = $this->normalizeDateInput($value);

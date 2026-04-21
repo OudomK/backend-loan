@@ -38,6 +38,7 @@ use App\Http\Controllers\PositionController;
 use App\Http\Controllers\QualityPortfolioController;
 use App\Http\Controllers\RepaymentController;
 use App\Http\Controllers\RepaymentReportController;
+use App\Http\Controllers\RepaymentScheduleReportController;
 use App\Http\Controllers\RescheduleRefinanceController;
 use App\Http\Controllers\SavingAccountController;
 use App\Http\Controllers\SaverController;
@@ -133,7 +134,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('saving-accounts/post-interest', [SavingAccountController::class, 'postInterest']);
     Route::get('saving-accounts/{account}/transactions', [SavingAccountController::class, 'getTransactions']);
     Route::post('saving-accounts/{account}/close', [SavingAccountController::class, 'closeAccount']);
-    Route::get('saving-accounts-report', [SavingAccountController::class, 'getSavingReport']);
     Route::post('capital-shares/preview-schedule', [CapitalShareController::class, 'previewSchedule']);
     Route::apiResource('capital-shares', CapitalShareController::class);
     Route::post('capital-shares/{share}/repay', [CapitalShareController::class, 'repay'])->middleware('permission:Update:CapitalShareTransaction');
@@ -146,7 +146,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('export/capital-report', [ExportController::class, 'exportCapitalReport']);
 
     Route::get('/dividends-preview', [DividendController::class, 'preview']);
-    Route::get('/dividends-report', [DividendController::class, 'getDividendReport']);
     Route::apiResource('dividends', DividendController::class);
     Route::post('dividends/{dividend}/distribute', [DividendController::class, 'distribute']);
     Route::get('dividends/{dividend}/transactions', [DividendController::class, 'transactions']);
@@ -168,19 +167,28 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('borrowings', [BorrowingController::class, 'storeBorrowing']);
     Route::put('borrowings/{id}', [BorrowingController::class, 'updateBorrowing']);
     Route::post('borrowings/repay', [BorrowingController::class, 'repayBorrowing']);
+    Route::get('borrowings/{id}/repayments', [BorrowingController::class, 'getRepayments']);
+    Route::get('borrowings/{id}/schedule', [BorrowingController::class, 'getSchedule']);
 
-    Route::get('reports/repayment', [RepaymentReportController::class, 'index']);
-    Route::get('reports/arrear-all', [ArrearReportController::class, 'index']);
-    Route::get('reports/arrear-under-30', [ArrearReportController::class, 'index']);
-    Route::get('reports/disbursement', [DisbursementReportController::class, 'index']);
-    Route::get('reports/active-loan', [ActiveLoanReportController::class, 'index']);
-    Route::get('reports/inactive-loan', [InactiveLoanReportController::class, 'index']);
-    Route::get('reports/quality-portfolio', [QualityPortfolioController::class, 'index']);
-    Route::get('/reports/write-off', [WriteOffReportController::class, 'index']);
-    Route::get('/reports/write-off-collection', [WriteOffCollectionReportController::class, 'index']);
-    Route::get('/reports/loan-collection', [LoanCollectionReportController::class, 'index']);
-    Route::get('/reports/interest-income', [InterestIncomeReportController::class, 'index']);
-    Route::get('/reports/loan-outstanding-par', [LoanOutstandingParReportController::class, 'index']);
+    Route::middleware('json.unescaped_unicode')->group(function () {
+        Route::get('saving-accounts-report', [SavingAccountController::class, 'getSavingReport']);
+        Route::get('/dividends-report', [DividendController::class, 'getDividendReport']);
+
+        Route::get('reports/repayment', [RepaymentReportController::class, 'index']);
+        Route::get('reports/repayment-schedule', [RepaymentScheduleReportController::class, 'index']);
+        Route::get('reports/arrear-all', [ArrearReportController::class, 'index']);
+        Route::get('reports/arrear-under-30', [ArrearReportController::class, 'index']);
+        Route::get('reports/disbursement', [DisbursementReportController::class, 'index']);
+        Route::get('reports/active-loan', [ActiveLoanReportController::class, 'index']);
+        Route::get('reports/inactive-loan', [InactiveLoanReportController::class, 'index']);
+        Route::get('reports/quality-portfolio', [QualityPortfolioController::class, 'index']);
+        Route::get('/reports/write-off', [WriteOffReportController::class, 'index']);
+        Route::get('/reports/write-off-collection', [WriteOffCollectionReportController::class, 'index']);
+        Route::get('/reports/loan-collection', [LoanCollectionReportController::class, 'index']);
+        Route::get('/reports/interest-income', [InterestIncomeReportController::class, 'index']);
+        Route::get('/reports/loan-outstanding-par', [LoanOutstandingParReportController::class, 'index']);
+        Route::get('/reports/income-statement', [IncomeStatementController::class, 'index']);
+    });
 
 
     Route::apiResource('payments', PaymentController::class);
@@ -189,7 +197,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('employees/upload-photo', [EmployeeController::class, 'uploadPhoto']);
     Route::apiResource('employees', EmployeeController::class);
     Route::apiResource('payrolls', PayrollController::class);
-    Route::get('/reports/income-statement', [IncomeStatementController::class, 'index']);
 
     Route::get('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'index'])->middleware('permission:ViewAny:MiscellaneousTransaction');
     Route::post('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'store'])->middleware('permission:Create:MiscellaneousTransaction');

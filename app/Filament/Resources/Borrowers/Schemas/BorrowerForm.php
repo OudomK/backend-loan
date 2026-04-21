@@ -55,12 +55,12 @@ class BorrowerForm
                             'xl' => 4,
                         ])
                             ->schema([
-                                TextInput::make('last_name')
-                                    ->label('Last Name')
-                                    ->required()
-                                    ->maxLength(255),
                                 TextInput::make('first_name')
                                     ->label('First Name')
+                                    ->required()
+                                    ->maxLength(255),
+                                TextInput::make('last_name')
+                                    ->label('Last Name')
                                     ->required()
                                     ->maxLength(255),
                                 Select::make('gender')
@@ -92,12 +92,25 @@ class BorrowerForm
                                     ->helperText('Format: DD/MM/YYYY')
                                     ->mask('99/99/9999')
                                     ->rule('date_format:d/m/Y')
-                                    ->formatStateUsing(fn ($state) => $state ? Carbon::parse($state)->format('d/m/Y') : null),
+                                    ->formatStateUsing(fn ($state) => $state ? Carbon::parse($state)->format('d/m/Y') : null)
+                                    ->live(onBlur: true)
+                                    ->afterStateUpdated(function ($state, callable $set) {
+                                        if (blank($state) || strlen($state) < 10) {
+                                            return;
+                                        }
+
+                                        try {
+                                            $date = Carbon::createFromFormat('d/m/Y', $state);
+                                            $set('age', $date->age);
+                                        } catch (\Exception $e) {
+                                        }
+                                    }),
                                 TextInput::make('age')
                                     ->label('Age')
                                     ->numeric()
                                     ->minValue(18)
-                                    ->maxValue(120),
+                                    ->maxValue(120)
+                                    ->readOnly(),
                                 TextInput::make('phone')
                                     ->label('Phone Number')
                                     ->tel()

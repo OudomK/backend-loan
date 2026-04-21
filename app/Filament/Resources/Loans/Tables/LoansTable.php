@@ -24,28 +24,28 @@ class LoansTable
                     ->label('Loan')
                     ->searchable()
                     ->sortable()
-                    ->description(fn ($record): ?string => collect([
+                    ->description(fn($record): ?string => collect([
                         filled($record->start_date) ? 'Start ' . self::formatDate($record->start_date) : null,
                         filled($record->loan_cycle) ? 'Cycle ' . $record->loan_cycle : null,
                     ])->filter()->implode(' • ')),
                 TextColumn::make('borrower.first_name')
                     ->label('Borrower')
-                    ->getStateUsing(fn ($record) => trim("{$record->borrower?->last_name} {$record->borrower?->first_name}"))
+                    ->getStateUsing(fn($record) => trim("{$record->borrower?->last_name} {$record->borrower?->first_name}"))
                     ->searchable(['first_name', 'last_name'])
                     ->sortable(['first_name', 'last_name'])
-                    ->description(fn ($record): ?string => collect([
+                    ->description(fn($record): ?string => collect([
                         filled($record->officer?->name) ? 'Officer ' . $record->officer->name : null,
                     ])->filter()->implode(' • ')),
                 TextColumn::make('amount')
                     ->label('Principal')
-                    ->money(fn ($record): string => self::resolveCurrencyCode($record))
+                    ->money(fn($record): string => self::resolveCurrencyCode($record))
                     ->sortable()
-                    ->description(fn ($record): ?string => collect([
+                    ->description(fn($record): ?string => collect([
                         filled($record->interest_rate) ? 'Rate ' . self::formatNumber((float) $record->interest_rate) . '%' : null,
                         filled($record->duration_months) ? $record->duration_months . ' mo' : null,
                         filled($record->monthly_payment)
-                            ? 'Pay ' . self::formatAmount((float) $record->monthly_payment, self::resolveCurrencyCode($record))
-                            : null,
+                        ? 'Pay ' . self::formatAmount((float) $record->monthly_payment, self::resolveCurrencyCode($record))
+                        : null,
                     ])->filter()->implode(' • ')),
                 TextColumn::make('interest_rate')
                     ->label('Rate')
@@ -64,7 +64,7 @@ class LoansTable
                 TextColumn::make('status')
                     ->badge()
                     ->sortable()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'pending' => 'gray',
                         'active' => 'success',
                         'completed' => 'info',

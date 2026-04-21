@@ -21,7 +21,7 @@ class ActivityLogsTable
                     ->color('gray')
                     ->searchable()
                     ->sortable()
-                    ->visibleFrom('2xl'),
+                    ->visibleFrom('lg'),
                 TextColumn::make('description')
                     ->wrap()
                     ->searchable()
@@ -34,23 +34,23 @@ class ActivityLogsTable
                     ->formatStateUsing(fn($state) => filled($state) ? class_basename($state) : '-')
                     ->searchable()
                     ->sortable()
-                    ->visibleFrom('xl'),
+                    ->visibleFrom('md'),
                 TextColumn::make('subject_id')
                     ->label('ID')
                     ->searchable()
                     ->sortable()
-                    ->visibleFrom('2xl'),
+                    ->visibleFrom('lg'),
                 TextColumn::make('causer.name')
                     ->label('User')
                     ->searchable()
                     ->sortable()
-                    ->visibleFrom('xl'),
+                    ->visibleFrom('lg'),
 
                 TextColumn::make('created_at')
                     ->label('Logged At')
                     ->dateTime('M j, Y g:i:s A')
                     ->sortable()
-                    ->visibleFrom('xl'),
+                    ->visibleFrom('md'),
             ])
             ->defaultSort('created_at', 'desc')
             ->filters([
@@ -60,10 +60,6 @@ class ActivityLogsTable
                 ViewAction::make()
                     ->iconButton()
                     ->tooltip('View log'),
-            ])
-            ->bulkActions([
-                // Logs are usually audit trails, deletion might not be desired but keeping it if they want.
-                // For now, let's keep it clean.
             ]);
     }
 }

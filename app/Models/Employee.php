@@ -37,6 +37,19 @@ class Employee extends Model
         'status'
     ];
 
+    public function getAgeAttribute()
+    {
+        if (blank($this->dob)) {
+            return null;
+        }
+
+        try {
+            return \Carbon\Carbon::parse($this->dob)->age;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
     public function position()
     {
         return $this->belongsTo(Position::class);

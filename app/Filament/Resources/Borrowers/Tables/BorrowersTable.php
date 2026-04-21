@@ -31,11 +31,11 @@ class BorrowersTable
                     ->defaultImageUrl(function ($record) {
                         $colors = ['0d9488', '4f46e5', 'e11d48', 'd97706', '059669', '7c3aed', '0891b2', '2563eb', 'db2777', '7c2d12'];
                         $color = $colors[$record->id % count($colors)];
-                        return "https://ui-avatars.com/api/?name=" . urlencode("{$record->last_name} {$record->first_name}") . "&color=FFFFFF&background={$color}";
+                        return "https://ui-avatars.com/api/?name=" . urlencode("{$record->first_name} {$record->last_name}") . "&color=FFFFFF&background={$color}";
                     }),
                 TextColumn::make('full_name')
                     ->label('Name')
-                    ->getStateUsing(fn ($record) => "{$record->last_name} {$record->first_name}")
+                    ->getStateUsing(fn ($record) => "{$record->first_name} {$record->last_name}")
                     ->searchable(['first_name', 'last_name'])
                     ->sortable()
                     ->description(fn ($record): ?string => collect([

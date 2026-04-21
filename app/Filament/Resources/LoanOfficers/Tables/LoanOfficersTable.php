@@ -30,34 +30,37 @@ class LoanOfficersTable
                     ->label('Name')
                     ->searchable()
                     ->sortable()
-                    ->description(fn ($record): ?string => collect([
-                        filled($record->employee?->employee_code) ? $record->employee->employee_code : null,
-                        filled($record->phone) ? $record->phone : null,
-                    ])->filter()->implode(' • ')),
+                    ->description(fn($record): ?string => $record->employee?->employee_code),
+                TextColumn::make('phone')
+                    ->label('Phone')
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('employee.name')
                     ->label('Linked Employee')
                     ->searchable()
-                    ->visibleFrom('xl'),
+                    ->visibleFrom('xl')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('employee.employee_code')
                     ->label('Emp Code')
                     ->searchable()
-                    ->visibleFrom('2xl'),
-                TextColumn::make('phone')
-                    ->searchable()
-                    ->visibleFrom('xl'),
+                    ->visibleFrom('2xl')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('gender')
                     ->sortable()
-                    ->visibleFrom('2xl'),
+                    ->visibleFrom('2xl')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('start_date')
                     ->label('Start Date')
                     ->date('d/m/Y')
                     ->sortable()
-                    ->visibleFrom('2xl'),
+                    ->visibleFrom('2xl')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('max_loan_amount')
                     ->label('Max Loan Amount')
                     ->formatStateUsing(fn($state): string => $state !== null ? '$' . number_format((float) $state, 2) : '-')
                     ->sortable()
-                    ->visibleFrom('xl'),
+                    ->visibleFrom('xl')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn(?string $state): string => ucfirst(strtolower((string) $state)))
@@ -69,7 +72,8 @@ class LoanOfficersTable
                     ->sortable(),
                 TextColumn::make('active_loans_count')
                     ->label('Active Loans')
-                    ->sortable(),
+                    ->sortable()
+                    ->visibleFrom('lg'),
                 TextColumn::make('updated_at')
                     ->dateTime()
                     ->sortable()

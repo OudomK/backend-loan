@@ -61,10 +61,10 @@ class ManageSettings extends Page implements HasForms
     {
         $dbSettings = Setting::pluck('value', 'key')->toArray();
         $frontendFont = strtolower((string) ($dbSettings['frontend_font_family'] ?? 'battambang'));
-        if (! array_key_exists($frontendFont, self::FRONTEND_FONT_OPTIONS)) {
+        if (!array_key_exists($frontendFont, self::FRONTEND_FONT_OPTIONS)) {
             $frontendFont = 'battambang';
         }
-        
+
         $this->form->fill([
             'company_name' => $dbSettings['company_name'] ?? config('app.company_name'),
             'company_logo' => $dbSettings['company_logo'] ?? '',
@@ -89,7 +89,7 @@ class ManageSettings extends Page implements HasForms
             ->components([
                 // ── Me ──────────────────────────────────────────────────────
                 Section::make('My Account')
-                    ->hidden(fn () => $this->activeTab !== 'me')
+                    ->hidden(fn() => $this->activeTab !== 'me')
                     ->schema([
                         FileUpload::make('me_avatar_url')
                             ->label('Profile Picture')
@@ -126,7 +126,7 @@ class ManageSettings extends Page implements HasForms
                             ->password()
                             ->maxLength(255)
                             ->confirmed()
-                            ->dehydrated(fn ($state) => filled($state)),
+                            ->dehydrated(fn($state) => filled($state)),
                         TextInput::make('me_password_confirmation')
                             ->label('Confirm Password')
                             ->password()
@@ -136,7 +136,7 @@ class ManageSettings extends Page implements HasForms
 
                 // ── Company Profile ─────────────────────────────────────────
                 Section::make('Company Profile')
-                    ->hidden(fn () => $this->activeTab !== 'profile')
+                    ->hidden(fn() => $this->activeTab !== 'profile')
                     ->schema([
                         TextInput::make('company_name')
                             ->label('Company Name')
@@ -178,7 +178,7 @@ class ManageSettings extends Page implements HasForms
 
                 // ── Exchange Rate ────────────────────────────────────────────
                 Section::make('Exchange Rate')
-                    ->hidden(fn () => $this->activeTab !== 'exchange_rate')
+                    ->hidden(fn() => $this->activeTab !== 'exchange_rate')
                     ->schema([
                         TextInput::make('exchange_rate_khr_to_usd')
                             ->label('Exchange Rate (1 USD to KHR)')
@@ -190,7 +190,7 @@ class ManageSettings extends Page implements HasForms
 
                 // ── Loan Configuration ───────────────────────────────────────
                 Section::make('Font Settings')
-                    ->hidden(fn () => $this->activeTab !== 'font')
+                    ->hidden(fn() => $this->activeTab !== 'font')
                     ->schema([
                         TextInput::make('available_fonts_count')
                             ->label('Total Available Fonts')
@@ -214,7 +214,7 @@ class ManageSettings extends Page implements HasForms
                     ]),
 
                 Section::make('Loan Configuration')
-                    ->hidden(fn () => $this->activeTab !== 'loan_config')
+                    ->hidden(fn() => $this->activeTab !== 'loan_config')
                     ->schema([
                         TextInput::make('default_interest_rate')
                             ->label('Default Interest Rate (%)')
