@@ -25,7 +25,7 @@ class SavingAccountResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Fund Management';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 1;
 
     protected static ?string $recordTitleAttribute = 'account_no';
     protected static ?string $navigationLabel = 'Borrowings';

@@ -18,6 +18,7 @@
             ['key' => 'exchange_rate', 'icon' => 'heroicon-o-currency-dollar', 'label' => 'Exchange Rate'],
             ['key' => 'font',          'icon' => 'heroicon-o-language',        'label' => 'Font Settings'],
             ['key' => 'loan_config',   'icon' => 'heroicon-o-cog-6-tooth',     'label' => 'Loan Config'],
+            ['key' => 'dividend_config', 'icon' => 'heroicon-o-banknotes',     'label' => 'Dividend Config'],
         ];
     ?>
 

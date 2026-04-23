@@ -63,8 +63,14 @@ class AutoDraftDividends extends Command
                         'total_amount' => round($totalAmount, 2),
                         'dividend_per_share' => round($perShare, 4),
                         'currency' => $schedule->currency,
+                        'distribution_basis' => $schedule->type,
                         'total_shares_count' => $totalSharesCount,
                         'declared_date' => now()->toDateString(),
+                        'payment_date' => now()->toDateString(),
+                        'declared_by' => null,
+                        'notes' => 'Auto-created from dividend schedule #' . $schedule->id,
+                        'tax_amount' => 0,
+                        'net_amount' => round($totalAmount, 2),
                         'status' => 'Draft',
                     ]);
 

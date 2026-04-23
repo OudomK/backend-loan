@@ -41,6 +41,53 @@ class CapitalShareController extends Controller
             ->exists();
     }
 
+    private function transformShare(CapitalShare $s): array
+    {
+        $name = 'N/A';
+        $code = '-';
+        $type = 'Individual';
+
+        if ($s->investor) {
+            $name = $s->investor->last_name . ' ' . $s->investor->first_name;
+            $code = $s->investor->customer_code;
+            $type = $s->investor->customer_type ?? 'Individual';
+        } elseif ($s->lender) {
+            $name = $s->lender->name;
+            $code = $s->lender->lender_code ?? $s->lender->code ?? '-';
+            $type = $s->lender->lender_type ?? 'Individual';
+        }
+
+        return [
+            'id' => $s->id,
+            'lender_id' => $s->investor_id ?? $s->lender_id, // For frontend compatibility
+            'lender_name' => $name,
+            'lender_code' => $code,
+            'investor_name' => $name,
+            'lender_type' => $type,
+            'category' => $s->category,
+            'share_qty' => $s->share_qty,
+            'par_value' => $s->par_value,
+            'total_capital' => $s->total_capital,
+            'currency' => $s->currency,
+            'status' => $s->status,
+            'created_at' => optional($s->created_at)->toIso8601String(),
+
+            // Borrowing/Legacy Fields
+            'transaction_no' => $s->transaction_no,
+            'loan_account' => $s->loan_account,
+            'borrowing_date' => $s->borrowing_date,
+            'account_no' => $s->account_no,
+            'contract_no' => $s->contract_no,
+            'amount' => $s->amount,
+            'int_pay_mode' => $s->int_pay_mode,
+            'balance' => $s->balance,
+            'dividends' => $s->dividends,
+            'total_dividend_paid' => $s->total_dividend_paid,
+            'last_dividend_date' => $s->last_dividend_date,
+            'repayment_schedule' => $s->repayment_schedule,
+        ];
+    }
+
     private function deriveCapitalValues(array $validated, ?CapitalShare $existing = null): array
     {
         $shareQty = array_key_exists('share_qty', $validated)
@@ -81,51 +128,23 @@ class CapitalShareController extends Controller
     public function index()
     {
         $shares = CapitalShare::with(['lender', 'investor'])->get();
-        return $shares->map(function ($s) {
-            $name = 'N/A';
-            $code = '-';
-            $type = 'Individual';
+        return $shares->map(fn($s) => $this->transformShare($s));
+    }
 
-            if ($s->investor) {
-                $name = $s->investor->last_name . ' ' . $s->investor->first_name;
-                $code = $s->investor->customer_code;
-                $type = $s->investor->customer_type ?? 'Individual';
-            } elseif ($s->lender) {
-                $name = $s->lender->name;
-                $code = $s->lender->lender_code ?? $s->lender->code ?? '-';
-                $type = $s->lender->lender_type ?? 'Individual';
-            }
+    public function show($id)
+    {
+        $share = CapitalShare::with(['lender', 'investor'])->findOrFail($id);
+        return response()->json($this->transformShare($share));
+    }
 
-            return [
-                'id' => $s->id,
-                'lender_id' => $s->investor_id ?? $s->lender_id, // For frontend compatibility
-                'lender_name' => $name,
-                'lender_code' => $code,
-                'investor_name' => $name,
-                'lender_type' => $type,
-                'category' => $s->category,
-                'share_qty' => $s->share_qty,
-                'par_value' => $s->par_value,
-                'total_capital' => $s->total_capital,
-                'currency' => $s->currency,
-                'status' => $s->status,
-                'created_at' => $s->created_at->toIso8601String(),
+    public function destroy(Request $request, $id)
+    {
+        $this->ensurePermission($request, 'ui:capital_share:delete');
 
-                // Borrowing/Legacy Fields
-                'transaction_no' => $s->transaction_no,
-                'loan_account' => $s->loan_account,
-                'borrowing_date' => $s->borrowing_date,
-                'account_no' => $s->account_no,
-                'contract_no' => $s->contract_no,
-                'amount' => $s->amount,
-                'int_pay_mode' => $s->int_pay_mode,
-                'balance' => $s->balance,
-                'dividends' => $s->dividends,
-                'total_dividend_paid' => $s->total_dividend_paid,
-                'last_dividend_date' => $s->last_dividend_date,
-                'repayment_schedule' => $s->repayment_schedule,
-            ];
-        });
+        $share = CapitalShare::findOrFail($id);
+        $share->delete();
+
+        return response()->json(['message' => 'Capital/share record deleted.']);
     }
 
     public function store(Request $request)
@@ -382,11 +401,19 @@ class CapitalShareController extends Controller
 
             // Calculate based on what was provided
             if (!empty($validated['amount'])) {
-                $addAmount = (float) $validated['amount'];
-                $addShares = (int) floor($addAmount / $parValue);
+                $inputAmount = round((float) $validated['amount'], 2);
+                $remainder = fmod($inputAmount, $parValue);
+                if ($remainder > 0.001 && ($parValue - $remainder) > 0.001) {
+                    return response()->json([
+                        'message' => 'Amount must match share multiples based on par value.',
+                    ], 422);
+                }
+
+                $addShares = (int) floor($inputAmount / $parValue);
+                $addAmount = round($addShares * $parValue, 2);
             } else {
                 $addShares = (int) $validated['share_qty'];
-                $addAmount = $addShares * $parValue;
+                $addAmount = round($addShares * $parValue, 2);
             }
 
             if ($addShares <= 0) {
@@ -396,7 +423,7 @@ class CapitalShareController extends Controller
             }
 
             $newShareQty = (int) $share->share_qty + $addShares;
-            $newTotalCapital = $newShareQty * $parValue;
+            $newTotalCapital = round($newShareQty * $parValue, 2);
 
             // Accumulate balance (do NOT reset to newTotalCapital - that can reduce balance)
             $newBalance = round((float) $share->balance + $addAmount, 2);
@@ -454,11 +481,19 @@ class CapitalShareController extends Controller
 
         // Calculate based on what was provided
         if (!empty($validated['amount'])) {
-            $withdrawAmount = (float) $validated['amount'];
-            $withdrawShares = (int) floor($withdrawAmount / $parValue);
+            $inputAmount = round((float) $validated['amount'], 2);
+            $remainder = fmod($inputAmount, $parValue);
+            if ($remainder > 0.001 && ($parValue - $remainder) > 0.001) {
+                return response()->json([
+                    'message' => 'Amount must match share multiples based on par value.',
+                ], 422);
+            }
+
+            $withdrawShares = (int) floor($inputAmount / $parValue);
+            $withdrawAmount = round($withdrawShares * $parValue, 2);
         } else {
             $withdrawShares = (int) $validated['share_qty'];
-            $withdrawAmount = $withdrawShares * $parValue;
+            $withdrawAmount = round($withdrawShares * $parValue, 2);
         }
 
         if ($withdrawShares <= 0) {
@@ -477,7 +512,7 @@ class CapitalShareController extends Controller
 
         return DB::transaction(function () use ($share, $validated, $withdrawShares, $withdrawAmount, $parValue) {
             $newShareQty = (int) $share->share_qty - $withdrawShares;
-            $newTotalCapital = $newShareQty * $parValue;
+            $newTotalCapital = round($newShareQty * $parValue, 2);
             $newBalance = round(max(0, (float) $share->balance - $withdrawAmount), 2);
 
             DB::table('capital_shares')->where('id', $share->id)->update([
@@ -541,6 +576,13 @@ class CapitalShareController extends Controller
                 ], 422);
             }
 
+            $paymentTotal = (float) $validated['principal_paid'] + (float) $validated['interest_paid'];
+            if ($paymentTotal <= 0.001) {
+                return response()->json([
+                    'message' => 'Principal or interest payment must be greater than zero.',
+                ], 422);
+            }
+
             if ($validated['principal_paid'] > $share->balance + 0.001) {
                 return response()->json([
                     'message' => "Principal paid ({$validated['principal_paid']}) exceeds remaining balance (" . number_format($share->balance, 2) . "). Please check the amount."
@@ -548,20 +590,59 @@ class CapitalShareController extends Controller
             }
 
             $schedule = $share->repayment_schedule ?? [];
-            $found = false;
-            foreach ($schedule as &$item) {
-                if ($item['period'] == $validated['period']) {
-                    $item['status'] = 'paid';
-                    $item['paid_date'] = $validated['transaction_date'];
-                    $found = true;
+            $foundIndex = -1;
+            foreach ($schedule as $idx => $item) {
+                if ((int) ($item['period'] ?? 0) === (int) $validated['period']) {
+                    $foundIndex = $idx;
                     break;
                 }
             }
 
-            if (!$found) {
+            if ($foundIndex < 0) {
                 return response()->json(['message' => 'Period not found in schedule'], 422);
             }
 
+            $item = $schedule[$foundIndex];
+
+            if (($item['status'] ?? '') === 'paid') {
+                return response()->json(['message' => 'This period is already fully paid.'], 422);
+            }
+
+            $principalDue = (float) ($item['principal_due'] ?? $item['principal'] ?? 0);
+            $interestDue = (float) ($item['interest_due'] ?? $item['interest'] ?? 0);
+            $principalPaidSoFar = (float) ($item['principal_paid'] ?? 0);
+            $interestPaidSoFar = (float) ($item['interest_paid'] ?? 0);
+
+            $principalOutstanding = round(max(0, $principalDue - $principalPaidSoFar), 2);
+            $interestOutstanding = round(max(0, $interestDue - $interestPaidSoFar), 2);
+
+            if ((float) $validated['principal_paid'] > $principalOutstanding + 0.001) {
+                return response()->json([
+                    'message' => "Principal paid exceeds outstanding principal for period {$validated['period']}.",
+                ], 422);
+            }
+
+            if ((float) $validated['interest_paid'] > $interestOutstanding + 0.001) {
+                return response()->json([
+                    'message' => "Interest paid exceeds outstanding interest for period {$validated['period']}.",
+                ], 422);
+            }
+
+            $item['principal_paid'] = round($principalPaidSoFar + (float) $validated['principal_paid'], 2);
+            $item['interest_paid'] = round($interestPaidSoFar + (float) $validated['interest_paid'], 2);
+            $item['last_payment_date'] = $validated['transaction_date'];
+
+            $principalRemaining = round(max(0, $principalDue - (float) $item['principal_paid']), 2);
+            $interestRemaining = round(max(0, $interestDue - (float) $item['interest_paid']), 2);
+
+            if ($principalRemaining <= 0.001 && $interestRemaining <= 0.001) {
+                $item['status'] = 'paid';
+                $item['paid_date'] = $validated['transaction_date'];
+            } else {
+                $item['status'] = 'partially_paid';
+            }
+
+            $schedule[$foundIndex] = $item;
             $share->repayment_schedule = $schedule;
 
             if ($validated['principal_paid'] > 0) {
@@ -599,6 +680,61 @@ class CapitalShareController extends Controller
             ]);
         });
     }
+
+    public function sellShare(Request $request, $id)
+    {
+        $this->ensurePermission($request, 'ui:capital_share:edit');
+
+        $share = CapitalShare::findOrFail($id);
+
+        if ($share->category !== 'Real Capital') {
+            return response()->json([
+                'message' => 'Sell Share is only available for Real Capital accounts.',
+            ], 422);
+        }
+
+        if ((int) $share->share_qty <= 0 || (float) $share->balance <= 0.001) {
+            return response()->json([
+                'message' => 'No active shares available to sell.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'payment_method' => 'nullable|string',
+            'transaction_date' => 'nullable|date',
+            'description' => 'nullable|string',
+        ]);
+
+        return DB::transaction(function () use ($share, $validated) {
+            $soldShares = (int) $share->share_qty;
+            $withdrawAmount = round((float) $share->balance, 2);
+
+            $share->update([
+                'share_qty' => 0,
+                'amount' => 0,
+                'total_capital' => 0,
+                'balance' => 0,
+                'status' => 'Withdrawn',
+            ]);
+
+            CapitalShareTransaction::create([
+                'capital_share_id' => $share->id,
+                'transaction_type' => 'Withdrawal',
+                'amount' => $withdrawAmount,
+                'share_qty' => $soldShares,
+                'payment_method' => $validated['payment_method'] ?? 'Cash',
+                'transaction_date' => $validated['transaction_date'] ?? now(),
+                'description' => $validated['description'] ?? 'Sell share and close account',
+                'performed_by' => Auth::id(),
+            ]);
+
+            return response()->json([
+                'message' => 'Share sold successfully.',
+                'data' => $share->fresh(),
+            ]);
+        });
+    }
+
     public function previewSchedule(Request $request, LoanCalculator $calculator)
     {
         $validated = $request->validate([

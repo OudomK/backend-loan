@@ -8,6 +8,8 @@ use App\Models\Lender;
 use App\Models\Investor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class BorrowingController extends Controller
 {
@@ -23,6 +25,14 @@ class BorrowingController extends Controller
         }
 
         abort(403, 'You do not have permission to perform this action.');
+    }
+
+    private function normalizePaymentMethod(string $paymentMethod): ?string
+    {
+        $normalized = ucfirst(strtolower(trim($paymentMethod)));
+        $allowed = ['Balloon', 'Declining', 'Fixed', 'Negotiable'];
+
+        return in_array($normalized, $allowed, true) ? $normalized : null;
     }
 
     public function getBorrowings()
@@ -55,6 +65,7 @@ class BorrowingController extends Controller
                 'term_months' => $b->term_months,
                 'amount' => $b->amount,
                 'interest_rate' => $b->interest_rate,
+                'penalty_rate' => $b->penalty_rate ?? 0,
                 'fee' => $b->fee,
                 'maturity_date' => $b->maturity_date,
                 'sl_term' => $b->sl_term,
@@ -120,11 +131,12 @@ class BorrowingController extends Controller
             'borrowing_date' => 'required|date',
             'account_no' => 'nullable',
             'contract_no' => 'nullable|string',
-            'payment_method' => 'required',
+            'payment_method' => 'required|string',
             'currency' => 'required',
             'term_months' => 'required|integer|min:1',
             'amount' => 'required|numeric|gt:0',
             'interest_rate' => 'required|numeric|min:0',
+            'penalty_rate' => 'nullable|numeric|min:0',
             'int_pay_mode' => 'nullable|string',
             'fee' => 'nullable|numeric|min:0',
             'first_pay_date' => 'nullable|date',
@@ -138,12 +150,35 @@ class BorrowingController extends Controller
             $validated['lender_id'] = $this->getOrCreateLenderFromInvestor($validated['investor_id']);
         }
 
+        $paymentMethod = $this->normalizePaymentMethod((string) $validated['payment_method']);
+        if (!$paymentMethod) {
+            return response()->json([
+                'message' => 'Invalid payment method. Allowed: Balloon, Declining, Fixed, Negotiable.',
+            ], 422);
+        }
+        $validated['payment_method'] = $paymentMethod;
+
         $totalPrincipalPaid = (float) $borrowing->repayments->sum('principal_paid');
         $newAmount = (float) $validated['amount'];
 
         if ($newAmount + 0.001 < $totalPrincipalPaid) {
             return response()->json([
                 'message' => 'Loan amount cannot be less than the principal already repaid.',
+            ], 422);
+        }
+
+        $hasRepayments = $borrowing->repayments()->exists();
+        $criticalChangedAfterRepayment =
+            (float) $validated['amount'] !== (float) $borrowing->amount ||
+            (float) $validated['interest_rate'] !== (float) $borrowing->interest_rate ||
+            (int) $validated['term_months'] !== (int) $borrowing->term_months ||
+            strtolower((string) ($validated['payment_method'] ?? '')) !== strtolower((string) ($borrowing->payment_method ?? '')) ||
+            (string) ($validated['borrowing_date'] ?? '') !== (string) ($borrowing->borrowing_date ?? '') ||
+            (string) ($validated['first_pay_date'] ?? '') !== (string) ($borrowing->first_pay_date ?? '');
+
+        if ($hasRepayments && $criticalChangedAfterRepayment) {
+            return response()->json([
+                'message' => 'Cannot change amount, term, rate, payment method, or pay dates after repayments have been recorded.',
             ], 422);
         }
 
@@ -166,11 +201,12 @@ class BorrowingController extends Controller
             'borrowing_date' => 'required|date',
             'account_no' => 'nullable',
             'contract_no' => 'nullable|string',
-            'payment_method' => 'required',
+            'payment_method' => 'required|string',
             'currency' => 'required',
             'term_months' => 'required|integer|min:1',
             'amount' => 'required|numeric|gt:0',
             'interest_rate' => 'required|numeric|min:0',
+            'penalty_rate' => 'nullable|numeric|min:0',
             'int_pay_mode' => 'nullable|string',
             'fee' => 'nullable|numeric|min:0',
             'first_pay_date' => 'nullable|date',
@@ -183,6 +219,14 @@ class BorrowingController extends Controller
         if (empty($validated['lender_id']) && !empty($validated['investor_id'])) {
             $validated['lender_id'] = $this->getOrCreateLenderFromInvestor($validated['investor_id']);
         }
+
+        $paymentMethod = $this->normalizePaymentMethod((string) $validated['payment_method']);
+        if (!$paymentMethod) {
+            return response()->json([
+                'message' => 'Invalid payment method. Allowed: Balloon, Declining, Fixed, Negotiable.',
+            ], 422);
+        }
+        $validated['payment_method'] = $paymentMethod;
 
         $validated['status'] = 'active';
 
@@ -230,10 +274,20 @@ class BorrowingController extends Controller
         $validated['penalty_paid'] = $validated['penalty_paid'] ?? 0;
         $validated['total_paid'] = $validated['principal_paid'] + $validated['interest_paid'] + $validated['penalty_paid'];
 
+        if ((float) $validated['total_paid'] <= 0.001) {
+            return response()->json([
+                'message' => 'At least one of principal, interest, or penalty must be greater than zero.',
+            ], 422);
+        }
+
         return DB::transaction(function () use ($validated) {
             $borrowing = Borrowing::with('repayments')->findOrFail($validated['borrowing_id']);
             $alreadyPaid = (float) $borrowing->repayments->sum('principal_paid');
             $remainingBalance = round((float) $borrowing->amount - $alreadyPaid, 2);
+            $schedules = $borrowing->schedules()->where('status', '!=', 'paid')->orderBy('installment_no')->get();
+            $outstandingInterest = (float) $schedules->sum(function ($sch) {
+                return max((float) $sch->interest_due - (float) $sch->interest_paid, 0);
+            });
 
             if ($remainingBalance <= 0.001) {
                 return response()->json([
@@ -247,16 +301,20 @@ class BorrowingController extends Controller
                 ], 422);
             }
 
+            if ((float) $validated['interest_paid'] > $outstandingInterest + 0.001) {
+                return response()->json([
+                    'message' => "Interest paid ({$validated['interest_paid']}) exceeds outstanding interest (" . number_format($outstandingInterest, 2) . "). Please check the amount.",
+                ], 422);
+            }
+
             // Standard Fields
             $validated['balance_after_payment'] = round($remainingBalance - (float) $validated['principal_paid'], 2);
             $validated['received_by'] = auth()->id();
             
-            // Generate Receipt No: BR-YYYYMMDD-COUNT
-            $todayCount = BorrowingRepayment::whereDate('created_at', now())->count();
-            $validated['receipt_no'] = 'BR-' . now()->format('Ymd') . '-' . str_pad($todayCount + 1, 3, '0', STR_PAD_LEFT);
+            // Generate receipt in a collision-safe format.
+            $validated['receipt_no'] = $this->generateUniqueBorrowingReceiptNo();
 
             // Sync with schedule
-            $schedules = $borrowing->schedules()->where('status', '!=', 'paid')->orderBy('installment_no')->get();
             $pLeft = (float) $validated['principal_paid'];
             $iLeft = (float) $validated['interest_paid'];
             $penLeft = (float) $validated['penalty_paid'];
@@ -307,6 +365,13 @@ class BorrowingController extends Controller
                 $sch->save();
             }
 
+            // Guard against unexpected over-allocation due to race conditions or stale data.
+            if ($pLeft > 0.001 || $iLeft > 0.001) {
+                throw ValidationException::withMessages([
+                    'amount' => 'Payment exceeds outstanding schedule amounts. Please refresh and try again.',
+                ]);
+            }
+
             $validated['schedule_id'] = $firstScheduleId;
             $repayment = BorrowingRepayment::create($validated);
 
@@ -338,6 +403,9 @@ class BorrowingController extends Controller
                 }
             } elseif ($sch->status !== 'paid' && $today->gt($dueDate)) {
                 $daysLate = $today->diffInDays($dueDate);
+                if ($sch->status === 'pending') {
+                    $sch->status = 'overdue';
+                }
             }
 
             $sch->days_late = $daysLate;
@@ -355,5 +423,24 @@ class BorrowingController extends Controller
             ->get();
 
         return response()->json($repayments);
+    }
+
+    private function generateUniqueBorrowingReceiptNo(): string
+    {
+        $datePart = now()->format('Ymd');
+
+        for ($attempt = 0; $attempt < 10; $attempt++) {
+            $candidate = sprintf(
+                'BR-%s-%s',
+                $datePart,
+                Str::upper(Str::random(6))
+            );
+
+            if (!BorrowingRepayment::withTrashed()->where('receipt_no', $candidate)->exists()) {
+                return $candidate;
+            }
+        }
+
+        return 'BR-' . $datePart . '-' . (string) Str::uuid();
     }
 }

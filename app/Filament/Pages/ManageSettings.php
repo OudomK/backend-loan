@@ -9,6 +9,7 @@ use Filament\Pages\Page;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
@@ -57,6 +58,27 @@ class ManageSettings extends Page implements HasForms
 
     public string $activeTab = 'me';
 
+    private function toBool(mixed $value, bool $default = false): bool
+    {
+        if ($value === null) {
+            return $default;
+        }
+
+        if (is_bool($value)) {
+            return $value;
+        }
+
+        $normalized = strtolower(trim((string) $value));
+        if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+            return true;
+        }
+        if (in_array($normalized, ['0', 'false', 'no', 'off', ''], true)) {
+            return false;
+        }
+
+        return $default;
+    }
+
     public function mount(): void
     {
         $dbSettings = Setting::pluck('value', 'key')->toArray();
@@ -77,6 +99,9 @@ class ManageSettings extends Page implements HasForms
             'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,
             'default_penalty_usd' => $dbSettings['default_penalty_usd'] ?? 2.5,
             'default_penalty_khr' => $dbSettings['default_penalty_khr'] ?? 10000,
+            'enable_dividend_tax' => $this->toBool($dbSettings['enable_dividend_tax'] ?? false, false),
+            'auto_dividend_tax' => $this->toBool($dbSettings['auto_dividend_tax'] ?? false, false),
+            'dividend_tax_rate' => $dbSettings['dividend_tax_rate'] ?? 0,
             'me_name' => Auth::user()->name,
             'me_email' => Auth::user()->email,
             'me_avatar_url' => Auth::user()->avatar_url,
@@ -229,6 +254,29 @@ class ManageSettings extends Page implements HasForms
                             ->numeric()
                             ->step('100'),
                     ])->columns(2),
+
+                Section::make('Dividend Configuration')
+                    ->hidden(fn() => $this->activeTab !== 'dividend_config')
+                    ->schema([
+                        Toggle::make('enable_dividend_tax')
+                            ->label('Enable Dividend Tax')
+                            ->helperText('OFF: hide/ignore tax in Dividend flow. ON: allow tax input and net calculation.')
+                            ->default(false)
+                            ->inline(false),
+                        Toggle::make('auto_dividend_tax')
+                            ->label('Auto Deduct Dividend Tax')
+                            ->helperText('OFF: user can type tax amount manually. ON: system auto-calculates tax from Tax Rate (%).')
+                            ->default(false)
+                            ->inline(false),
+                        TextInput::make('dividend_tax_rate')
+                            ->label('Dividend Tax Rate (%)')
+                            ->numeric()
+                            ->step('0.01')
+                            ->minValue(0)
+                            ->maxValue(100)
+                            ->default(0)
+                            ->helperText('Used only when Auto Deduct Dividend Tax is ON. Example: 10 means 10% tax.'),
+                    ]),
             ])
             ->statePath('data');
     }

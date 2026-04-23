@@ -26,7 +26,7 @@ class CapitalShareResource extends Resource
 
     protected static string|\UnitEnum|null $navigationGroup = 'Fund Management';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 3;
 
     protected static ?string $recordTitleAttribute = 'account_no';
 
@@ -153,4 +153,3 @@ class CapitalShareResource extends Resource
             ->exists();
     }
 }
-

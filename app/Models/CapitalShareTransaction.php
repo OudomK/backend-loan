@@ -36,4 +36,9 @@ class CapitalShareTransaction extends Model
     {
         return $this->belongsTo(CapitalShare::class);
     }
+
+    public function performedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'performed_by');
+    }
 }

@@ -58,7 +58,23 @@ Route::get('/app/footer-user', function () {
 
 Route::get('/app/settings', function () {
     $dbSettings = \App\Models\Setting::pluck('value', 'key')->toArray();
+    $toBool = static function (mixed $value, bool $fallback = false): bool {
+        if ($value === null) {
+            return $fallback;
+        }
+        if (is_bool($value)) {
+            return $value;
+        }
+        $normalized = strtolower(trim((string) $value));
+        if (in_array($normalized, ['1', 'true', 'yes', 'on'], true)) {
+            return true;
+        }
+        if (in_array($normalized, ['0', 'false', 'no', 'off', ''], true)) {
+            return false;
+        }
 
+        return $fallback;
+    };
     return response()->json([
         'company_name' => $dbSettings['company_name'] ?? Config::get('app.company_name', 'Company Name'),
         'company_logo' => isset($dbSettings['company_logo']) ? asset('storage/' . $dbSettings['company_logo']) : null,
@@ -69,6 +85,9 @@ Route::get('/app/settings', function () {
         'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,
         'default_penalty_usd' => $dbSettings['default_penalty_usd'] ?? 2.5,
         'default_penalty_khr' => $dbSettings['default_penalty_khr'] ?? 10000,
+        'enable_dividend_tax' => $toBool($dbSettings['enable_dividend_tax'] ?? false, false),
+        'auto_dividend_tax' => $toBool($dbSettings['auto_dividend_tax'] ?? false, false),
+        'dividend_tax_rate' => (float) ($dbSettings['dividend_tax_rate'] ?? 0),
     ]);
 });
 

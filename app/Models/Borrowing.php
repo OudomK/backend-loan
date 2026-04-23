@@ -22,6 +22,7 @@ class Borrowing extends Model
         'term_months',
         'amount',
         'interest_rate',
+        'penalty_rate',
         'int_pay_mode',
         'fee',
         'maturity_date',
@@ -53,8 +54,9 @@ class Borrowing extends Model
         });
 
         static::updated(function ($borrowing) {
-            // Only regenerate if critical calculation fields have changed
-            $criticalFields = ['amount', 'interest_rate', 'term_months', 'first_pay_date', 'payment_method'];
+            // Only regenerate if critical calculation fields have changed.
+            // Never regenerate after repayments exist, to avoid breaking paid schedule history.
+            $criticalFields = ['amount', 'interest_rate', 'term_months', 'first_pay_date', 'borrowing_date', 'payment_method'];
             if ($borrowing->wasChanged($criticalFields)) {
                 $borrowing->generateSchedule();
             }
@@ -63,6 +65,10 @@ class Borrowing extends Model
 
     public function generateSchedule()
     {
+        if ($this->repayments()->exists()) {
+            return;
+        }
+
         $this->schedules()->delete();
 
         $amount = (float) $this->amount;
@@ -82,7 +88,7 @@ class Borrowing extends Model
                 if ($i === $terms) {
                     $principal = $currentBalance;
                 }
-            } elseif ($method === 'balloon') {
+            } elseif ($method === 'balloon' || $method === 'negotiable') {
                 if ($i === $terms) {
                     $principal = $amount;
                 }
