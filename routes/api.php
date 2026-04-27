@@ -88,6 +88,7 @@ Route::get('/app/settings', function () {
         'enable_dividend_tax' => $toBool($dbSettings['enable_dividend_tax'] ?? false, false),
         'auto_dividend_tax' => $toBool($dbSettings['auto_dividend_tax'] ?? false, false),
         'dividend_tax_rate' => (float) ($dbSettings['dividend_tax_rate'] ?? 0),
+        'default_payment_qr_id' => $dbSettings['default_payment_qr_id'] ?? null,
     ]);
 });
 
@@ -125,6 +126,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('loan-products', LoanProductController::class);
     Route::apiResource('loan-officers', LoanOfficerController::class);
+    Route::get('payment-qrs', [LoanController::class, 'getPaymentQrs']);
     Route::post('loans/preview-schedule', [LoanController::class, 'previewSchedule']);
     Route::get('loans/suggest-code', [LoanController::class, 'suggestCode']);
     Route::apiResource('loans', LoanController::class);

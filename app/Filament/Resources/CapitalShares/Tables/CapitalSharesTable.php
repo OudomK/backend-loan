@@ -6,6 +6,7 @@ use App\Support\CurrencyHelper;
 use Carbon\Carbon;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -118,8 +119,9 @@ class CapitalSharesTable
                 EditAction::make()
                     ->iconButton()
                     ->tooltip('Manage capital share'),
-                RestoreAction::make(),
-                ForceDeleteAction::make(),
+                DeleteAction::make()->iconButton(),
+                RestoreAction::make()->iconButton(),
+                ForceDeleteAction::make()->iconButton(),
             ])
             ->headerActions([
                 CreateAction::make()

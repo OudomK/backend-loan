@@ -35,4 +35,3 @@ class ListCapitalShareTransactions extends ListRecords
         return 'full';
     }
 }
-

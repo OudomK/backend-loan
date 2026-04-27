@@ -2,11 +2,13 @@
 
 namespace App\Filament\Resources\Borrowers\Tables;
 
-use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\RestoreAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\ImageColumn;
@@ -98,7 +100,15 @@ class BorrowersTable
                 EditAction::make()
                     ->iconButton()
                     ->tooltip('Manage borrower'),
-                RestoreAction::make(),
+                DeleteAction::make()
+                    ->iconButton()
+                    ->tooltip('Delete borrower'),
+                RestoreAction::make()
+                    ->iconButton()
+                    ->tooltip('Restore borrower'),
+                ForceDeleteAction::make()
+                    ->iconButton()
+                    ->tooltip('Permanently delete borrower'),
             ])
             ->headerActions([
                 CreateAction::make()

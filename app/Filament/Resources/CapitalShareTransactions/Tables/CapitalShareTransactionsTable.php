@@ -2,11 +2,19 @@
 
 namespace App\Filament\Resources\CapitalShareTransactions\Tables;
 
+use App\Filament\Resources\CapitalShares\CapitalShareResource;
 use App\Support\CurrencyHelper;
-use Filament\Actions\CreateAction;
-use Filament\Actions\EditAction;
+use Filament\Actions\Action;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
+use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Tables\Table;
 
 class CapitalShareTransactionsTable
@@ -15,7 +23,7 @@ class CapitalShareTransactionsTable
     {
         return $table
             ->heading('Capital Share Transactions')
-            ->description('View add capital, withdrawal, repayment, and dividend transactions for capital share accounts.')
+            ->description('Audit log for capital share movements. Create new movements from the source workflow, not from this ledger.')
             ->defaultSort('transaction_date', 'desc')
             ->persistFiltersInSession()
             ->columns([
@@ -123,18 +131,25 @@ class CapitalShareTransactionsTable
                         'Bank Transfer' => 'Bank Transfer',
                         'Cheque' => 'Cheque',
                     ]),
-            ])
-            ->recordActions([
-                EditAction::make()
-                    ->iconButton()
-                    ->tooltip('Edit transaction'),
+                TrashedFilter::make(),
             ])
             ->headerActions([
-                CreateAction::make()
-                    ->label('New Capital Transaction')
-                    ->icon('heroicon-m-plus-circle')
-                    ->button(),
+                Action::make('openCapitalShares')
+                    ->label('Open Capital & Shares')
+                    ->icon('heroicon-m-arrow-top-right-on-square')
+                    ->url(CapitalShareResource::getUrl('index')),
             ])
-            ->bulkActions([]);
+            ->recordActions([
+                DeleteAction::make()->iconButton(),
+                RestoreAction::make()->iconButton(),
+                ForceDeleteAction::make()->iconButton(),
+            ])
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
+                ]),
+            ]);
     }
 }

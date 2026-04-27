@@ -2,12 +2,13 @@
 
 namespace App\Filament\Resources\CapitalShareTransactions\Schemas;
 
+use App\Filament\Resources\CapitalShareTransactions\CapitalShareTransactionResource;
 use App\Models\CapitalShare;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -40,14 +41,22 @@ class CapitalShareTransactionForm
                                             ->placeholder('Select capital/share account')
                                             ->required(),
                                         Select::make('transaction_type')
-                                            ->options([
-                                                'Initial' => 'Initial',
-                                                'Deposit' => 'Deposit',
-                                                'Withdrawal' => 'Withdrawal',
-                                                'Repayment' => 'Repayment',
-                                                'Dividend' => 'Dividend',
-                                            ])
+                                            ->options(function (callable $get): array {
+                                                $shareId = $get('capital_share_id');
+                                                if (blank($shareId)) {
+                                                    return ['Initial' => 'Initial'];
+                                                }
+
+                                                $category = CapitalShare::query()
+                                                    ->whereKey($shareId)
+                                                    ->value('category');
+
+                                                return CapitalShareTransactionResource::allowedTransactionTypesForCategory(
+                                                    (string) ($category ?? '')
+                                                );
+                                            })
                                             ->native(false)
+                                            ->live()
                                             ->placeholder('Select transaction type')
                                             ->required(),
                                         TextInput::make('amount')
@@ -112,22 +121,22 @@ class CapitalShareTransactionForm
                             ->description('Preview calculated values.')
                             ->icon('heroicon-o-presentation-chart-line')
                             ->schema([
-                                Placeholder::make('preview_currency')
+                                TextEntry::make('preview_currency')
                                     ->label('Currency')
                                     ->extraAttributes(['class' => 'font-bold text-primary-600'])
-                                    ->content(fn(callable $get): string => static::resolveCurrency($get('capital_share_id'))),
-                                Placeholder::make('preview_amount')
+                                    ->state(fn(callable $get): string => static::resolveCurrency($get('capital_share_id'))),
+                                TextEntry::make('preview_amount')
                                     ->label('Amount Preview')
                                     ->extraAttributes(['class' => 'text-xl font-black text-success-600'])
-                                    ->content(function (callable $get): string {
+                                    ->state(function (callable $get): string {
                                         return static::formatAmount(
                                             static::toFloat($get('amount')),
                                             static::resolveCurrency($get('capital_share_id'))
                                         );
                                     }),
-                                Placeholder::make('preview_unit')
+                                TextEntry::make('preview_unit')
                                     ->label('Avg Amount / Share')
-                                    ->content(function (callable $get): string {
+                                    ->state(function (callable $get): string {
                                         $qty = (int) static::toFloat($get('share_qty'));
                                         if ($qty <= 0) {
                                             return '-';
@@ -140,9 +149,9 @@ class CapitalShareTransactionForm
                                             static::resolveCurrency($get('capital_share_id'))
                                         );
                                     }),
-                                Placeholder::make('preview_type_hint')
+                                TextEntry::make('preview_type_hint')
                                     ->label('Transaction Hint')
-                                    ->content(function (callable $get): string {
+                                    ->state(function (callable $get): string {
                                         return match ((string) ($get('transaction_type') ?? '')) {
                                             'Deposit' => 'Increases invested capital.',
                                             'Withdrawal' => 'Reduces invested capital.',

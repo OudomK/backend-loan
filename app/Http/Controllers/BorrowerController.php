@@ -30,7 +30,8 @@ class BorrowerController extends Controller
             $query->where('customer_type', $request->query('customer_type'));
         }
 
-        $query->where('status', '!=', 'Deleted');
+        // Laravel SoftDeletes will automatically filter out deleted records.
+        // We can keep business status filters if needed, but 'Deleted' status is now redundant.
 
         if ($request->has('id_number')) {
             $query->where('id_number', $request->query('id_number'));
@@ -67,7 +68,7 @@ class BorrowerController extends Controller
         ]);
 
         if (empty($validated['customer_code'])) {
-            $latest = Borrower::orderBy('id', 'desc')->first();
+            $latest = Borrower::withTrashed()->orderBy('id', 'desc')->first();
             $nextId = $latest ? $latest->id + 1 : 1;
             $validated['customer_code'] = 'QF-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
         }
@@ -110,13 +111,13 @@ class BorrowerController extends Controller
 
     public function destroy(Borrower $borrower)
     {
-        $borrower->update(['status' => 'Deleted']);
+        $borrower->delete();
         return response()->json(null, 204);
     }
 
     public function getNextCode()
     {
-        $latest = Borrower::orderBy('id', 'desc')->first();
+        $latest = Borrower::withTrashed()->orderBy('id', 'desc')->first();
         $nextId = $latest ? $latest->id + 1 : 1;
         $code = 'QF-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
         return response()->json(['code' => $code]);

@@ -180,6 +180,7 @@ class LoanForm
                                                     ->options([
                                                         'monthly' => 'Monthly',
                                                         '15days' => 'Semi-monthly',
+                                                        'term' => 'Term',
                                                     ])
                                                     ->default('monthly')
                                                     ->native(false)
@@ -212,6 +213,11 @@ class LoanForm
                                                 TextInput::make('monthly_payment')
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency'))),
+                                                Select::make('payment_qr_id')
+                                                    ->relationship('paymentQr', 'name')
+                                                    ->label('Payment QR Code')
+                                                    ->searchable()
+                                                    ->preload(),
                                             ]),
                                     ]),
 

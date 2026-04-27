@@ -27,7 +27,7 @@ class GuarantorController extends Controller
             $query->limit(25);
         }
 
-        $query->where('status', '!=', 'Deleted');
+        // Laravel SoftDeletes will automatically filter out deleted records.
 
         if ($request->has('id_number')) {
             $query->where('id_number', $request->query('id_number'));
@@ -63,7 +63,7 @@ class GuarantorController extends Controller
         ]);
 
         if (empty($validated['customer_code'])) {
-            $latest = Guarantor::orderBy('id', 'desc')->first();
+            $latest = Guarantor::withTrashed()->orderBy('id', 'desc')->first();
             $nextId = $latest ? $latest->id + 1 : 1;
             $validated['customer_code'] = 'GU-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
         }
@@ -105,13 +105,13 @@ class GuarantorController extends Controller
 
     public function destroy(Guarantor $guarantor)
     {
-        $guarantor->update(['status' => 'Deleted']);
+        $guarantor->delete();
         return response()->json(null, 204);
     }
 
     public function getNextCode()
     {
-        $latest = Guarantor::orderBy('id', 'desc')->first();
+        $latest = Guarantor::withTrashed()->orderBy('id', 'desc')->first();
         $nextId = $latest ? $latest->id + 1 : 1;
         $code = 'GU-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
         return response()->json(['code' => $code]);

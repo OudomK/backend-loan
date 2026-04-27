@@ -105,6 +105,7 @@ class ManageSettings extends Page implements HasForms
             'me_name' => Auth::user()->name,
             'me_email' => Auth::user()->email,
             'me_avatar_url' => Auth::user()->avatar_url,
+            'default_payment_qr_id' => $dbSettings['default_payment_qr_id'] ?? null,
         ]);
     }
 
@@ -276,6 +277,25 @@ class ManageSettings extends Page implements HasForms
                             ->maxValue(100)
                             ->default(0)
                             ->helperText('Used only when Auto Deduct Dividend Tax is ON. Example: 10 means 10% tax.'),
+                    ]),
+
+                Section::make('Payment QR Codes')
+                    ->hidden(fn() => $this->activeTab !== 'payment_qr')
+                    ->schema([
+                        Select::make('default_payment_qr_id')
+                            ->label('Default QR Code')
+                            ->options(\App\Models\PaymentQr::pluck('name', 'id'))
+                            ->placeholder('Select a default QR')
+                            ->helperText('This QR will be selected by default in new loan applications.'),
+
+                        \Filament\Forms\Components\Placeholder::make('manage_qrs')
+                            ->label('Full Management')
+                            ->content(new \Illuminate\Support\HtmlString('
+                                <a href="' . \App\Filament\Resources\PaymentQrs\PaymentQrResource::getUrl() . '" 
+                                   class="text-primary-600 font-bold underline hover:text-primary-500">
+                                    Click here to manage, upload, or delete all QR Codes
+                                </a>
+                            ')),
                     ]),
             ])
             ->statePath('data');

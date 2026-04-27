@@ -19,6 +19,10 @@ class CreateBorrowingRepayment extends CreateRecord
 
     protected function afterCreate(): void
     {
+        BorrowingRepaymentResource::rebuildBorrowingSchedules(
+            $this->record?->borrowing_id ? (int) $this->record->borrowing_id : null
+        );
+
         BorrowingRepaymentResource::syncBorrowingStatus(
             $this->record?->borrowing_id ? (int) $this->record->borrowing_id : null
         );

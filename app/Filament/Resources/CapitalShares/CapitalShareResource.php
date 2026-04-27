@@ -54,6 +54,9 @@ class CapitalShareResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ])
             ->where('category', 'Real Capital')
             ->with(['investor']);
     }

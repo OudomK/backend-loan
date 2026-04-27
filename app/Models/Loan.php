@@ -83,8 +83,14 @@ class Loan extends Model
         'aging',
         'monthly_interest',
         'reschedule_fee',
-        'rescheduled_at'
+        'rescheduled_at',
+        'payment_qr_id',
     ];
+
+    public function paymentQr(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(PaymentQr::class, 'payment_qr_id');
+    }
 
     public function product(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

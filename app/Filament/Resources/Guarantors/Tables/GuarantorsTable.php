@@ -38,10 +38,10 @@ class GuarantorsTable
                     ->toggleable(),
                 TextColumn::make('full_name')
                     ->label('Name')
-                    ->getStateUsing(fn ($record) => "{$record->first_name} {$record->last_name}")
+                    ->getStateUsing(fn($record) => "{$record->first_name} {$record->last_name}")
                     ->searchable(['first_name', 'last_name'])
                     ->sortable()
-                    ->description(fn ($record): ?string => collect([
+                    ->description(fn($record): ?string => collect([
                         filled($record->customer_code) ? $record->customer_code : null,
                         filled($record->phone) ? $record->phone : null,
                         filled($record->id_number) ? 'ID ' . $record->id_number : null,

@@ -16,6 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class SavingAccountResource extends Resource
 {
@@ -57,6 +58,9 @@ class SavingAccountResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ])
             ->with(['lender'])
             ->withSum('repayments as principal_paid_total', 'principal_paid');
     }

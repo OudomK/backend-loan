@@ -72,8 +72,8 @@ class PayrollForm
                                     ->options([
                                         'Cash' => 'Cash',
                                         'Bank Transfer' => 'Bank Transfer',
-                                        'Cheque' => 'Cheque',
-                                        'Other' => 'Other',
+                                        'ABA' => 'ABA',
+                                        'ACLEDA' => 'ACLEDA',
                                     ])
                                     ->searchable(),
                             ]),

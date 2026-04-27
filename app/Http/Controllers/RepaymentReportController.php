@@ -14,17 +14,19 @@ class RepaymentReportController extends Controller
         $toDate = $request->query('to_date');
         $officerId = $request->query('officer_id');
 
-        $query = RepaymentTransaction::with([
-            'loan.borrower',
-            'loan.coBorrower',
-            'loan.guarantor',
-            'loan.officer',
-            'loan.collaterals',
-            'loan.product',
-            'collector'
-        ])
-        ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
-        ->join('borrowers', 'loans.borrower_id', '=', 'borrowers.id');
+        $query = RepaymentTransaction::withTrashed()
+            ->with([
+                'loan' => function($q) { $q->withTrashed(); },
+                'loan.borrower' => function($q) { $q->withTrashed(); },
+                'loan.coBorrower' => function($q) { $q->withTrashed(); },
+                'loan.guarantor' => function($q) { $q->withTrashed(); },
+                'loan.officer',
+                'loan.collaterals',
+                'loan.product',
+                'collector'
+            ])
+            ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
+            ->join('borrowers', 'loans.borrower_id', '=', 'borrowers.id');
 
         if ($fromDate) {
             $query->where('repayment_transactions.transaction_date', '>=', $fromDate);
@@ -32,11 +34,11 @@ class RepaymentReportController extends Controller
         if ($toDate) {
             $query->where('repayment_transactions.transaction_date', '<=', $toDate);
         }
-        
+
         if ($officerId && $officerId !== 'all') {
             $query->where(function ($q) use ($officerId) {
                 $q->where('repayment_transactions.collector_id', $officerId)
-                  ->orWhere('loans.loan_officer_id', $officerId);
+                    ->orWhere('loans.loan_officer_id', $officerId);
             });
         }
 

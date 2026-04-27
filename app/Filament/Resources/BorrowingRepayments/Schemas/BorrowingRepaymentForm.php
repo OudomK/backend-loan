@@ -4,11 +4,11 @@ namespace App\Filament\Resources\BorrowingRepayments\Schemas;
 
 use App\Models\Borrowing;
 use App\Models\BorrowingSchedule;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -147,23 +147,23 @@ class BorrowingRepaymentForm
                             ->description('Preview calculated values.')
                             ->icon('heroicon-o-calculator')
                             ->schema([
-                                Placeholder::make('preview_currency')
+                                TextEntry::make('preview_currency')
                                     ->label('Currency')
                                     ->extraAttributes(['class' => 'font-bold text-primary-600'])
-                                    ->content(fn(callable $get): string => static::resolveCurrency($get('borrowing_id'))),
-                                Placeholder::make('preview_total')
+                                    ->state(fn(callable $get): string => static::resolveCurrency($get('borrowing_id'))),
+                                TextEntry::make('preview_total')
                                     ->label('Current Total')
                                     ->extraAttributes(['class' => 'text-xl font-black text-success-600'])
-                                    ->content(function (callable $get): string {
+                                    ->state(function (callable $get): string {
                                         $total = static::toFloat($get('principal_paid'))
                                             + static::toFloat($get('interest_paid'))
                                             + static::toFloat($get('penalty_paid'));
 
                                         return static::formatAmount($total, static::resolveCurrency($get('borrowing_id')));
                                     }),
-                                Placeholder::make('preview_receipt')
+                                TextEntry::make('preview_receipt')
                                     ->label('Receipt Number')
-                                    ->content(fn(callable $get): string => filled($get('receipt_no'))
+                                    ->state(fn(callable $get): string => filled($get('receipt_no'))
                                         ? (string) $get('receipt_no')
                                         : 'Auto-generate on save'),
                                 TextInput::make('total_paid')

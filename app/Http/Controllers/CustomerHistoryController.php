@@ -89,19 +89,19 @@ class CustomerHistoryController extends Controller
             case 'borrower':
                 $customer = Borrower::find($id);
                 $loans = Loan::where('borrower_id', $id)
-                    ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer'])
+                    ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'paymentQr'])
                     ->get();
                 break;
             case 'coborrower':
                 $customer = CoBorrower::find($id);
                 $loans = Loan::where('co_borrower_id', $id)
-                    ->with(['payments', 'collaterals', 'borrower', 'guarantor', 'officer'])
+                    ->with(['payments', 'collaterals', 'borrower', 'guarantor', 'officer', 'paymentQr'])
                     ->get();
                 break;
             case 'guarantor':
                 $customer = Guarantor::find($id);
                 $loans = Loan::where('guarantor_id', $id)
-                    ->with(['payments', 'collaterals', 'borrower', 'coBorrower', 'officer'])
+                    ->with(['payments', 'collaterals', 'borrower', 'coBorrower', 'officer', 'paymentQr'])
                     ->get();
                 break;
         }
@@ -130,7 +130,7 @@ class CustomerHistoryController extends Controller
 
         $contractNo = trim($contractNo);
         $loan = Loan::where('loan_code', $contractNo)
-            ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'borrower'])
+            ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'borrower', 'paymentQr'])
             ->first();
 
         if (!$loan) {
@@ -144,7 +144,7 @@ class CustomerHistoryController extends Controller
         }
 
         $loans = Loan::where('borrower_id', $borrowerId)
-            ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer'])
+            ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'paymentQr'])
             ->get();
 
         $loansPayload = $loans->map(fn(Loan $l) => $this->loanToHistoryArray($l))->values()->all();

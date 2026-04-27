@@ -36,7 +36,7 @@ class LoanCalculator
             if (strpos($currency, 'KHR') !== false) {
                 return $customRoundKHR($amount);
             }
-            return round($amount, 2); // Keep 2 decimal places for USD
+            return ceil($amount); // Round up to whole number for USD
         };
 
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
@@ -60,7 +60,7 @@ class LoanCalculator
             $monthlyPrincipal = $principal / $duration;
             $monthlyInterest = $principal * ($rate / 100);
 
-            $dailyInterestRate = ($rate / 100) / 365;
+
 
             $firstPaymentPrincipal = $monthlyPrincipal * ($firstPayPercent / 100);
             $secondPaymentPrincipal = $monthlyPrincipal * ($secondPayPercent / 100);
@@ -77,9 +77,8 @@ class LoanCalculator
 
                 if ($i == 1) {
                     $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days;
-                    $fullMonthInterest = $monthlyInterest;
-                    $additionalDaysInterest = $principal * $dailyInterestRate * $daysFromStart;
-                    $totalFirstInterest = $fullMonthInterest + $additionalDaysInterest;
+                    // Pro-rate first payment interest based on actual days (same as 50/50 method)
+                    $totalFirstInterest = $monthlyInterest * ($daysFromStart / 30);
                     $firstPaymentInterest = $applyRounding($totalFirstInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
                     $principalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
 
@@ -164,7 +163,8 @@ class LoanCalculator
 
                 if ($i == 1) {
                     $days = $loanStartDate->diff($currentPaymentDate)->days;
-                    $interestPay = $applyRounding($monthlyInterest * ($days / 30), $currency);
+                    // Pro-rate first payment interest and split by percentage (50/50)
+                    $interestPay = $applyRounding($monthlyInterest * ($days / 30) * ($firstPayPercent / 100), $currency);
                 } else {
                     $interestPay = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
                 }

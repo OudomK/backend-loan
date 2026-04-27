@@ -5,10 +5,16 @@ namespace App\Filament\Resources\SavingAccounts\Tables;
 use App\Support\CurrencyHelper;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
+use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class SavingAccountsTable
@@ -141,6 +147,7 @@ class SavingAccountsTable
                         'active' => 'Active',
                         'completed' => 'Completed',
                     ]),
+                TrashedFilter::make(),
                 SelectFilter::make('currency')
                     ->options(CurrencyHelper::options()),
                 SelectFilter::make('payment_method')
@@ -154,8 +161,9 @@ class SavingAccountsTable
                 EditAction::make()
                     ->iconButton()
                     ->tooltip('Manage borrowing'),
-                RestoreAction::make(),
-                ForceDeleteAction::make(),
+                DeleteAction::make()->iconButton(),
+                RestoreAction::make()->iconButton(),
+                ForceDeleteAction::make()->iconButton(),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -163,6 +171,12 @@ class SavingAccountsTable
                     ->icon('heroicon-m-plus-circle')
                     ->button(),
             ])
-            ->bulkActions([]);
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
+                ]),
+            ]);
     }
 }

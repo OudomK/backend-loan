@@ -6,6 +6,7 @@ use App\Models\CapitalShare;
 use App\Models\Dividend;
 use App\Models\DividendSchedule;
 use App\Models\DividendTransaction;
+use App\Models\Setting;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
@@ -14,6 +15,56 @@ class AutoDraftDividends extends Command
 {
     protected $signature = 'app:auto-draft-dividends';
     protected $description = 'Auto-create Draft dividend declarations based on active schedules';
+
+    private function getBoolSetting(string $key, bool $default = false): bool
+    {
+        $raw = Setting::where('key', $key)->value('value');
+        if ($raw === null) {
+            return $default;
+        }
+
+        $normalized = strtolower(trim((string) $raw));
+
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true);
+    }
+
+    private function isDividendTaxEnabled(): bool
+    {
+        return $this->getBoolSetting('enable_dividend_tax', false);
+    }
+
+    private function getDividendTaxRate(): float
+    {
+        $raw = Setting::where('key', 'dividend_tax_rate')->value('value');
+        if ($raw === null || $raw === '') {
+            return 0.0;
+        }
+
+        $rate = (float) $raw;
+        if ($rate < 0) {
+            return 0.0;
+        }
+        if ($rate > 100) {
+            return 100.0;
+        }
+
+        return $rate;
+    }
+
+    private function calculateScheduledTaxAmount(float $totalAmount): float
+    {
+        if (!$this->isDividendTaxEnabled()) {
+            return 0.0;
+        }
+
+        // Scheduled drafts have no manual tax entry step, so use the configured rate.
+        $rate = $this->getDividendTaxRate();
+        if ($rate <= 0) {
+            return 0.0;
+        }
+
+        return round($totalAmount * ($rate / 100), 2);
+    }
 
     public function handle(): void
     {
@@ -58,10 +109,15 @@ class AutoDraftDividends extends Command
                         $totalAmount = $perShare * $totalSharesCount;
                     }
 
+                    $totalAmount = round($totalAmount, 2);
+                    $perShare = round($perShare, 4);
+                    $taxAmount = $this->calculateScheduledTaxAmount($totalAmount);
+                    $netAmount = round($totalAmount - $taxAmount, 2);
+
                     // Create Draft dividend declaration
                     $dividend = Dividend::create([
-                        'total_amount' => round($totalAmount, 2),
-                        'dividend_per_share' => round($perShare, 4),
+                        'total_amount' => $totalAmount,
+                        'dividend_per_share' => $perShare,
                         'currency' => $schedule->currency,
                         'distribution_basis' => $schedule->type,
                         'total_shares_count' => $totalSharesCount,
@@ -69,8 +125,8 @@ class AutoDraftDividends extends Command
                         'payment_date' => now()->toDateString(),
                         'declared_by' => null,
                         'notes' => 'Auto-created from dividend schedule #' . $schedule->id,
-                        'tax_amount' => 0,
-                        'net_amount' => round($totalAmount, 2),
+                        'tax_amount' => $taxAmount,
+                        'net_amount' => $netAmount,
                         'status' => 'Draft',
                     ]);
 

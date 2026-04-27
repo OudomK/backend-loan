@@ -7,6 +7,14 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\BulkActionGroup;
+use Filament\Actions\DeleteBulkAction;
+use Filament\Actions\RestoreBulkAction;
+use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Tables\Table;
 
 class BorrowingRepaymentsTable
@@ -130,11 +138,15 @@ class BorrowingRepaymentsTable
                         'pending' => 'Pending',
                         'void' => 'Void',
                     ]),
+                TrashedFilter::make(),
             ])
             ->recordActions([
                 EditAction::make()
                     ->iconButton()
                     ->tooltip('Edit repayment'),
+                DeleteAction::make()->iconButton(),
+                RestoreAction::make()->iconButton(),
+                ForceDeleteAction::make()->iconButton(),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -142,6 +154,12 @@ class BorrowingRepaymentsTable
                     ->icon('heroicon-m-plus-circle')
                     ->button(),
             ])
-            ->bulkActions([]);
+            ->bulkActions([
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
+                ]),
+            ]);
     }
 }

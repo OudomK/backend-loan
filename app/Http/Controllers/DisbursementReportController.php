@@ -36,7 +36,7 @@ class DisbursementReportController extends Controller
 
         foreach ($officers as $officer) {
             // --- Disbursement Section ---
-            $disbQuery = Loan::where('loan_officer_id', $officer->id);
+            $disbQuery = Loan::withTrashed()->where('loan_officer_id', $officer->id);
 
             $oldDisb = (clone $disbQuery)->where('start_date', '<', $fromDateStr);
             $newDisb = (clone $disbQuery)->whereBetween('start_date', [$fromDateStr, $toDateStr]);
@@ -48,12 +48,12 @@ class DisbursementReportController extends Controller
 
             // --- Portfolio Size Section ---
             // Approximate portfolio state as of to_date using transactions recorded on/before to_date.
-            $portfolioLoans = Loan::with([
+            $portfolioLoans = Loan::withTrashed()->with([
                 'payments' => function ($query) {
                     $query->orderBy('payment_date', 'asc');
                 },
                 'transactions' => function ($query) use ($toDateStr) {
-                    $query->where('transaction_date', '<=', $toDateStr);
+                    $query->withTrashed()->where('transaction_date', '<=', $toDateStr);
                 },
             ])
                 ->where('loan_officer_id', $officer->id)
@@ -165,8 +165,8 @@ class DisbursementReportController extends Controller
             $totalClient = collect($activeBorrowerIds)->unique()->count();
 
             // --- Portfolio Mutation Section ---
-            $transactions = RepaymentTransaction::whereHas('loan', function ($q) use ($officer) {
-                $q->where('loan_officer_id', $officer->id);
+            $transactions = RepaymentTransaction::withTrashed()->whereHas('loan', function ($q) use ($officer) {
+                $q->withTrashed()->where('loan_officer_id', $officer->id);
             })->whereBetween('transaction_date', [$fromDateStr, $toDateStr])->get();
 
             $principalCollected = $transactions->sum('principal_paid');
@@ -182,7 +182,7 @@ class DisbursementReportController extends Controller
 
             // --- Due Section (Payments scheduled within the period) ---
             $duePayments = \App\Models\Payment::whereHas('loan', function ($q) use ($officer) {
-                $q->where('loan_officer_id', $officer->id);
+                $q->withTrashed()->where('loan_officer_id', $officer->id);
             })->whereBetween('payment_date', [$fromDateStr, $toDateStr])->get();
 
             $principalDue = $duePayments->sum('principal_amount');
@@ -190,13 +190,13 @@ class DisbursementReportController extends Controller
             $feeDue       = 0; // no fee column on payments table
 
             // --- Write-Off Section ---
-            $woCurLoans = Loan::where('loan_officer_id', $officer->id)
+            $woCurLoans = Loan::withTrashed()->where('loan_officer_id', $officer->id)
                 ->whereNotNull('written_off_at')
                 ->whereBetween('written_off_at', [$fromDateStr, $toDateStr])
                 ->get();
 
             $yearStart = \Carbon\Carbon::parse($toDateStr)->startOfYear()->toDateString();
-            $woYtdLoans = Loan::where('loan_officer_id', $officer->id)
+            $woYtdLoans = Loan::withTrashed()->where('loan_officer_id', $officer->id)
                 ->whereNotNull('written_off_at')
                 ->whereBetween('written_off_at', [$yearStart, $toDateStr])
                 ->get();

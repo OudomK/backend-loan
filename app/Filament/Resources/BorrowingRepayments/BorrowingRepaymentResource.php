@@ -14,8 +14,11 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class BorrowingRepaymentResource extends Resource
 {
@@ -46,6 +49,9 @@ class BorrowingRepaymentResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ])
             ->with(['borrowing.lender', 'receivedByUser']);
     }
 
@@ -88,20 +94,20 @@ class BorrowingRepaymentResource extends Resource
             ]);
         }
 
-        $alreadyPaidPrincipal = BorrowingRepayment::query()
-            ->where('borrowing_id', $borrowingId)
-            ->when($record, fn($q) => $q->where('id', '!=', $record->id))
-            ->sum('principal_paid');
+        $currentStatus = strtolower((string) ($data['payment_status'] ?? $record?->payment_status ?? 'confirmed'));
+        $alreadyPaidPrincipal = static::confirmedRepaymentsQuery($borrowingId, $record)->sum('principal_paid');
 
-        $remainingPrincipal = round((float) $borrowing->amount - (float) $alreadyPaidPrincipal, 2);
-        if ($principal > $remainingPrincipal + 0.001) {
+        $projectedConfirmedPrincipal = $alreadyPaidPrincipal
+            + ($currentStatus === 'confirmed' ? $principal : 0.0);
+
+        if ($projectedConfirmedPrincipal > ((float) $borrowing->amount + 0.001)) {
             throw ValidationException::withMessages([
                 'principal_paid' => 'Principal paid exceeds remaining principal balance.',
             ]);
         }
 
         $totalPaid = round($principal + $interest + $penalty, 2);
-        $balanceAfter = round(max((float) $borrowing->amount - ((float) $alreadyPaidPrincipal + $principal), 0), 2);
+        $balanceAfter = round(max((float) $borrowing->amount - $projectedConfirmedPrincipal, 0), 2);
 
         if (blank($data['receipt_no'] ?? null)) {
             $data['receipt_no'] = static::generateUniqueReceiptNo();
@@ -129,15 +135,126 @@ class BorrowingRepaymentResource extends Resource
             return;
         }
 
-        $paidPrincipal = (float) BorrowingRepayment::query()
-            ->where('borrowing_id', $borrowingId)
-            ->sum('principal_paid');
+        $paidPrincipal = (float) static::confirmedRepaymentsQuery($borrowingId)->sum('principal_paid');
 
         $borrowing->status = ($paidPrincipal + 0.001 >= (float) $borrowing->amount)
             ? 'completed'
             : 'active';
 
         $borrowing->saveQuietly();
+    }
+
+    public static function rebuildBorrowingSchedules(?int $borrowingId): void
+    {
+        if (!$borrowingId) {
+            return;
+        }
+
+        DB::transaction(function () use ($borrowingId): void {
+            $borrowing = Borrowing::query()
+                ->with(['schedules' => fn($query) => $query->orderBy('installment_no')])
+                ->find($borrowingId);
+
+            if (!$borrowing || $borrowing->schedules->isEmpty()) {
+                return;
+            }
+
+            $schedules = $borrowing->schedules->values();
+
+            foreach ($schedules as $schedule) {
+                $schedule->principal_paid = 0;
+                $schedule->interest_paid = 0;
+                $schedule->penalty_paid = 0;
+                $schedule->status = 'pending';
+                $schedule->paid_date = null;
+                $schedule->last_payment_date = null;
+            }
+
+            $runningConfirmedPrincipal = 0.0;
+
+            $repayments = static::confirmedRepaymentsQuery($borrowingId)
+                ->orderBy('payment_date')
+                ->orderBy('id')
+                ->get();
+
+            foreach ($repayments as $repayment) {
+                $principalLeft = round((float) $repayment->principal_paid, 2);
+                $interestLeft = round((float) $repayment->interest_paid, 2);
+                $penaltyLeft = round((float) $repayment->penalty_paid, 2);
+                $firstScheduleId = null;
+
+                foreach ($schedules as $schedule) {
+                    if ($principalLeft <= 0.001 && $interestLeft <= 0.001 && $penaltyLeft <= 0.001) {
+                        break;
+                    }
+
+                    $principalOutstanding = round(max((float) $schedule->principal_due - (float) $schedule->principal_paid, 0), 2);
+                    $interestOutstanding = round(max((float) $schedule->interest_due - (float) $schedule->interest_paid, 0), 2);
+
+                    if (
+                        $firstScheduleId === null
+                        && ($principalOutstanding > 0.001 || $interestOutstanding > 0.001 || $penaltyLeft > 0.001)
+                    ) {
+                        $firstScheduleId = (int) $schedule->id;
+                    }
+
+                    if ($penaltyLeft > 0.001 && ($principalOutstanding > 0.001 || $interestOutstanding > 0.001)) {
+                        $schedule->penalty_paid = round((float) $schedule->penalty_paid + $penaltyLeft, 2);
+                        $penaltyLeft = 0.0;
+                    }
+
+                    if ($interestLeft > 0.001 && $interestOutstanding > 0.001) {
+                        $interestApplied = min($interestLeft, $interestOutstanding);
+                        $schedule->interest_paid = round((float) $schedule->interest_paid + $interestApplied, 2);
+                        $interestLeft = round($interestLeft - $interestApplied, 2);
+                    }
+
+                    if ($principalLeft > 0.001 && $principalOutstanding > 0.001) {
+                        $principalApplied = min($principalLeft, $principalOutstanding);
+                        $schedule->principal_paid = round((float) $schedule->principal_paid + $principalApplied, 2);
+                        $principalLeft = round($principalLeft - $principalApplied, 2);
+                    }
+
+                    if (
+                        (float) $schedule->principal_paid > 0.001
+                        || (float) $schedule->interest_paid > 0.001
+                        || (float) $schedule->penalty_paid > 0.001
+                    ) {
+                        $schedule->last_payment_date = $repayment->payment_date;
+                    }
+
+                    $totalPaidExcludingPenalty = round((float) $schedule->principal_paid + (float) $schedule->interest_paid, 2);
+                    if ($totalPaidExcludingPenalty >= (float) $schedule->total_due - 0.001) {
+                        $schedule->status = 'paid';
+                        $schedule->paid_date = $repayment->payment_date;
+                    } elseif (
+                        $totalPaidExcludingPenalty > 0.001
+                        || (float) $schedule->penalty_paid > 0.001
+                    ) {
+                        $schedule->status = 'partially_paid';
+                    }
+                }
+
+                $runningConfirmedPrincipal = round($runningConfirmedPrincipal + (float) $repayment->principal_paid, 2);
+                $repayment->schedule_id = $firstScheduleId;
+                $repayment->balance_after_payment = round(max((float) $borrowing->amount - $runningConfirmedPrincipal, 0), 2);
+                $repayment->saveQuietly();
+            }
+
+            foreach ($schedules as $schedule) {
+                $schedule->saveQuietly();
+            }
+        });
+    }
+
+    private static function confirmedRepaymentsQuery(
+        int $borrowingId,
+        ?BorrowingRepayment $exceptRecord = null
+    ): EloquentBuilder {
+        return BorrowingRepayment::query()
+            ->where('borrowing_id', $borrowingId)
+            ->where('payment_status', 'confirmed')
+            ->when($exceptRecord, fn(EloquentBuilder $query) => $query->where('id', '!=', $exceptRecord->id));
     }
 
     private static function generateUniqueReceiptNo(): string

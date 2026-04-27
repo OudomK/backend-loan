@@ -18,7 +18,7 @@ class RepaymentController extends Controller
     {
         $today = Carbon::today();
 
-        $dueToday = Loan::with('borrower')
+        $dueToday = Loan::with(['borrower' => function($q) { $q->withTrashed(); }])
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('payment_date', $today)
@@ -44,7 +44,9 @@ class RepaymentController extends Controller
                 $symbol = (strpos($loan->currency, 'KHR') !== false) ? '៛' : '$';
                 return [
                     'id' => (string) $loan->id,
-                    'name' => $loan->borrower->last_name . ' ' . $loan->borrower->first_name,
+                    'name' => $loan->borrower 
+                        ? ($loan->borrower->last_name . ' ' . $loan->borrower->first_name)
+                        : 'Unknown (Deleted)',
                     'code' => $loan->loan_code ?? ('L-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT)),
                     'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
                     'amount' => $symbol . number_format($dueAmount, 2),
@@ -59,7 +61,7 @@ class RepaymentController extends Controller
 
         // Overdue: one row per overdue installment (so "3 late" = 3 rows)
         $overdueRows = collect();
-        $overdueLoans = Loan::with('borrower')
+        $overdueLoans = Loan::with(['borrower' => function($q) { $q->withTrashed(); }])
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('payment_date', '<', $today)
@@ -81,7 +83,9 @@ class RepaymentController extends Controller
                 $dpd = (int) $today->diffInDays(Carbon::parse($payment->payment_date));
                 $overdueRows->push([
                     'id' => (string) $loan->id,
-                    'name' => $loan->borrower->last_name . ' ' . $loan->borrower->first_name,
+                    'name' => $loan->borrower 
+                        ? ($loan->borrower->last_name . ' ' . $loan->borrower->first_name)
+                        : 'Unknown (Deleted)',
                     'code' => $loan->loan_code ?? ('L-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT)),
                     'payment_date' => Carbon::parse($payment->payment_date)->format('Y-m-d'),
                     'amount' => $symbol . number_format($dueAmount, 2),
@@ -107,7 +111,7 @@ class RepaymentController extends Controller
     {
         $query = $request->input('query');
 
-        $loans = Loan::with('borrower')
+        $loans = Loan::with(['borrower' => function($q) { $q->withTrashed(); }])
             ->where('status', 'active')
             ->where(function ($q) use ($query) {
                 $q->where('loan_code', 'LIKE', "%$query%")
@@ -122,7 +126,9 @@ class RepaymentController extends Controller
         return response()->json($loans->map(function ($loan) {
             return [
                 'id' => (string) $loan->id,
-                'name' => $loan->borrower->last_name . ' ' . $loan->borrower->first_name,
+                'name' => $loan->borrower 
+                    ? ($loan->borrower->last_name . ' ' . $loan->borrower->first_name)
+                    : 'Unknown (Deleted)',
                 'code' => $loan->loan_code ?? ('L-' . str_pad($loan->id, 5, '0', STR_PAD_LEFT)),
                 'principal' => (string) $loan->amount,
                 'interest' => (string) $loan->interest_rate, // Simple mapping for search
@@ -173,7 +179,7 @@ class RepaymentController extends Controller
         return DB::transaction(function () use ($validated) {
             // Acquire Pessimistic Lock (FOR UPDATE) to prevent Race Conditions (Double-Clicks)
             $loan = Loan::where('id', $validated['loan_id'])->lockForUpdate()->firstOrFail();
-            
+
             $waivedAmount = $validated['waived_amount'] ?? 0;
             $penaltyAmountTotal = $validated['penalty_amount'] ?? 0;
             $feePaid = $validated['fee_amount'] ?? 0;
@@ -249,25 +255,25 @@ class RepaymentController extends Controller
                 $totalPrincipalRemaining = 0;
                 $dueInterest = 0;
                 $dueFee = 0;
-                
+
                 foreach ($installments as $idx => $inst) {
-                    $alreadyPaidToPrinInt = max(0, $inst->total_paid - ($inst->fee_paid ?? 0)); 
+                    $alreadyPaidToPrinInt = max(0, $inst->total_paid - ($inst->fee_paid ?? 0));
                     $interestPaidSoFar = min($inst->interest_amount, $alreadyPaidToPrinInt);
                     $principalPaidSoFar = max(0, $alreadyPaidToPrinInt - $interestPaidSoFar);
 
                     $totalPrincipalRemaining += ($inst->principal_amount - $principalPaidSoFar);
-                    
+
                     $dueFee += (($inst->fee_amount ?? 0) - ($inst->fee_paid ?? 0));
-                    
+
                     if ($idx === 0) {
-                       $dueInterest += ($inst->interest_amount - $interestPaidSoFar);
+                        $dueInterest += ($inst->interest_amount - $interestPaidSoFar);
                     } elseif ($idx === 1) {
-                       $dueInterest += $inst->interest_amount; // 1 month advance interest penalty
+                        $dueInterest += $inst->interest_amount; // 1 month advance interest penalty
                     }
                 }
-                
+
                 $expectedPayOff = round($totalPrincipalRemaining + $dueInterest + $dueFee, 2);
-                
+
                 if (abs($totalToDistribute - $expectedPayOff) > 0.01) {
                     $expectedTotalWithPenalty = round($expectedPayOff + $cashPenaltyPaid, 2);
                     throw new \Exception("Total payment (Paid Amount) must perfectly match the Pay Off amount ($expectedTotalWithPenalty). (Principal: $totalPrincipalRemaining, Interest: $dueInterest, Fee: $dueFee, Penalty: $cashPenaltyPaid).");
@@ -304,7 +310,7 @@ class RepaymentController extends Controller
             foreach ($installments as $inst) {
                 if ($totalToDistribute <= 0.001)
                     break;
-        
+
                 // Waterfall Priority for this installment: Fee -> Interest -> Principal
                 // 1. Fee
                 $dueFee = $inst->fee_amount - $inst->fee_paid;
@@ -320,10 +326,10 @@ class RepaymentController extends Controller
                 }
 
                 // 2. Interest
-                $alreadyPaidToPrinInt = max(0, $inst->total_paid - $inst->fee_paid); 
+                $alreadyPaidToPrinInt = max(0, $inst->total_paid - $inst->fee_paid);
                 $interestPaidSoFar = min($inst->interest_amount, $alreadyPaidToPrinInt);
                 $dueInterest = $inst->interest_amount - $interestPaidSoFar;
-                
+
                 $interestToPay = 0;
                 // Only pay interest if NOT Pay Off (for future rows) OR if it's 1st or 2nd unpaid row
                 $isFirstOrSecond = ($inst === $installments->first() || ($installments->count() > 1 && $inst === $installments[1]));
@@ -342,12 +348,12 @@ class RepaymentController extends Controller
                     $principalToPay = round(min($totalToDistribute, $duePrincipal), 2);
                     $totalPrincipalPaid += $principalToPay;
                     $totalToDistribute -= $principalToPay;
-                    
+
                     if ($inst === $installments->first()) {
                         $firstRowPrincipalPaid = $principalToPay;
                     }
                 }
-        
+
                 $appliedToThisRow = round($feeApplied + $interestToPay + $principalToPay, 2);
                 $inst->total_paid = round($inst->total_paid + $appliedToThisRow, 2);
                 $inst->repayment_transaction_id = $transaction->id;
@@ -367,7 +373,7 @@ class RepaymentController extends Controller
                     $lastUpdatedInst->total_paid = round($lastUpdatedInst->total_paid + $totalToDistribute, 2);
                     $lastUpdatedInst->prepayment = $extraPrincipal; // ← save prepayment column
                     $lastUpdatedInst->save();
-                    $totalToDistribute = 0; 
+                    $totalToDistribute = 0;
                     break;
                 }
             }
@@ -460,7 +466,7 @@ class RepaymentController extends Controller
                 $installments = Payment::where('loan_id', $loan->id)
                     ->where('repayment_transaction_id', $transaction->id)
                     ->get();
-                
+
                 // If no direct link (older data), fallback to reverse waterfall on latest paid
                 if ($installments->isEmpty()) {
                     $installments = Payment::where('loan_id', $loan->id)
@@ -472,7 +478,7 @@ class RepaymentController extends Controller
                 $feeToReverse = (float) $transaction->fee_paid;
                 $interestToReverse = (float) $transaction->interest_paid;
                 $principalToReverse = (float) ($transaction->principal_paid + $transaction->paid_off_amount);
-                
+
                 /** @var \App\Models\Payment $inst */
                 foreach ($installments as $inst) {
                     // Reverse Fee

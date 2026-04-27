@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Roles;
 
-use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use App\Filament\Resources\Roles\Pages\CreateRole;
 use App\Filament\Resources\Roles\Pages\EditRole;
 use App\Filament\Resources\Roles\Pages\ListRoles;
 use App\Filament\Resources\Roles\Pages\ViewRole;
+use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use BezhanSalleh\FilamentShield\Support\Utils;
 use BezhanSalleh\FilamentShield\Traits\HasShieldFormComponents;
 use BezhanSalleh\PluginEssentials\Concerns\Resource as Essentials;
 use Filament\Actions\CreateAction;
-use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
@@ -56,9 +55,6 @@ class RoleResource extends Resource
     }
 
     /**
-     * Get UI permission names with friendly labels for display.
-     */
-    /**
      * Get UI feature names grouped for better organization.
      */
     public static function getUiFeatureGroups(): array
@@ -89,7 +85,7 @@ class RoleResource extends Resource
             'Menu Visibility' => [
                 'credit_menu' => 'Credit Menu',
                 'operation_menu' => 'Operation Menu',
-            ]
+            ],
         ];
     }
 
@@ -117,7 +113,8 @@ class RoleResource extends Resource
                                 TextInput::make('name')
                                     ->label(__('filament-shield::filament-shield.field.name'))
                                     ->unique(
-                                        ignoreRecord: true, /** @phpstan-ignore-next-line */
+                                        ignoreRecord: true,
+                                        /** @phpstan-ignore-next-line */
                                         modifyRuleUsing: fn(Unique $rule): Unique => Utils::isTenancyEnabled() ? $rule->where(Utils::getTenantModelForeignKey(), Filament::getTenant()?->id) : $rule
                                     )
                                     ->required()
@@ -134,8 +131,8 @@ class RoleResource extends Resource
                                 Select::make('category')
                                     ->label('Category')
                                     ->options([
-                                        'admin' => '🔧 Admin Panel',
-                                        'system_ui' => '📱 System UI (Flutter)',
+                                        'admin' => 'Admin Panel',
+                                        'system_ui' => 'System UI (Flutter)',
                                     ])
                                     ->default('admin')
                                     ->required()
@@ -157,7 +154,6 @@ class RoleResource extends Resource
                                     ->dehydrated(fn(): bool => static::shield()->isCentralApp() && Utils::isTenancyEnabled()),
 
                                 static::getSelectAllFormComponent(),
-
                             ])
                             ->columns([
                                 'sm' => 2,
@@ -167,18 +163,17 @@ class RoleResource extends Resource
                     ])
                     ->columnSpanFull(),
 
-                // === Admin permissions (Filament Shield) ===
-                // Show Shield sections only when category = admin
                 static::getShieldFormComponents()
                     ->visible(fn($get) => ($get('category') ?? 'admin') === 'admin'),
-
 
                 Section::make('System UI Permissions')
                     ->description('Select which features to show in the Flutter app and what actions are allowed. Organized by feature groups.')
                     ->schema(function () {
                         $sections = [];
+
                         foreach (static::getUiFeatureGroups() as $groupName => $features) {
                             $featureFields = [];
+
                             foreach ($features as $key => $label) {
                                 $featureFields[] = Fieldset::make($label)
                                     ->schema([
@@ -186,31 +181,37 @@ class RoleResource extends Resource
                                             ->label('Show Feature')
                                             ->live()
                                             ->afterStateHydrated(function (Toggle $component, $record) use ($key) {
-                                                if (!$record)
+                                                if (! $record) {
                                                     return;
+                                                }
+
                                                 $exists = $record->permissions->pluck('name')
-                                                    ->filter(fn($p) => $p === "ui:{$key}" || $p === "ui:{$key}:view")
+                                                    ->filter(fn($permission) => $permission === "ui:{$key}" || $permission === "ui:{$key}:view")
                                                     ->isNotEmpty();
+
                                                 $component->state($exists);
                                             }),
                                         CheckboxList::make("ui_feature_{$key}_actions")
                                             ->label('Actions')
                                             ->options(function () use ($groupName) {
-                                                // Reports only get 'Export', others get full CRUD + Export
                                                 if ($groupName === 'Reports') {
                                                     return ['export' => 'Export'];
                                                 }
+
                                                 return static::getUiActions();
                                             })
                                             ->columns(2)
                                             ->visible(fn($get) => $get("ui_feature_{$key}_show") && $groupName !== 'Menu Visibility')
                                             ->afterStateHydrated(function (CheckboxList $component, $record) use ($key) {
-                                                if (!$record)
+                                                if (! $record) {
                                                     return;
+                                                }
+
                                                 $actions = $record->permissions->pluck('name')
-                                                    ->filter(fn($p) => str_starts_with($p, "ui:{$key}:") && !str_ends_with($p, ":view"))
-                                                    ->map(fn($p) => str_replace("ui:{$key}:", "", $p))
+                                                    ->filter(fn($permission) => str_starts_with($permission, "ui:{$key}:") && ! str_ends_with($permission, ':view'))
+                                                    ->map(fn($permission) => str_replace("ui:{$key}:", '', $permission))
                                                     ->toArray();
+
                                                 $component->state($actions);
                                             }),
                                     ])
@@ -224,10 +225,11 @@ class RoleResource extends Resource
                                         'sm' => 2,
                                         'lg' => 3,
                                     ])
-                                        ->schema($featureFields)
+                                        ->schema($featureFields),
                                 ])
                                 ->collapsible();
                         }
+
                         return $sections;
                     })
                     ->visible(fn($get) => ($get('category') ?? 'admin') === 'system_ui')
@@ -255,8 +257,8 @@ class RoleResource extends Resource
                         default => 'gray',
                     })
                     ->formatStateUsing(fn(string $state): string => match ($state) {
-                        'admin' => '🔧 Admin',
-                        'system_ui' => '📱 System UI',
+                        'admin' => 'Admin',
+                        'system_ui' => 'System UI',
                         default => $state,
                     })
                     ->label('Category'),
@@ -284,8 +286,8 @@ class RoleResource extends Resource
                 SelectFilter::make('category')
                     ->label('Category')
                     ->options([
-                        'admin' => '🔧 Admin',
-                        'system_ui' => '📱 System UI',
+                        'admin' => 'Admin',
+                        'system_ui' => 'System UI',
                     ]),
             ])
             ->recordActions([

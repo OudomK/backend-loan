@@ -41,8 +41,6 @@ class AdminPanelProvider extends PanelProvider
             ->spa()
             ->login(\App\Filament\Pages\Auth\Login::class)
             ->defaultThemeMode(ThemeMode::Dark)
-            ->sidebarCollapsibleOnDesktop()
-            ->sidebarFullyCollapsibleOnDesktop()
             ->font(
                 family: 'Kantumruy Pro',
                 provider: LocalFontProvider::class,

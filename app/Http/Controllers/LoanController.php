@@ -18,6 +18,11 @@ class LoanController extends Controller
         $this->calculator = $calculator;
     }
 
+    public function getPaymentQrs()
+    {
+        return response()->json(\App\Models\PaymentQr::where('is_active', true)->get());
+    }
+
     /** Normalize schedule date (d/m/Y or Y-m-d) to Y-m-d for DB. */
     private function normalizeScheduleDate(string $date): string
     {
@@ -30,7 +35,7 @@ class LoanController extends Controller
 
     public function index()
     {
-        return response()->json(Loan::with(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'product'])->get());
+        return response()->json(Loan::with(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'product', 'paymentQr'])->get());
     }
 
     /**
@@ -83,6 +88,7 @@ class LoanController extends Controller
             'collaterals.*.currency' => 'nullable|string',
             'collaterals.*.description' => 'nullable|string',
             'custom_schedule' => 'nullable|array', // For negotiable loans
+            'payment_qr_id' => 'nullable|exists:payment_qrs,id',
         ]);
 
         // Ensure admin_fee is always set from request (fee %)
@@ -220,7 +226,7 @@ class LoanController extends Controller
             }
         }
 
-        return response()->json($loan->load(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'payments', 'product']), 201);
+        return response()->json($loan->load(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'payments', 'product', 'paymentQr']), 201);
     }
 
     public function previewSchedule(Request $request)
@@ -289,7 +295,7 @@ class LoanController extends Controller
     {
         return response()->json($loan->load([
             'borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals',
-            'payments', 'product'
+            'payments', 'product', 'paymentQr'
         ]));
     }
 

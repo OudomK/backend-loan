@@ -27,7 +27,7 @@ class CoBorrowerController extends Controller
             $query->limit(25);
         }
 
-        $query->where('status', '!=', 'Deleted');
+        // Laravel SoftDeletes will automatically filter out deleted records.
 
         if ($request->has('id_number')) {
             $query->where('id_number', $request->query('id_number'));
@@ -63,7 +63,7 @@ class CoBorrowerController extends Controller
         ]);
 
         if (empty($validated['customer_code'])) {
-            $latest = CoBorrower::orderBy('id', 'desc')->first();
+            $latest = CoBorrower::withTrashed()->orderBy('id', 'desc')->first();
             $nextId = $latest ? $latest->id + 1 : 1;
             $validated['customer_code'] = 'CB-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
         }
@@ -105,13 +105,13 @@ class CoBorrowerController extends Controller
 
     public function destroy(CoBorrower $coBorrower)
     {
-        $coBorrower->update(['status' => 'Deleted']);
+        $coBorrower->delete();
         return response()->json(null, 204);
     }
 
     public function getNextCode()
     {
-        $latest = CoBorrower::orderBy('id', 'desc')->first();
+        $latest = CoBorrower::withTrashed()->orderBy('id', 'desc')->first();
         $nextId = $latest ? $latest->id + 1 : 1;
         $code = 'CB-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
         return response()->json(['code' => $code]);
