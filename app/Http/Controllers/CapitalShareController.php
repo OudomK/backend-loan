@@ -427,7 +427,7 @@ class CapitalShareController extends Controller
 
             // Accumulate balance (do NOT reset to newTotalCapital - that can reduce balance)
             $newBalance = round((float) $share->balance + $addAmount, 2);
-            DB::table('capital_shares')->where('id', $share->id)->update([
+            DB::table('capital_shares')->where('id', $share->id)->whereNull('deleted_at')->update([
                 'share_qty'     => $newShareQty,
                 'total_capital' => $newTotalCapital,
                 'amount'        => $newTotalCapital,
@@ -515,7 +515,7 @@ class CapitalShareController extends Controller
             $newTotalCapital = round($newShareQty * $parValue, 2);
             $newBalance = round(max(0, (float) $share->balance - $withdrawAmount), 2);
 
-            DB::table('capital_shares')->where('id', $share->id)->update([
+            DB::table('capital_shares')->where('id', $share->id)->whereNull('deleted_at')->update([
                 'share_qty' => $newShareQty,
                 'total_capital' => $newTotalCapital,
                 'amount' => $newTotalCapital,

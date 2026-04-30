@@ -26,9 +26,9 @@ class IncomeStatementController extends Controller
             if ($currencyParam && $currencyParam !== 'all') {
                 $currencies = [$currencyParam];
             } else {
-                $loanCurrs = DB::table('loans')->whereBetween('start_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
-                $miscCurrs = DB::table('miscellaneous_transactions')->whereBetween('transaction_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
-                $borrowingCurrs = DB::table('borrowings')->whereBetween('borrowing_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
+                $loanCurrs = DB::table('loans')->whereNull('deleted_at')->whereBetween('start_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
+                $miscCurrs = DB::table('miscellaneous_transactions')->whereNull('deleted_at')->whereBetween('transaction_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
+                $borrowingCurrs = DB::table('borrowings')->whereNull('deleted_at')->whereBetween('borrowing_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
 
                 $rawCurrs = array_merge(['USD'], $loanCurrs, $miscCurrs, $borrowingCurrs);
                 $normalized = [];
@@ -77,6 +77,7 @@ class IncomeStatementController extends Controller
                 $interest = (double) DB::table('repayment_transactions')
                     ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
                     ->whereNull('repayment_transactions.deleted_at')
+                    ->whereNull('loans.deleted_at')
                     ->where('loans.currency', 'LIKE', $curr . '%')
                     ->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate])
                     ->sum('repayment_transactions.interest_paid');
@@ -87,6 +88,7 @@ class IncomeStatementController extends Controller
                 $penalty = (double) DB::table('repayment_transactions')
                     ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
                     ->whereNull('repayment_transactions.deleted_at')
+                    ->whereNull('loans.deleted_at')
                     ->where('loans.currency', 'LIKE', $curr . '%')
                     ->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate])
                     ->sum('repayment_transactions.penalty_paid');
@@ -95,6 +97,7 @@ class IncomeStatementController extends Controller
                 $revenueItems['penalty_income']['total_usd'] += ($curr === 'USD' ? $penalty : $penalty / $exchangeRate);
 
                 $admin = (double) DB::table('loans')
+                    ->whereNull('loans.deleted_at')
                     ->where('loans.currency', 'LIKE', $curr . '%')
                     ->whereBetween('loans.start_date', [$fromDate, $toDate])
                     ->sum('loans.admin_fee');
@@ -140,6 +143,7 @@ class IncomeStatementController extends Controller
                 $borrInt = (double) DB::table('borrowing_repayments')
                     ->join('borrowings', 'borrowing_repayments.borrowing_id', '=', 'borrowings.id')
                     ->whereNull('borrowing_repayments.deleted_at')
+                    ->whereNull('borrowings.deleted_at')
                     ->where('borrowings.currency', 'LIKE', $curr . '%')
                     ->whereBetween('borrowing_repayments.payment_date', [$fromDate, $toDate])
                     ->sum('borrowing_repayments.interest_paid');

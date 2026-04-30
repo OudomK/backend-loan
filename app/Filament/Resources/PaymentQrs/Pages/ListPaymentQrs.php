@@ -10,10 +10,30 @@ class ListPaymentQrs extends ListRecords
 {
     protected static string $resource = PaymentQrResource::class;
 
+    public function getHeading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return null;
+    }
+
+    public function getSubheading(): string|\Illuminate\Contracts\Support\Htmlable|null
+    {
+        return null;
+    }
+
+    public function getBreadcrumbs(): array
+    {
+        return [];
+    }
+
+    public function getMaxContentWidth(): string|null
+    {
+        return 'full';
+    }
+
     protected function getHeaderActions(): array
     {
         return [
-            CreateAction::make(),
+            // Header actions are configured in PaymentQrsTable
         ];
     }
 }

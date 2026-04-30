@@ -29,10 +29,10 @@ class AppServiceProvider extends ServiceProvider
 
         Event::subscribe(AuthEventSubscriber::class);
 
-        // Let super_admin (users.role column) bypass all Filament/Shield authorization
-        // so the Admin Panel shows all resources/pages instead of only 4.
+        // Let admin users from the legacy role column bypass Filament/Shield authorization.
+        // Spatie roles still work normally for users created from the Role/User screens.
         Gate::before(function (?object $user, string $ability): ?bool {
-            if ($user instanceof User && strtolower((string) ($user->role ?? '')) === 'super_admin') {
+            if ($user instanceof User && in_array(strtolower((string) ($user->role ?? '')), ['admin', 'super_admin'], true)) {
                 return true;
             }
             return null;

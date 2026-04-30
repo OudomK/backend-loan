@@ -35,12 +35,16 @@ class LoanOperationController extends Controller
         try {
             $principalPaidUSD = (float) (DB::table('payments')
                 ->join('loans', 'payments.loan_id', '=', 'loans.id')
+                ->whereNull('payments.deleted_at')
+                ->whereNull('loans.deleted_at')
                 ->where('loans.status', '!=', 'completed')
                 ->where('loans.currency', 'LIKE', 'USD%')
                 ->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0) - COALESCE(payments.interest_amount,0)))), 0) as paid')
                 ->value('paid') ?? 0);
             $principalPaidKHR = (float) (DB::table('payments')
                 ->join('loans', 'payments.loan_id', '=', 'loans.id')
+                ->whereNull('payments.deleted_at')
+                ->whereNull('loans.deleted_at')
                 ->where('loans.status', '!=', 'completed')
                 ->where('loans.currency', 'LIKE', 'KHR%')
                 ->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0) - COALESCE(payments.interest_amount,0)))), 0) as paid')
@@ -61,6 +65,8 @@ class LoanOperationController extends Controller
             $today = Carbon::today('Asia/Phnom_Penh');
             $overdueUSD = (float) (DB::table('payments')
                 ->join('loans', 'payments.loan_id', '=', 'loans.id')
+                ->whereNull('payments.deleted_at')
+                ->whereNull('loans.deleted_at')
                 ->where('loans.status', '!=', 'completed')
                 ->where('loans.currency', 'LIKE', 'USD%')
                 ->where('payments.payment_date', '<', $today)
@@ -69,6 +75,8 @@ class LoanOperationController extends Controller
                 ->value('overdue') ?? 0);
             $overdueKHR = (float) (DB::table('payments')
                 ->join('loans', 'payments.loan_id', '=', 'loans.id')
+                ->whereNull('payments.deleted_at')
+                ->whereNull('loans.deleted_at')
                 ->where('loans.status', '!=', 'completed')
                 ->where('loans.currency', 'LIKE', 'KHR%')
                 ->where('payments.payment_date', '<', $today)
@@ -78,6 +86,8 @@ class LoanOperationController extends Controller
             $thirtyDaysAgo = $today->copy()->subDays(30);
             $loanIdsOverdue30 = DB::table('payments')
                 ->join('loans', 'payments.loan_id', '=', 'loans.id')
+                ->whereNull('payments.deleted_at')
+                ->whereNull('loans.deleted_at')
                 ->where('loans.status', '!=', 'completed')
                 ->where('payments.payment_date', '<', $thirtyDaysAgo)
                 ->whereRaw('COALESCE(payments.total_paid,0) < (COALESCE(payments.principal_amount,0) + COALESCE(payments.interest_amount,0))')
@@ -88,10 +98,10 @@ class LoanOperationController extends Controller
             $par30AmountUSD = 0.0;
             $par30AmountKHR = 0.0;
             if ($loanIdsOverdue30->isNotEmpty()) {
-                $par30PrincipalPaidUSD = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'USD%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0)-COALESCE(payments.interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
+                $par30PrincipalPaidUSD = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereNull('payments.deleted_at')->whereNull('loans.deleted_at')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'USD%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0)-COALESCE(payments.interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
                 $par30DisbursedUSD = (float) Loan::whereIn('id', $loanIdsOverdue30)->where('currency', 'LIKE', 'USD%')->sum('amount');
                 $par30AmountUSD = max(0, $par30DisbursedUSD - $par30PrincipalPaidUSD);
-                $par30PrincipalPaidKHR = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'KHR%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0)-COALESCE(payments.interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
+                $par30PrincipalPaidKHR = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereNull('payments.deleted_at')->whereNull('loans.deleted_at')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'KHR%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0)-COALESCE(payments.interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
                 $par30DisbursedKHR = (float) Loan::whereIn('id', $loanIdsOverdue30)->where('currency', 'LIKE', 'KHR%')->sum('amount');
                 $par30AmountKHR = max(0, $par30DisbursedKHR - $par30PrincipalPaidKHR);
             }
@@ -116,9 +126,9 @@ class LoanOperationController extends Controller
             \Illuminate\Support\Facades\Log::error('LoanOperation getStats failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             // Fallback: try raw count/sum so we don't return all zeros
             try {
-                $c = DB::table('loans')->where('status', '!=', 'completed')->count();
-                $usd = (float) DB::table('loans')->where('status', '!=', 'completed')->where('currency', 'LIKE', 'USD%')->sum('amount');
-                $khr = (float) DB::table('loans')->where('status', '!=', 'completed')->where('currency', 'LIKE', 'KHR%')->sum('amount');
+                $c = DB::table('loans')->whereNull('deleted_at')->where('status', '!=', 'completed')->count();
+                $usd = (float) DB::table('loans')->whereNull('deleted_at')->where('status', '!=', 'completed')->where('currency', 'LIKE', 'USD%')->sum('amount');
+                $khr = (float) DB::table('loans')->whereNull('deleted_at')->where('status', '!=', 'completed')->where('currency', 'LIKE', 'KHR%')->sum('amount');
                 $total = $usd + ($khr / max(1, $exchangeRate));
                 return response()->json([
                     'active_loans' => $c,

@@ -40,6 +40,7 @@ class LoanCollectionReportController extends Controller
             ])
             ->whereNull('repayment_transactions.deleted_at')
             ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
+            ->whereNull('loans.deleted_at')
             ->leftJoin('borrowers', 'loans.borrower_id', '=', 'borrowers.id')
             ->leftJoin('loan_officers', 'repayment_transactions.collector_id', '=', 'loan_officers.id');
 

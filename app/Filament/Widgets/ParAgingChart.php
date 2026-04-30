@@ -15,19 +15,41 @@ class ParAgingChart extends ChartWidget
 
     protected function getData(): array
     {
-        $ttl = 60;
+        $today = now()->toDateString();
 
-        $buckets = Cache::remember('filament.chart.par_aging', $ttl, function () {
-            return [
-                'Current'  => Loan::where('status', 'active')->where(function ($q) {
-                    $q->where('aging', 0)->orWhereNull('aging');
-                })->count(),
-                '1–30 days'  => Loan::where('status', 'active')->whereBetween('aging', [1, 30])->count(),
-                '31–60 days' => Loan::where('status', 'active')->whereBetween('aging', [31, 60])->count(),
-                '61–90 days' => Loan::where('status', 'active')->whereBetween('aging', [61, 90])->count(),
-                '90+ days'   => Loan::where('status', 'active')->where('aging', '>', 90)->count(),
-            ];
-        });
+        $loans = Loan::where('status', 'active')
+            ->select('id')
+            ->addSelect([
+                'real_aging' => \App\Models\Payment::selectRaw('DATEDIFF(?, MIN(payment_date))', [$today])
+                    ->whereColumn('loan_id', 'loans.id')
+                    ->where('payment_date', '<', $today)
+                    ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
+            ])
+            ->get();
+
+        $buckets = [
+            'Current'    => 0,
+            '1–30 days'  => 0,
+            '31–60 days' => 0,
+            '61–90 days' => 0,
+            '90+ days'   => 0,
+        ];
+
+        foreach ($loans as $loan) {
+            $aging = $loan->real_aging ?? 0;
+
+            if ($aging <= 0) {
+                $buckets['Current']++;
+            } elseif ($aging <= 30) {
+                $buckets['1–30 days']++;
+            } elseif ($aging <= 60) {
+                $buckets['31–60 days']++;
+            } elseif ($aging <= 90) {
+                $buckets['61–90 days']++;
+            } else {
+                $buckets['90+ days']++;
+            }
+        }
 
         return [
             'datasets' => [

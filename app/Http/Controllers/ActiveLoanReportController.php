@@ -22,7 +22,7 @@ class ActiveLoanReportController extends Controller
         $fromDateStr = $fromDate ? $fromDate->toDateString() : null;
 
         // Load candidate loans and reconstruct the portfolio as of the selected date.
-        $query = Loan::withTrashed()->with([
+        $query = Loan::with([
             'borrower' => function($q) { $q->withTrashed(); },
             'officer',
             'disburseOfficer',
@@ -32,7 +32,7 @@ class ActiveLoanReportController extends Controller
                 $query->orderBy('payment_date', 'asc');
             },
             'transactions' => function ($query) use ($refDateStr) {
-                $query->withTrashed()->where('transaction_date', '<=', $refDateStr);
+                $query->where('transaction_date', '<=', $refDateStr);
             },
         ])
             ->where('status', '!=', 'pending')

@@ -60,6 +60,8 @@ class EditRole extends EditRecord
             }
         }
 
+        $this->permissions = RoleResource::expandUiPermissionAliases($this->permissions);
+
         $keepKeys = ['name', 'guard_name', 'category'];
         if (Utils::isTenancyEnabled() && Arr::has($data, Utils::getTenantModelForeignKey()) && filled($data[Utils::getTenantModelForeignKey()])) {
             $keepKeys[] = Utils::getTenantModelForeignKey();

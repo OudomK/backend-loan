@@ -30,6 +30,7 @@ use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Unique;
 
@@ -102,6 +103,28 @@ class RoleResource extends Resource
         ];
     }
 
+    public static function expandUiPermissionAliases(Collection $permissions): Collection
+    {
+        $expanded = collect($permissions);
+
+        foreach ($permissions as $permission) {
+            if (! is_string($permission)) {
+                continue;
+            }
+
+            foreach ([
+                'ui:dividend' => 'ui:dividend_declaration',
+                'ui:hr_employee' => 'ui:hr_payroll',
+            ] as $source => $alias) {
+                if ($permission === $source || str_starts_with($permission, "{$source}:")) {
+                    $expanded->push($alias . substr($permission, strlen($source)));
+                }
+            }
+        }
+
+        return $expanded->unique()->values();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -122,10 +145,8 @@ class RoleResource extends Resource
 
                                 TextInput::make('guard_name')
                                     ->label(__('filament-shield::filament-shield.field.guard_name'))
-                                    ->default(Utils::getFilamentAuthGuard())
-                                    ->nullable()
-                                    ->maxLength(255)
-                                    ->disabled(fn($get) => $get('category') === 'system_ui')
+                                    ->default('web')
+                                    ->disabled()
                                     ->dehydrated(),
 
                                 Select::make('category')
@@ -303,6 +324,7 @@ class RoleResource extends Resource
                 DeleteBulkAction::make(),
             ]);
     }
+
 
     public static function getRelations(): array
     {

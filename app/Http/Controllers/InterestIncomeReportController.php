@@ -51,7 +51,8 @@ class InterestIncomeReportController extends Controller
                     'borrowers.last_name',
                     'loan_products.name as product_name',
                 ])
-                ->where('loans.status', '!=', 'pending');
+                ->where('loans.status', '!=', 'pending')
+                ->whereNull('loans.deleted_at');
 
             $query->addSelect([
                 DB::raw("(SELECT type FROM collaterals WHERE collaterals.loan_id = loans.id ORDER BY collaterals.id ASC LIMIT 1) as collateral_type"),

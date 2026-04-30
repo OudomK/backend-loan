@@ -18,7 +18,7 @@ class InactiveLoanReportController extends Controller
         // (If there are other statuses like 'written_off' added later, include them here)
         $statuses = ['completed', 'paid_off'];
 
-        $query = Loan::withTrashed()->with([
+        $query = Loan::with([
             'borrower' => function($q) { $q->withTrashed(); },
             'officer',
             'disburseOfficer',

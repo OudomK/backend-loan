@@ -24,7 +24,7 @@ class QualityPortfolioController extends Controller
 
         // Group by officer + product + currency so mixed currencies never collapse
         // into one row when the user selects "all".
-        $combinations = Loan::withTrashed()->with(['officer', 'product'])
+        $combinations = Loan::with(['officer', 'product'])
             ->select('loan_officer_id', 'product_id', 'currency')
             ->whereNotNull('loan_officer_id')
             ->when($currency !== 'all', function ($query) use ($currency) {
@@ -45,7 +45,7 @@ class QualityPortfolioController extends Controller
 
             try {
                 // Get loans for this officer/product/currency combination.
-                $baseQuery = Loan::withTrashed()->where('loan_officer_id', $officer->id)
+                $baseQuery = Loan::query()->where('loan_officer_id', $officer->id)
                     ->where('product_id', $combo->product_id)
                     ->where('currency', $comboCurrency);
 
@@ -63,12 +63,12 @@ class QualityPortfolioController extends Controller
                 $newDisbAmount = $newDisb->sum('amount') ?? 0;
 
                 // --- 2. Portfolio Size (End of Period) ---
-                $portfolioLoans = Loan::withTrashed()->with([
+                $portfolioLoans = Loan::with([
                     'payments' => function ($query) {
                         $query->orderBy('payment_date', 'asc');
                     },
                     'transactions' => function ($query) use ($toDateStr) {
-                        $query->withTrashed()->where('transaction_date', '<=', $toDateStr);
+                        $query->where('transaction_date', '<=', $toDateStr);
                     },
                 ])
                     ->where('loan_officer_id', $officer->id)
@@ -88,8 +88,8 @@ class QualityPortfolioController extends Controller
                 $feeOS = 0;
 
                 // --- 3. Portfolio Mutation (This Period) ---
-                $transactions = RepaymentTransaction::withTrashed()->whereHas('loan', function ($q) use ($officer, $combo, $comboCurrency) {
-                    $q->withTrashed()->where('loan_officer_id', $officer->id)
+                $transactions = RepaymentTransaction::query()->whereHas('loan', function ($q) use ($officer, $combo, $comboCurrency) {
+                    $q->where('loan_officer_id', $officer->id)
                         ->where('product_id', $combo->product_id)
                         ->where('currency', $comboCurrency);
                 })->whereBetween('transaction_date', [$fromDateStr, $toDateStr])->get();

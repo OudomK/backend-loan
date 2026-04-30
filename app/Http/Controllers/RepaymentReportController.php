@@ -14,7 +14,7 @@ class RepaymentReportController extends Controller
         $toDate = $request->query('to_date');
         $officerId = $request->query('officer_id');
 
-        $query = RepaymentTransaction::withTrashed()
+        $query = RepaymentTransaction::query()
             ->with([
                 'loan' => function($q) { $q->withTrashed(); },
                 'loan.borrower' => function($q) { $q->withTrashed(); },
@@ -26,7 +26,8 @@ class RepaymentReportController extends Controller
                 'collector'
             ])
             ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
-            ->join('borrowers', 'loans.borrower_id', '=', 'borrowers.id');
+            ->join('borrowers', 'loans.borrower_id', '=', 'borrowers.id')
+            ->whereNull('loans.deleted_at');
 
         if ($fromDate) {
             $query->where('repayment_transactions.transaction_date', '>=', $fromDate);

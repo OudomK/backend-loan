@@ -16,12 +16,12 @@ class LoanOutstandingParReportController extends Controller
         $refDateStr = $refDate->toDateString();
         $refDateTime = $refDate->toDateTimeString();
 
-        $loans = Loan::withTrashed()->with([
+        $loans = Loan::with([
             'payments' => function ($query) {
                 $query->orderBy('payment_date', 'asc');
             },
             'transactions' => function ($query) use ($refDateTime) {
-                $query->withTrashed()->where('transaction_date', '<=', $refDateTime);
+                $query->where('transaction_date', '<=', $refDateTime);
             },
         ])
             ->where('start_date', '<=', $refDateStr)
