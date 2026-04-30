@@ -126,16 +126,16 @@ class CapitalShareController extends Controller
     public function index()
     {
         $shares = CapitalShare::with(['lender', 'investor'])->get();
-        return $shares->map(fn($s) => $this->transformShare($s));
+        return $shares->map(fn(CapitalShare $s) => $this->transformShare($s));
     }
 
-    public function show($id)
+    public function show(string|int $id)
     {
         $share = CapitalShare::with(['lender', 'investor'])->findOrFail($id);
         return response()->json($this->transformShare($share));
     }
 
-    public function destroy(Request $request, $id)
+    public function destroy(Request $request, string|int $id)
     {
         $this->ensurePermission($request, 'ui:capital_share:delete');
 
@@ -261,7 +261,7 @@ class CapitalShareController extends Controller
         return response()->json($share, 201);
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, string|int $id)
     {
         $this->ensurePermission($request, 'ui:capital_share:edit');
 
@@ -370,7 +370,7 @@ class CapitalShareController extends Controller
         return response()->json($share);
     }
 
-    public function addCapital(Request $request, $id)
+    public function addCapital(Request $request, string|int $id)
     {
         $share = CapitalShare::findOrFail($id);
 
@@ -451,7 +451,7 @@ class CapitalShareController extends Controller
         });
     }
 
-    public function withdrawCapital(Request $request, $id)
+    public function withdrawCapital(Request $request, string|int $id)
     {
         $share = CapitalShare::findOrFail($id);
 
@@ -540,7 +540,7 @@ class CapitalShareController extends Controller
         });
     }
 
-    public function getTransactions($id)
+    public function getTransactions(string|int $id)
     {
         $transactions = CapitalShareTransaction::where('capital_share_id', $id)
             ->orderBy('transaction_date', 'desc')
@@ -548,7 +548,7 @@ class CapitalShareController extends Controller
         return response()->json($transactions);
     }
 
-    public function repay(Request $request, $id)
+    public function repay(Request $request, string|int $id)
     {
         $share = CapitalShare::findOrFail($id);
 
@@ -679,7 +679,7 @@ class CapitalShareController extends Controller
         });
     }
 
-    public function sellShare(Request $request, $id)
+    public function sellShare(Request $request, string|int $id)
     {
         $this->ensurePermission($request, 'ui:capital_share:edit');
 

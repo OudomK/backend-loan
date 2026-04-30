@@ -22,7 +22,8 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->roles()->exists();
+        // Check for either Spatie roles OR the legacy 'role' string column
+        return $this->roles()->exists() || !empty($this->role);
     }
 
     public function getFilamentAvatarUrl(): ?string

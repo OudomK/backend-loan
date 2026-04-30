@@ -294,7 +294,7 @@ class DividendController extends Controller
         }
 
         // Build recipient list
-        $recipients = $shares->map(function ($share) use ($perShare) {
+        $recipients = $shares->map(function (CapitalShare $share) use ($perShare) {
             return [
                 'holder_id' => $share->holder_id,
                 'holder_name' => $this->resolveHolderName($share),

@@ -34,8 +34,8 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(function (?object $user, string $ability): ?bool {
             if ($user instanceof User) {
                 // Get the super admin role name dynamically from Filament Shield config
-                $superAdminRole = class_exists('\BezhanSalleh\FilamentShield\Support\Utils') 
-                    ? \BezhanSalleh\FilamentShield\Support\Utils::getSuperAdminName() 
+                $superAdminRole = class_exists('\BezhanSalleh\FilamentShield\Support\Utils')
+                    ? \BezhanSalleh\FilamentShield\Support\Utils::getSuperAdminName()
                     : 'super_admin';
 
                 // Allow if user has the Spatie super admin role, OR if their legacy role column matches
