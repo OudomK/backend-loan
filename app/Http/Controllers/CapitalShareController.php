@@ -25,9 +25,7 @@ class CapitalShareController extends Controller
         $user = $request->user();
         abort_if(!$user, 401, 'Unauthenticated.');
 
-        $role = strtolower((string) ($user->roles()->pluck('name')->first() ?? $user->role ?? ''));
-
-        if (in_array($role, ['admin', 'super_admin'], true) || $user->can($permission)) {
+        if ($user->can($permission)) {
             return;
         }
 

@@ -18,9 +18,7 @@ class BorrowingController extends Controller
         $user = $request->user();
         abort_if(!$user, 401, 'Unauthenticated.');
 
-        $role = strtolower((string) ($user->roles()->pluck('name')->first() ?? $user->role ?? ''));
-
-        if (in_array($role, ['admin', 'super_admin'], true) || $user->can($permission)) {
+        if ($user->can($permission)) {
             return;
         }
 
@@ -310,7 +308,7 @@ class BorrowingController extends Controller
             // Standard Fields
             $validated['balance_after_payment'] = round($remainingBalance - (float) $validated['principal_paid'], 2);
             $validated['received_by'] = auth()->id();
-            
+
             // Generate receipt in a collision-safe format.
             $validated['receipt_no'] = $this->generateUniqueBorrowingReceiptNo();
 
@@ -322,9 +320,11 @@ class BorrowingController extends Controller
             $firstScheduleId = null;
 
             foreach ($schedules as $sch) {
-                if ($iLeft <= 0 && $pLeft <= 0 && $penLeft <= 0) break;
+                if ($iLeft <= 0 && $pLeft <= 0 && $penLeft <= 0)
+                    break;
 
-                if (!$firstScheduleId) $firstScheduleId = $sch->id;
+                if (!$firstScheduleId)
+                    $firstScheduleId = $sch->id;
 
                 $schInterestDue = (float) $sch->interest_due - (float) $sch->interest_paid;
                 $schPrincipalDue = (float) $sch->principal_due - (float) $sch->principal_paid;
@@ -352,7 +352,7 @@ class BorrowingController extends Controller
                 // Update Status
                 $totalDue = (float) $sch->total_due;
                 $totalPaid = (float) $sch->principal_paid + (float) $sch->interest_paid;
-                
+
                 $sch->last_payment_date = $validated['payment_date'];
 
                 if ($totalPaid >= $totalDue - 0.001) {
@@ -386,9 +386,11 @@ class BorrowingController extends Controller
 
     public function getSchedule($id)
     {
-        $borrowing = Borrowing::with(['schedules' => function ($q) {
-            $q->orderBy('installment_no', 'asc');
-        }])->findOrFail($id);
+        $borrowing = Borrowing::with([
+            'schedules' => function ($q) {
+                $q->orderBy('installment_no', 'asc');
+            }
+        ])->findOrFail($id);
 
         $today = now()->startOfDay();
 
