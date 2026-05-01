@@ -10,8 +10,12 @@ use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 use Illuminate\Database\Eloquent\Builder;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class LoanOfficerPerformance extends BaseWidget
 {
+    use HasWidgetShield;
+
     protected static ?string $heading = 'Loan Officer Performance';
     protected static ?int $sort = 8;
     protected int|string|array $columnSpan = 'full';

@@ -17,8 +17,12 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class StatsOverview extends BaseWidget
 {
+    use HasWidgetShield;
+
     protected static ?int $sort = 1;
 
     protected function getColumns(): int

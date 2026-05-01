@@ -16,10 +16,12 @@ use App\Models\Setting;
 use App\Support\AdminFontRegistry;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Auth;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class ManageSettings extends Page implements HasForms
 {
     use InteractsWithForms;
+    use HasPageShield;
 
     /**
      * @var array<string, string>
@@ -231,7 +233,7 @@ class ManageSettings extends Page implements HasForms
                             ->native(false)
                             ->helperText('Available fonts: ' . AdminFontRegistry::count() . ' (' . AdminFontRegistry::labelsAsText() . ')'),
                         Select::make('frontend_font_family')
-                            ->label('Frontend App Font')
+                            ->label('QuickFund App Font')
                             ->options(self::FRONTEND_FONT_OPTIONS)
                             ->default('battambang')
                             ->required()

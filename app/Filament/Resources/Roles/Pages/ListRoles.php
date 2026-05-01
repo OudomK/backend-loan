@@ -9,6 +9,7 @@ use Filament\Actions\Action;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
+use BezhanSalleh\FilamentShield\Support\Utils;
 
 class ListRoles extends ListRecords
 {
@@ -45,7 +46,7 @@ class ListRoles extends ListRecords
                     $this->showSuperAdmin = ! $this->showSuperAdmin;
                     $this->resetTable();
                 })
-                ->visible(fn () => auth()->user()?->hasRole('super_admin')),
+                ->visible(fn () => auth()->user()?->hasRole(Utils::getSuperAdminName())),
         ];
     }
 
@@ -54,12 +55,12 @@ class ListRoles extends ListRecords
         $query = parent::getTableQuery();
 
         // Non-super_admin: always hide super_admin role
-        if (! auth()->user()?->hasRole('super_admin')) {
-            $query->where('name', '!=', 'super_admin');
+        if (! auth()->user()?->hasRole(Utils::getSuperAdminName())) {
+            $query->where('name', '!=', Utils::getSuperAdminName());
         }
         // Super_admin: hide unless toggle is on
         elseif (! $this->showSuperAdmin) {
-            $query->where('name', '!=', 'super_admin');
+            $query->where('name', '!=', Utils::getSuperAdminName());
         }
 
         return $query;

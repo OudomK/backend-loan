@@ -42,7 +42,12 @@ class UserForm
                         ])
                             ->schema([
                                 Select::make('roles')
-                                    ->relationship('roles', 'name')
+                                    ->relationship('roles', 'name', function (\Illuminate\Database\Eloquent\Builder $query) {
+                                        $superAdminRole = \BezhanSalleh\FilamentShield\Support\Utils::getSuperAdminName();
+                                        if (!auth()->user()->hasRole($superAdminRole)) {
+                                            $query->where('name', '!=', $superAdminRole);
+                                        }
+                                    })
                                     ->multiple()
                                     ->preload()
                                     ->searchable(),

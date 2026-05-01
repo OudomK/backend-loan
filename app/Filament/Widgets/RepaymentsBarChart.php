@@ -5,8 +5,12 @@ namespace App\Filament\Widgets;
 use App\Models\RepaymentTransaction;
 use Filament\Widgets\ChartWidget;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class RepaymentsBarChart extends ChartWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Collection Trend';
     protected ?string $description = 'Monthly repayments (USD-normalized)';
     protected static ?int $sort = 3;

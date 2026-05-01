@@ -3,9 +3,12 @@
 namespace App\Filament\Pages;
 
 use Filament\Pages\Page;
+use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class ReportsDashboard extends Page
 {
+    use HasPageShield;
+
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static string|\UnitEnum|null $navigationGroup = 'Reports';
     protected static ?string $navigationLabel = 'Reports';

@@ -7,8 +7,12 @@ use App\Models\RepaymentTransaction;
 use Filament\Widgets\ChartWidget;
 use Illuminate\Support\Carbon;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class MonthlyPerformanceChart extends ChartWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Disbursement vs Collection';
     protected ?string $description = '12-month comparison in USD';
     protected static ?int $sort = 4;

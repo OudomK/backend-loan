@@ -34,6 +34,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Unique;
 
+use Illuminate\Database\Eloquent\Builder;
+
 class RoleResource extends Resource
 {
     use Essentials\BelongsToParent;
@@ -323,6 +325,14 @@ class RoleResource extends Resource
             ->toolbarActions([
                 DeleteBulkAction::make(),
             ]);
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        return parent::getEloquentQuery()
+            ->when(!auth()->user()->hasRole(Utils::getSuperAdminName()), function (Builder $query) {
+                $query->where('name', '!=', Utils::getSuperAdminName());
+            });
     }
 
 

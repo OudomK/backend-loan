@@ -7,8 +7,12 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class RecentLoanApplications extends BaseWidget
 {
+    use HasWidgetShield;
+
     protected static ?string $heading = 'Recent Loan Applications';
     protected static ?int $sort = 10;
     protected int|string|array $columnSpan = [

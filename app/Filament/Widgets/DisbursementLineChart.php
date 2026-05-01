@@ -6,8 +6,12 @@ use App\Models\Loan;
 use Filament\Widgets\ChartWidget;
 use Illuminate\Support\Carbon;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class DisbursementLineChart extends ChartWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Disbursement Trend';
     protected ?string $description = 'Last 12 months (USD-normalized)';
     protected static ?int $sort = 2;

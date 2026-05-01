@@ -7,8 +7,12 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class RecentActivityTable extends BaseWidget
 {
+    use HasWidgetShield;
+
     protected static ?string $heading = 'Recent Repayment Activity';
     protected static ?int $sort = 5;
     protected int|string|array $columnSpan = 'full';

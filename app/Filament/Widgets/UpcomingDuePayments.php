@@ -7,8 +7,12 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class UpcomingDuePayments extends BaseWidget
 {
+    use HasWidgetShield;
+
     protected static ?string $heading = 'Upcoming Due Payments';
     protected static ?int $sort = 9;
     protected int|string|array $columnSpan = 1;

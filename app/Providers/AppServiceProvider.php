@@ -27,6 +27,9 @@ class AppServiceProvider extends ServiceProvider
         // Disable Vite preload tags to avoid browser warnings for deferred CSS usage in SPA navigation.
         Vite::usePreloadTagAttributes(false);
 
+        // Explicitly register ActivityPolicy for Audit Logs
+        Gate::policy(\Spatie\Activitylog\Models\Activity::class, \App\Policies\ActivityPolicy::class);
+
         Event::subscribe(AuthEventSubscriber::class);
 
         // Let admin users from the legacy role column bypass Filament/Shield authorization.

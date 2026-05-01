@@ -6,8 +6,12 @@ use App\Models\Loan;
 use Filament\Widgets\ChartWidget;
 use Illuminate\Support\Facades\Cache;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class LoanStatusChart extends ChartWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'Loan Status Distribution';
     protected ?string $description = 'Breakdown of all loans by status';
     protected static ?int $sort = 6;

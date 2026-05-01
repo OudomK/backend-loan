@@ -6,8 +6,12 @@ use App\Models\Loan;
 use Filament\Widgets\ChartWidget;
 use Illuminate\Support\Facades\Cache;
 
+use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
+
 class ParAgingChart extends ChartWidget
 {
+    use HasWidgetShield;
+
     protected ?string $heading = 'PAR Aging Breakdown';
     protected ?string $description = 'Portfolio at risk by aging bucket (loan count)';
     protected static ?int $sort = 7;
