@@ -10,6 +10,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
+use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
@@ -108,6 +109,7 @@ class ManageSettings extends Page implements HasForms
             'me_email' => Auth::user()->email,
             'me_avatar_url' => Auth::user()->avatar_url,
             'default_payment_qr_id' => $dbSettings['default_payment_qr_id'] ?? null,
+            'excel_export_font' => $dbSettings['excel_export_font'] ?? 'Khmer OS Siemreap',
         ]);
     }
 
@@ -239,6 +241,13 @@ class ManageSettings extends Page implements HasForms
                             ->required()
                             ->native(false)
                             ->helperText('Used by Flutter frontend app. The app auto-syncs this setting about every 5 seconds.'),
+                        Select::make('excel_export_font')
+                            ->label('Excel Export Font')
+                            ->options(array_combine(array_values(AdminFontRegistry::options()), array_values(AdminFontRegistry::options())))
+                            ->default('Khmer OS Siemreap')
+                            ->required()
+                            ->native(false)
+                            ->helperText('Font family used for all exported Excel reports (e.g. Khmer OS Siemreap).'),
                     ]),
 
                 Section::make('Loan Configuration')
@@ -290,14 +299,15 @@ class ManageSettings extends Page implements HasForms
                             ->placeholder('Select a default QR')
                             ->helperText('This QR will be selected by default in new loan applications.'),
 
-                        \Filament\Forms\Components\Placeholder::make('manage_qrs')
+                        TextEntry::make('manage_qrs')
                             ->label('Full Management')
-                            ->content(new \Illuminate\Support\HtmlString('
+                            ->state(new \Illuminate\Support\HtmlString('
                                 <a href="' . \App\Filament\Resources\PaymentQrs\PaymentQrResource::getUrl() . '" 
                                    class="text-primary-600 font-bold underline hover:text-primary-500">
                                     Click here to manage, upload, or delete all QR Codes
                                 </a>
-                            ')),
+                            '))
+                            ->html(),
                     ]),
             ])
             ->statePath('data');

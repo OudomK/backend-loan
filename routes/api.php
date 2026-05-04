@@ -80,6 +80,7 @@ Route::get('/app/settings', function () {
         'company_logo' => isset($dbSettings['company_logo']) ? asset('storage/' . $dbSettings['company_logo']) : null,
         'default_language' => $dbSettings['default_language'] ?? 'EN',
         'frontend_font_family' => $dbSettings['frontend_font_family'] ?? 'battambang',
+        'excel_export_font' => $dbSettings['excel_export_font'] ?? 'Khmer OS Siemreap',
         'copyright_text' => $dbSettings['copyright_text'] ?? ('© ' . date('Y') . ' ' . Config::get('app.company_name')),
         'exchange_rate' => $dbSettings['exchange_rate_khr_to_usd'] ?? $dbSettings['exchange_rate'] ?? 4000,
         'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,
@@ -131,11 +132,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('loans/suggest-code', [LoanController::class, 'suggestCode']);
     Route::apiResource('loans', LoanController::class);
 
-    Route::get('/repayments/due-list', [RepaymentController::class, 'getDueList'])->middleware('permission:ViewAny:RepaymentTransaction');
-    Route::get('/repayments/search', [RepaymentController::class, 'search'])->middleware('permission:ViewAny:RepaymentTransaction');
-    Route::get('/repayments/installments/{loan_id}', [RepaymentController::class, 'getInstallments'])->middleware('permission:ViewAny:RepaymentTransaction');
-    Route::post('/repayments', [RepaymentController::class, 'store'])->middleware('permission:Create:RepaymentTransaction');
-    Route::delete('/repayments/{id}/void', [RepaymentController::class, 'destroy'])->middleware('permission:Delete:RepaymentTransaction');
+    Route::get('/repayments/due-list', [RepaymentController::class, 'getDueList'])->middleware('permission:ui:repayment:view');
+    Route::get('/repayments/search', [RepaymentController::class, 'search'])->middleware('permission:ui:repayment:view');
+    Route::get('/repayments/installments/{loan_id}', [RepaymentController::class, 'getInstallments'])->middleware('permission:ui:repayment:view');
+    Route::post('/repayments', [RepaymentController::class, 'store'])->middleware('permission:ui:repayment:create');
+    Route::delete('/repayments/{id}/void', [RepaymentController::class, 'destroy'])->middleware('permission:ui:repayment:delete');
 
     Route::get('/loan-operation/stats', [LoanOperationController::class, 'getStats']);
     Route::get('/loan-operation/activity', [LoanOperationController::class, 'getRecentActivity']);
@@ -219,9 +220,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('employees', EmployeeController::class);
     Route::apiResource('payrolls', PayrollController::class);
 
-    Route::get('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'index'])->middleware('permission:ViewAny:MiscellaneousTransaction');
-    Route::post('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'store'])->middleware('permission:Create:MiscellaneousTransaction');
-    Route::delete('/miscellaneous-transactions/{id}', [MiscellaneousTransactionController::class, 'destroy'])->middleware('permission:Delete:MiscellaneousTransaction');
+    Route::get('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'index'])->middleware('permission:ui:hr_miscellaneous:view');
+    Route::post('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'store'])->middleware('permission:ui:hr_miscellaneous:create');
+    Route::delete('/miscellaneous-transactions/{id}', [MiscellaneousTransactionController::class, 'destroy'])->middleware('permission:ui:hr_miscellaneous:delete');
 
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
 });

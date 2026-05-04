@@ -47,6 +47,11 @@ class UserForm
                                         if (!auth()->user()->hasRole($superAdminRole)) {
                                             $query->where('name', '!=', $superAdminRole);
                                         }
+                                        $query->orderBy('category')->orderBy('name');
+                                    })
+                                    ->getOptionLabelFromRecordUsing(function ($record) {
+                                        $cat = $record->category === 'system_ui' ? 'System UI' : ucfirst($record->category ?? 'General');
+                                        return "{$record->name} [{$cat}]";
                                     })
                                     ->multiple()
                                     ->preload()

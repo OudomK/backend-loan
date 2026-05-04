@@ -95,7 +95,11 @@ class DividendController extends Controller
 
     public function index(Request $request)
     {
-        $this->ensurePermission($request, 'ui:dividend');
+        $user = $request->user();
+        if (!$user || (!$user->can('ui:dividend') && !$user->can('ui:dividend:view') && !$user->can('ui:dividend_declaration:view'))) {
+            abort(403, 'You do not have permission to view dividends.');
+        }
+
         $dividends = Dividend::with('declarer:id,name')
             ->orderBy('created_at', 'desc')
             ->get()
@@ -316,7 +320,10 @@ class DividendController extends Controller
 
     public function scheduleIndex(Request $request)
     {
-        $this->ensurePermission($request, 'ui:dividend');
+        $user = $request->user();
+        if (!$user || (!$user->can('ui:dividend') && !$user->can('ui:dividend:view') && !$user->can('ui:dividend_declaration:view'))) {
+            abort(403, 'You do not have permission to view dividend schedules.');
+        }
         return response()->json(DividendSchedule::orderBy('id')->get());
     }
 

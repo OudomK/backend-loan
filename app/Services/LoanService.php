@@ -3,7 +3,9 @@
 namespace App\Services;
 
 use App\Models\Loan;
+use App\Models\Payment;
 use App\Models\RepaymentTransaction;
+use App\Models\LoanModification;
 use Illuminate\Support\Facades\DB;
 
 class LoanService
@@ -18,15 +20,29 @@ class LoanService
     /**
      * Calculate the current outstanding principal balance of a loan.
      */
-    public function calculateCurrentBalance(Loan $loan): float
+    public function calculateCurrentBalance(Loan $loan)
     {
-        // Use the immutable ledger approach matching Loan->recalculateSchedule()
-        $totalPrincipalPaid = (float) $loan->transactions()->sum('principal_paid')
-                            + (float) $loan->transactions()->sum('prepayment_paid')
-                            + (float) $loan->transactions()->sum('paid_off_amount')
-                            - (float) $loan->transactions()->sum('withdrawn_prepayment');
+        $totalPrincipal = (float) $loan->amount;
+        
+        // Sum principal from installments that are FULLY paid
+        $paidPrincipal = $loan->payments()
+            ->where('total_paid', '>=', DB::raw('principal_amount + interest_amount + penalty_amount - 0.01'))
+            ->sum('principal_amount');
+            
+        // Add principal from PARTIALLY paid installments
+        $partialPayments = $loan->payments()
+            ->where('total_paid', '>', 0)
+            ->where('total_paid', '<', DB::raw('principal_amount + interest_amount + penalty_amount - 0.01'))
+            ->get();
+            
+        foreach ($partialPayments as $p) {
+            $remainingForPrincipal = (float)$p->total_paid - (float)$p->interest_amount - (float)$p->penalty_amount;
+            if ($remainingForPrincipal > 0) {
+                $paidPrincipal += $remainingForPrincipal;
+            }
+        }
 
-        return round((float) $loan->amount - $totalPrincipalPaid, 2);
+        return max(0, $totalPrincipal - $paidPrincipal);
     }
 
     public function reschedule(Loan $loan, array $data)
@@ -41,6 +57,12 @@ class LoanService
             $paidCount = $loan->payments()->where('total_paid', '>', 0)->count();
             $newTotalTerm = $paidCount + $data['remaining_term'];
 
+            $oldData = [
+                'interest_rate' => $loan->interest_rate,
+                'duration_months' => $loan->duration_months,
+                'remaining_term' => $loan->payments()->where('total_paid', 0)->count(),
+            ];
+
             $loan->update([
                 'interest_rate' => $data['new_rate'],
                 'duration_months' => $newTotalTerm,
@@ -49,44 +71,78 @@ class LoanService
                 'rescheduled_at' => $data['reschedule_date'],
             ]);
 
-            // Record transaction
-            RepaymentTransaction::create([
+            // Record modification history
+            LoanModification::create([
                 'loan_id' => $loan->id,
-                'collector_id' => $loan->loan_officer_id,
-                'amount_paid' => 0,
-                'principal_paid' => 0,
-                'interest_paid' => 0,
-                'penalty_paid' => 0,
-                'payment_method' => 'Internal',
-                'repayment_type' => 'Reschedule',
-                'transaction_date' => $data['reschedule_date'],
+                'type' => 'reschedule',
+                'old_data' => $oldData,
+                'new_data' => [
+                    'interest_rate' => $data['new_rate'],
+                    'duration_months' => $newTotalTerm,
+                    'remaining_term' => $data['remaining_term'],
+                ],
+                'notes' => 'Rescheduled on ' . $data['reschedule_date'],
             ]);
 
-            // Regenerate schedule
-            $lastPaidDate = $loan->payments()->where('total_paid', '>', 0)->max('payment_date') ?? $loan->start_date;
-            $nextDate = $data['first_payment_date'] ?? date('Y-m-d', strtotime($lastPaidDate . ' +1 month'));
+            $newData = [
+                'interest_rate' => (float)$data['new_rate'],
+                'duration_months' => (int)$newTotalTerm,
+                'remaining_term' => (int)$data['remaining_term'],
+            ];
 
-            $newSchedule = $this->calculator->calculateLoanWithDates(
-                $remainingPrincipal,
-                $data['new_rate'],
-                $data['remaining_term'],
-                $data['repayment_method'] ?? $loan->repayment_method,
-                $nextDate,
-                $loan->currency
-            );
+            // Add to system Audit Log
+            activity()
+                ->performedOn($loan)
+                ->withProperties([
+                    'old' => $oldData,
+                    'attributes' => $newData
+                ])
+                ->log('Rescheduled loan ' . $loan->loan_code);
 
-            $startingNo = $loan->payments()->count() + 1;
-            foreach ($newSchedule as $index => $item) {
-                $loan->payments()->create([
-                    'payment_number' => $startingNo + $index,
-                    'principal_amount' => $item['principal'],
-                    'interest_amount' => $item['interest'],
-                    'penalty_amount' => 0,
-                    'total_paid' => 0,
-                    'payment_date' => $item['date'],
-                    'payment_method' => 'Cash',
-                ]);
-            }
+            // Delete ALL unpaid installments to start fresh for the remaining term
+            // Silence payment logs during this mass update
+            Payment::withoutEvents(function () use ($loan, $data, $remainingPrincipal, $paidCount) {
+                $loan->payments()->where('total_paid', '<', 0.01)->delete();
+
+                // Use custom schedule if provided, otherwise regenerate
+                if (!empty($data['custom_schedule'])) {
+                    $newSchedule = $data['custom_schedule'];
+                } else {
+                    $lastPaidDate = $loan->payments()->where('total_paid', '>', 0)->max('payment_date') ?? $loan->start_date;
+                    $nextDate = $data['first_payment_date'] ?? date('Y-m-d', strtotime($lastPaidDate . ' +1 month'));
+
+                    $newSchedule = $this->calculator->calculateLoanWithDates(
+                        $remainingPrincipal,
+                        $data['new_rate'],
+                        $data['remaining_term'],
+                        $data['repayment_method'] ?? $loan->repayment_method,
+                        $nextDate,
+                        $loan->currency
+                    );
+                }
+
+                // Determine starting payment number based on remaining PAID payments
+                $lastPaidNo = $loan->payments()->where('total_paid', '>', 0)->max('payment_number') ?? 0;
+                $startingNo = $lastPaidNo + 1;
+
+                foreach ($newSchedule as $index => $item) {
+                    // Fix date format if it's in DD/MM/YYYY
+                    $paymentDate = $item['date'] ?? ($item['payment_date'] ?? null);
+                    if ($paymentDate && preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $paymentDate)) {
+                        $paymentDate = \DateTime::createFromFormat('d/m/Y', $paymentDate)->format('Y-m-d');
+                    }
+
+                    $loan->payments()->create([
+                        'payment_number' => $startingNo + $index,
+                        'principal_amount' => $item['principal'] ?? ($item['principal_amount'] ?? 0),
+                        'interest_amount' => $item['interest'] ?? ($item['interest_amount'] ?? 0),
+                        'penalty_amount' => 0,
+                        'total_paid' => 0,
+                        'payment_date' => $paymentDate,
+                        'payment_method' => 'Cash',
+                    ]);
+                }
+            });
 
             return $loan;
         });
@@ -98,7 +154,7 @@ class LoanService
             $oldBalance = $this->calculateCurrentBalance($oldLoan);
 
             // Close old loan
-            $oldLoan->update(['status' => 'completed']);
+            $oldLoan->update(['status' => 'refinanced']);
 
             // Create new consolidated loan
             $newAmount = $oldBalance + $data['additional_amount'];
@@ -114,49 +170,88 @@ class LoanService
             $newLoan->refinance_fee = $data['refinance_fee'] ?? 0;
             $newLoan->loan_cycle = Loan::where('borrower_id', $oldLoan->borrower_id)->count() + 1;
 
-            // Generate new code
-            $lastCode = Loan::max('loan_code');
-            $newLoan->loan_code = 'REF-' . (intval(substr($lastCode, 4)) + 1);
+            // Generate new code based on last loan code pattern
+            $lastLoan = Loan::orderBy('id', 'desc')->first();
+            $lastCode = $lastLoan ? $lastLoan->loan_code : 'QF-000';
+            $prefix = 'QF-';
+            $number = 1;
+            if (preg_match('/([A-Z]+)-(\d+)/', $lastCode, $matches)) {
+                $prefix = $matches[1] . '-';
+                $number = intval($matches[2]) + 1;
+            }
+            $newLoan->loan_code = $prefix . str_pad($number, 3, '0', STR_PAD_LEFT);
             $newLoan->disbursed_by_officer_id = $newLoan->loan_officer_id;
             $newLoan->save();
 
-            // Do not artificially mark future interest as paid. The loan is completed.
-            $oldLoan->payments()->where('total_paid', '<', 0.01)->delete();
-
-            // Record transaction
-            RepaymentTransaction::create([
-                'loan_id' => $oldLoan->id,
-                'collector_id' => $oldLoan->loan_officer_id,
-                'amount_paid' => $oldBalance,
-                'principal_paid' => $oldBalance,
-                'interest_paid' => 0,
-                'penalty_paid' => 0,
-                'payment_method' => 'Internal/Refinance',
-                'repayment_type' => 'Refinance',
-                'transaction_date' => $data['start_date'],
+            LoanModification::create([
+                'loan_id' => $newLoan->id,
+                'type' => 'refinance',
+                'old_data' => [
+                    'old_loan_id' => $oldLoan->id,
+                    'old_balance' => $oldBalance,
+                ],
+                'new_data' => [
+                    'additional_amount' => $data['additional_amount'],
+                    'new_total_amount' => $newAmount,
+                ],
+                'notes' => 'Refinanced from loan ' . $oldLoan->loan_code,
             ]);
 
-            // Generate new schedule
-            $schedule = $this->calculator->calculateLoanWithDates(
-                $newAmount,
-                $data['new_rate'],
-                $data['new_term'],
-                $data['repayment_method'] ?? $newLoan->repayment_method,
-                $data['start_date'],
-                $newLoan->currency
-            );
+            // Add to system Audit Log
+            activity()
+                ->performedOn($newLoan)
+                ->withProperties([
+                    'old' => [
+                        'loan_code' => $oldLoan->loan_code,
+                        'amount' => (float)$oldBalance,
+                        'interest_rate' => (float)$oldLoan->interest_rate,
+                    ],
+                    'attributes' => [
+                        'loan_code' => $newLoan->loan_code,
+                        'amount' => (float)$newAmount,
+                        'interest_rate' => (float)$data['new_rate'],
+                    ]
+                ])
+                ->log('Refinanced loan ' . $newLoan->loan_code);
 
-            foreach ($schedule as $item) {
-                $newLoan->payments()->create([
-                    'payment_number' => $item['period'],
-                    'principal_amount' => $item['principal'],
-                    'interest_amount' => $item['interest'],
-                    'penalty_amount' => 0,
-                    'total_paid' => 0,
-                    'payment_date' => $item['date'],
-                    'payment_method' => 'Cash',
-                ]);
-            }
+            // Do not artificially mark future interest as paid. The loan is completed.
+            // Do not artificially mark future interest as paid. The loan is completed.
+            // Silence payment logs during this mass update
+            Payment::withoutEvents(function () use ($oldLoan, $newLoan, $data, $newAmount) {
+                $oldLoan->payments()->where('total_paid', '<', 0.01)->delete();
+
+                // Use custom schedule if provided, otherwise regenerate
+                if (!empty($data['custom_schedule'])) {
+                    $schedule = $data['custom_schedule'];
+                } else {
+                    $schedule = $this->calculator->calculateLoanWithDates(
+                        $newAmount,
+                        $data['new_rate'],
+                        $data['new_term'],
+                        $data['repayment_method'] ?? $newLoan->repayment_method,
+                        $data['start_date'],
+                        $newLoan->currency
+                    );
+                }
+
+                foreach ($schedule as $index => $item) {
+                    // Fix date format if it's in DD/MM/YYYY
+                    $paymentDate = $item['date'] ?? ($item['payment_date'] ?? null);
+                    if ($paymentDate && preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $paymentDate)) {
+                        $paymentDate = \DateTime::createFromFormat('d/m/Y', $paymentDate)->format('Y-m-d');
+                    }
+
+                    $newLoan->payments()->create([
+                        'payment_number' => $item['period'] ?? ($item['payment_number'] ?? ($index + 1)),
+                        'principal_amount' => $item['principal'] ?? ($item['principal_amount'] ?? 0),
+                        'interest_amount' => $item['interest'] ?? ($item['interest_amount'] ?? 0),
+                        'penalty_amount' => 0,
+                        'total_paid' => 0,
+                        'payment_date' => $paymentDate,
+                        'payment_method' => 'Cash',
+                    ]);
+                }
+            });
 
             return $newLoan;
         });

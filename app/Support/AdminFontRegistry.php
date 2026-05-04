@@ -12,6 +12,8 @@ class AdminFontRegistry
         return [
             'kantumruy_pro' => 'Kantumruy Pro',
             'krasar' => 'Krasar',
+            'khmer_os_siemreap' => 'Khmer OS Siemreap',
+            'khmer_os_battambang' => 'Khmer OS Battambang',
             'khmer_os_system' => 'Khmer OS System',
             'khmer_ui' => 'Khmer UI',
             'segoe_ui' => 'Segoe UI',

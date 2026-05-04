@@ -21,21 +21,34 @@ class CustomerHistoryController extends Controller
             ->pluck('repayment_type', 'id');
 
         $arr['payments'] = $loan->payments->sortBy('payment_number')->values()->map(fn($p) => [
-            'id'                       => $p->id,
-            'payment_number'           => $p->payment_number,
-            'principal_amount'         => (float) $p->principal_amount,
-            'interest_amount'          => (float) $p->interest_amount,
-            'fee_amount'               => (float) ($p->fee_amount ?? 0),
-            'penalty_amount'           => (float) $p->penalty_amount,
-            'total_paid'               => (float) $p->total_paid,
-            'total_due'                => (float) ($p->total_due ?? 0),
-            'payment_date'             => $p->payment_date,
-            'payment_method'           => $p->payment_method,
-            'updated_at'               => ($p->total_paid > 0 && $p->updated_at) ? $p->updated_at->toIso8601String() : '',
-            'prepayment'               => (float) ($p->prepayment ?? 0),
+            'id' => $p->id,
+            'payment_number' => $p->payment_number,
+            'principal_amount' => (float) $p->principal_amount,
+            'interest_amount' => (float) $p->interest_amount,
+            'fee_amount' => (float) ($p->fee_amount ?? 0),
+            'penalty_amount' => (float) $p->penalty_amount,
+            'total_paid' => (float) $p->total_paid,
+            'total_due' => (float) ($p->total_due ?? 0),
+            'payment_date' => $p->payment_date,
+            'payment_method' => $p->payment_method,
+            'updated_at' => ($p->total_paid > 0 && $p->updated_at) ? $p->updated_at->toIso8601String() : '',
+            'prepayment' => (float) ($p->prepayment ?? 0),
             'repayment_transaction_id' => $p->repayment_transaction_id,
-            'repayment_type'           => $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id] ?? null) : null,
+            'repayment_type' => $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id] ?? null) : null,
         ])->all();
+
+        // Add modifications to the history
+        $arr['modifications'] = \App\Models\LoanModification::where('loan_id', $loan->id)
+            ->latest()
+            ->get()
+            ->map(fn($m) => [
+                'id' => $m->id,
+                'type' => $m->type,
+                'old_data' => $m->old_data,
+                'new_data' => $m->new_data,
+                'notes' => $m->notes,
+                'created_at' => $m->created_at->toIso8601String(),
+            ])->all();
         return $arr;
     }
     /**

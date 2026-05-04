@@ -280,4 +280,9 @@ class Loan extends Model
             $currentBalance -= $principalAmount;
         }
     }
+
+    public function modifications()
+    {
+        return $this->hasMany(LoanModification::class);
+    }
 }
