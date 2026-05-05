@@ -272,7 +272,6 @@ class Loan extends Model
                 'principal_amount' => $principalAmount,
                 'interest_amount' => $interestAmount,
                 'fee_amount' => 0,
-                'total_due' => round($principalAmount + $interestAmount, 2),
                 'total_paid' => 0,
                 'payment_date' => $paymentDate->toDateString(),
             ]);

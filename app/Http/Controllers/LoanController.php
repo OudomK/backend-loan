@@ -294,8 +294,14 @@ class LoanController extends Controller
     public function show(Loan $loan)
     {
         return response()->json($loan->load([
-            'borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals',
-            'payments', 'product', 'paymentQr'
+            'borrower',
+            'coBorrower',
+            'guarantor',
+            'officer',
+            'collaterals',
+            'payments',
+            'product',
+            'paymentQr'
         ]));
     }
 

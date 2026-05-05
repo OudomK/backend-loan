@@ -23,20 +23,20 @@ class LoanService
     public function calculateCurrentBalance(Loan $loan)
     {
         $totalPrincipal = (float) $loan->amount;
-        
+
         // Sum principal from installments that are FULLY paid
         $paidPrincipal = $loan->payments()
             ->where('total_paid', '>=', DB::raw('principal_amount + interest_amount + penalty_amount - 0.01'))
             ->sum('principal_amount');
-            
+
         // Add principal from PARTIALLY paid installments
         $partialPayments = $loan->payments()
             ->where('total_paid', '>', 0)
             ->where('total_paid', '<', DB::raw('principal_amount + interest_amount + penalty_amount - 0.01'))
             ->get();
-            
+
         foreach ($partialPayments as $p) {
-            $remainingForPrincipal = (float)$p->total_paid - (float)$p->interest_amount - (float)$p->penalty_amount;
+            $remainingForPrincipal = (float) $p->total_paid - (float) $p->interest_amount - (float) $p->penalty_amount;
             if ($remainingForPrincipal > 0) {
                 $paidPrincipal += $remainingForPrincipal;
             }
@@ -85,9 +85,9 @@ class LoanService
             ]);
 
             $newData = [
-                'interest_rate' => (float)$data['new_rate'],
-                'duration_months' => (int)$newTotalTerm,
-                'remaining_term' => (int)$data['remaining_term'],
+                'interest_rate' => (float) $data['new_rate'],
+                'duration_months' => (int) $newTotalTerm,
+                'remaining_term' => (int) $data['remaining_term'],
             ];
 
             // Add to system Audit Log
@@ -203,13 +203,13 @@ class LoanService
                 ->withProperties([
                     'old' => [
                         'loan_code' => $oldLoan->loan_code,
-                        'amount' => (float)$oldBalance,
-                        'interest_rate' => (float)$oldLoan->interest_rate,
+                        'amount' => (float) $oldBalance,
+                        'interest_rate' => (float) $oldLoan->interest_rate,
                     ],
                     'attributes' => [
                         'loan_code' => $newLoan->loan_code,
-                        'amount' => (float)$newAmount,
-                        'interest_rate' => (float)$data['new_rate'],
+                        'amount' => (float) $newAmount,
+                        'interest_rate' => (float) $data['new_rate'],
                     ]
                 ])
                 ->log('Refinanced loan ' . $newLoan->loan_code);

@@ -215,18 +215,23 @@ class LoanCalculator
             unset($pay);
             $results = $allPayments;
         } elseif ($option === 'annuity_monthly') {
-            if ($principal <= 0 || $rate <= 0 || $duration <= 0) {
+            if ($principal <= 0 || $duration <= 0) {
                 return [];
             }
 
             $monthlyInterestRate = $rate / 100;
 
-            $denominator = pow(1 + $monthlyInterestRate, $duration) - 1;
-            if ($denominator == 0) {
-                return [];
+            if ($monthlyInterestRate > 0) {
+                $denominator = pow(1 + $monthlyInterestRate, $duration) - 1;
+                if ($denominator == 0) {
+                    $monthlyPayment = $principal / $duration;
+                } else {
+                    $monthlyPayment = $principal * $monthlyInterestRate * pow(1 + $monthlyInterestRate, $duration) / $denominator;
+                }
+            } else {
+                $monthlyPayment = $principal / $duration;
             }
-
-            $monthlyPayment = $principal * $monthlyInterestRate * pow(1 + $monthlyInterestRate, $duration) / $denominator;
+            
             $monthlyPayment = $applyRounding($monthlyPayment, $currency);
 
             $remainingBalance = $principal;

@@ -36,7 +36,6 @@ class Payment extends Model
         'principal_amount',
         'interest_amount',
         'fee_amount',
-        'total_due',
         'prepayment',
         'penalty_amount',
         'total_paid',

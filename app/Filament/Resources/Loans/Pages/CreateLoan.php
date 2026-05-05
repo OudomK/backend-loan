@@ -62,13 +62,8 @@ class CreateLoan extends CreateRecord
         }
 
         if ($this->record->repayment_method === 'negotiable') {
-            Notification::make()
-                ->title('Loan created without schedule')
-                ->body('Negotiable repayment requires a custom schedule.')
-                ->warning()
-                ->send();
-
-            return;
+            // Optional: You could still generate a default schedule for negotiable loans
+            // so the user has a starting point to edit.
         }
 
         try {
@@ -89,11 +84,24 @@ class CreateLoan extends CreateRecord
 
     private function canGenerateSchedule(Loan $loan): bool
     {
-        return !empty($loan->amount)
-            && !empty($loan->interest_rate)
+        $can = !empty($loan->amount)
+            && isset($loan->interest_rate) // Allow 0
             && !empty($loan->duration_months)
             && !empty($loan->repayment_method)
             && !empty($loan->start_date);
+
+        if (!$can) {
+            Log::info('Schedule generation skipped: missing mandatory fields', [
+                'loan_id' => $loan->id,
+                'amount' => $loan->amount,
+                'rate' => $loan->interest_rate,
+                'duration' => $loan->duration_months,
+                'method' => $loan->repayment_method,
+                'start_date' => $loan->start_date,
+            ]);
+        }
+
+        return $can;
     }
 
     private function generateSchedule(Loan $loan): void
@@ -133,12 +141,6 @@ class CreateLoan extends CreateRecord
                     'principal_amount' => (float) ($payment['principal_amount'] ?? 0),
                     'interest_amount' => (float) ($payment['interest_amount'] ?? 0),
                     'fee_amount' => (float) ($payment['fee_amount'] ?? 0),
-                    'total_due' => round(
-                        ((float) ($payment['principal_amount'] ?? 0))
-                            + ((float) ($payment['interest_amount'] ?? 0))
-                            + ((float) ($payment['fee_amount'] ?? 0)),
-                        2
-                    ),
                     'penalty_amount' => (float) ($payment['penalty_amount'] ?? 0),
                     'total_paid' => (float) ($payment['total_paid'] ?? 0),
                     'payment_date' => $paymentDate,
@@ -179,12 +181,6 @@ class CreateLoan extends CreateRecord
                     'principal_amount' => (float) ($item['principal'] ?? 0),
                     'interest_amount' => (float) ($item['interest'] ?? 0),
                     'fee_amount' => (float) ($item['fee'] ?? 0),
-                    'total_due' => round(
-                        ((float) ($item['principal'] ?? 0))
-                            + ((float) ($item['interest'] ?? 0))
-                            + ((float) ($item['fee'] ?? 0)),
-                        2
-                    ),
                     'penalty_amount' => 0,
                     'total_paid' => 0,
                     'payment_date' => $paymentDate,
