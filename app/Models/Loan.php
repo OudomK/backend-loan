@@ -218,6 +218,11 @@ class Loan extends Model
         $p = $outstandingPrincipal;
         $method = strtolower(trim($this->repayment_method ?? ''));
 
+        if ($n <= 0) {
+            $this->update(['monthly_payment' => 0]);
+            return;
+        }
+
         // Determine if this is a flat/fixed-principal method
         $isFlat = str_contains($method, 'fixed') || str_contains($method, 'flat')
                || str_contains($method, '100%') || str_contains($method, 'declining')
@@ -231,7 +236,12 @@ class Loan extends Model
         } else {
             // Amortization (annuity) formula: EMI = [P x R x (1+R)^N] / [(1+R)^N - 1]
             if ($r > 0) {
-                $newMonthlyPayment = ($p * $r * pow(1 + $r, $n)) / (pow(1 + $r, $n) - 1);
+                $denominator = pow(1 + $r, $n) - 1;
+                if ($denominator == 0) {
+                    $newMonthlyPayment = $p / $n;
+                } else {
+                    $newMonthlyPayment = ($p * $r * pow(1 + $r, $n)) / $denominator;
+                }
             } else {
                 $newMonthlyPayment = $p / $n;
             }
