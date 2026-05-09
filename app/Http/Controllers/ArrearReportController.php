@@ -90,6 +90,10 @@ class ArrearReportController extends Controller
                 ->whereColumn('loan_id', 'loans.id')
                 ->orderBy('transaction_date', 'desc')
                 ->limit(1),
+
+            // Total penalty collected for this loan
+            'penalty_paid_total' => \App\Models\RepaymentTransaction::selectRaw('COALESCE(SUM(penalty_paid), 0)')
+                ->whereColumn('loan_id', 'loans.id'),
         ]);
 
         $loans = $query->get();

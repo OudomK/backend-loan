@@ -96,11 +96,14 @@ class LoanOutstandingParReportController extends Controller
                 return (float) ($transaction->fee_paid ?? 0)
                     + (float) ($transaction->interest_paid ?? 0)
                     + (float) ($transaction->principal_paid ?? 0)
+                    + (float) ($transaction->prepayment_paid ?? 0)
                     + (float) ($transaction->paid_off_amount ?? 0);
             });
 
             $earliestArrearDate = null;
+            $earliestPrincipalArrearDate = null;
             $cumulativeDue = 0.0;
+            $cumulativePrincipalDue = 0.0;
 
             foreach ($loan->payments as $payment) {
                 if ($payment->payment_date >= $refDateStr) {
@@ -110,18 +113,24 @@ class LoanOutstandingParReportController extends Controller
                 $cumulativeDue += (float) ($payment->principal_amount ?? 0)
                     + (float) ($payment->interest_amount ?? 0)
                     + (float) ($payment->fee_amount ?? 0);
+                $cumulativePrincipalDue += (float) ($payment->principal_amount ?? 0);
 
-                if (($cumulativeDue - $scheduledPaidAtDate) > 0.01) {
+                if (($cumulativeDue - $scheduledPaidAtDate) > 0.01 && $earliestArrearDate === null) {
                     $earliestArrearDate = $payment->payment_date;
-                    break;
+                }
+
+                if (($cumulativePrincipalDue - $principalPaid) > 0.01 && $earliestPrincipalArrearDate === null) {
+                    $earliestPrincipalArrearDate = $payment->payment_date;
                 }
             }
 
+            $effectiveArrearDate = $earliestArrearDate ?? $earliestPrincipalArrearDate;
+
             $agingDays = 0;
-            if ($earliestArrearDate) {
-                $agingDays = $refDate->copy()->startOfDay()->diffInDays(
-                    Carbon::parse($earliestArrearDate)->startOfDay()
-                );
+            if ($effectiveArrearDate) {
+                $agingDays = abs($refDate->copy()->startOfDay()->diffInDays(
+                    Carbon::parse($effectiveArrearDate)->startOfDay()
+                ));
             }
 
             if ($agingDays > 0) {

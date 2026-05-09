@@ -25,7 +25,7 @@ class RepaymentTransactionForm
                         Group::make()
                             ->schema([
                                 Section::make('Transaction Context')
-                                    ->description('Link the repayment to a loan and collector.')
+            ->description('Link the repayment to a loan and credit officer.')
                                     ->icon('heroicon-o-link')
                                     ->schema([
                                         Grid::make([
@@ -42,9 +42,9 @@ class RepaymentTransactionForm
                                                     ->live()
                                                     ->afterStateUpdated(fn($state, callable $set) => static::fillDueAmounts($state, $set))
                                                     ->required(),
-                                                Select::make('collector_id')
-                                                    ->label('Collector')
-                                                    ->relationship('collector', 'name')
+                        Select::make('collector_id')
+                            ->label('Credit Officer')
+                            ->relationship('collector', 'name')
                                                     ->searchable()
                                                     ->preload()
                                                     ->required(),
@@ -108,7 +108,7 @@ class RepaymentTransactionForm
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
                                                     ->required()
                                                     ->placeholder('0.00')
-                                                    ->helperText('Total should match principal + interest + penalty + fee.')
+                                                    ->helperText('Principal + interest only. Penalty is entered separately, and fee is auto-paid.')
                                                     ->columnSpan(12),
                                                 TextInput::make('principal_paid')
                                                     ->numeric()
@@ -136,7 +136,7 @@ class RepaymentTransactionForm
                                                     ->afterStateUpdated(fn($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                                 TextInput::make('fee_paid')
-                                                    ->label('Fee paid')
+                                                    ->label('Auto fee preview')
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
                                                     ->default(0)
@@ -209,17 +209,15 @@ class RepaymentTransactionForm
         $set('interest_paid', static::formatMoney($interest));
         $set('penalty_paid', static::formatMoney($penalty));
         $set('fee_paid', static::formatMoney($fee));
-        $set('amount_paid', static::formatMoney($principal + $interest + $penalty + $fee));
+        $set('amount_paid', static::formatMoney($principal + $interest));
     }
 
     protected static function syncTotalAmount(callable $set, callable $get): void
     {
         $principal = static::toFloat($get('principal_paid'));
         $interest = static::toFloat($get('interest_paid'));
-        $penalty = static::toFloat($get('penalty_paid'));
-        $fee = static::toFloat($get('fee_paid'));
 
-        $set('amount_paid', static::formatMoney($principal + $interest + $penalty + $fee));
+        $set('amount_paid', static::formatMoney($principal + $interest));
     }
 
     protected static function toFloat(mixed $value): float

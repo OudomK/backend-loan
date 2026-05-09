@@ -2,13 +2,8 @@
 
 namespace App\Filament\Resources\RepaymentTransactions\Tables;
 
-use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
-use Filament\Actions\RestoreAction;
-use Filament\Actions\DeleteBulkAction;
-use Filament\Actions\ForceDeleteBulkAction;
-use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
@@ -29,7 +24,7 @@ class RepaymentTransactionsTable
                     ->searchable()
                     ->sortable()
                     ->description(fn ($record): ?string => collect([
-                        filled($record->collector?->name) ? 'Collector ' . $record->collector->name : null,
+                        filled($record->collector?->name) ? 'Credit Officer ' . $record->collector->name : null,
                     ])->filter()->implode(' • ')),
                 TextColumn::make('loan.borrower.id')
                     ->label('Borrower')
@@ -42,6 +37,7 @@ class RepaymentTransactionsTable
                     ])->filter()->implode(' • ')),
                 TextColumn::make('amount_paid')
                     ->label('Total Paid')
+                    ->state(fn ($record): float => round((float) $record->amount_paid + (float) $record->penalty_paid, 2))
                     ->money(fn ($record): string => self::resolveCurrencyCode($record))
                     ->sortable(),
                 TextColumn::make('principal_paid')
@@ -68,7 +64,7 @@ class RepaymentTransactionsTable
                     ->date('d M Y')
                     ->sortable(),
                 TextColumn::make('collector.name')
-                    ->label('Collector')
+                    ->label('Credit Officer')
                     ->toggleable(),
                 TextColumn::make('created_at')
                     ->label('Created On')
@@ -102,9 +98,9 @@ class RepaymentTransactionsTable
             ])
             ->recordActions([
                 EditAction::make()
+                    ->label('Manage')
                     ->iconButton()
                     ->tooltip('Manage repayment'),
-                RestoreAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -112,13 +108,7 @@ class RepaymentTransactionsTable
                     ->icon('heroicon-m-plus-circle')
                     ->button(),
             ])
-            ->bulkActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
-                ]),
-            ]);
+            ->bulkActions([]);
     }
 
     private static function resolveCurrencyCode(object $record): string

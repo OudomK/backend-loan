@@ -76,6 +76,7 @@ class WriteOffCollectionReportController extends Controller
                     return (float) ($transaction->fee_paid ?? 0)
                         + (float) ($transaction->interest_paid ?? 0)
                         + (float) ($transaction->principal_paid ?? 0)
+                        + (float) ($transaction->prepayment_paid ?? 0)
                         + (float) ($transaction->paid_off_amount ?? 0);
                 });
 
@@ -88,6 +89,7 @@ class WriteOffCollectionReportController extends Controller
                 $cumulativeDue = 0.0;
                 $cumulativePrincipalDue = 0.0;
                 $earliestArrearDate = null;
+                $earliestPrincipalArrearDate = null;
 
                 foreach ($loan->payments as $payment) {
                     if (($payment->payment_date ?? '') >= $toDateStr) {
@@ -99,18 +101,27 @@ class WriteOffCollectionReportController extends Controller
                         + (float) ($payment->fee_amount ?? 0);
                     $cumulativePrincipalDue += (float) ($payment->principal_amount ?? 0);
 
+                    // 1. Check total amount due vs total amount paid
                     if (($cumulativeDue - $scheduledPaidAtDate) > 0.01 && $earliestArrearDate === null) {
                         $earliestArrearDate = $payment->payment_date;
                     }
+
+                    // 2. Fallback: Check if principal specifically is overdue
+                    if (($cumulativePrincipalDue - $principalPaid) > 0.01 && $earliestPrincipalArrearDate === null) {
+                        $earliestPrincipalArrearDate = $payment->payment_date;
+                    }
                 }
+
+                // If no total arrear date was found, but there is a principal shortfall, use that instead
+                $effectiveArrearDate = $earliestArrearDate ?? $earliestPrincipalArrearDate;
 
                 $amountDefault = max(0, $cumulativePrincipalDue - $principalPaid);
                 $aging = 0;
 
-                if ($earliestArrearDate) {
-                    $aging = $toDate->copy()->startOfDay()->diffInDays(
-                        Carbon::parse($earliestArrearDate)->startOfDay()
-                    );
+                if ($effectiveArrearDate) {
+                    $aging = abs($toDate->copy()->startOfDay()->diffInDays(
+                        Carbon::parse($effectiveArrearDate)->startOfDay()
+                    ));
                 }
 
                 if ($aging <= 0 && $amountDefault > 0.01) {
@@ -187,7 +198,7 @@ class WriteOffCollectionReportController extends Controller
         ]);
     }
 
-    private function principalComponent($transaction): float
+    private function principalComponent(mixed $transaction): float
     {
         return (float) ($transaction->principal_paid ?? 0)
             + (float) ($transaction->prepayment_paid ?? 0)

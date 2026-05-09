@@ -72,7 +72,7 @@ class LoanCollectionReportController extends Controller
                 'interest' => $row->interest_paid,
                 'penalty' => $row->penalty_paid,
                 'fee' => $row->fee_paid,
-                'total' => $row->amount_paid,
+                'total' => round((float) $row->amount_paid + (float) $row->penalty_paid, 2),
                 'currency' => $row->currency,
             ];
         });

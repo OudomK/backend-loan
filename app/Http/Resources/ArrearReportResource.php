@@ -2,12 +2,18 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Carbon\Carbon;
 
 class ArrearReportResource extends JsonResource
 {
+    /**
+     * @var array<string, float>|null
+     */
+    private static ?array $penaltyRates = null;
+
     /**
      * Transform the resource into an array.
      *
@@ -22,6 +28,18 @@ class ArrearReportResource extends JsonResource
 
         $arrearDate = $this->earliest_arrear_date;
         $aging = $arrearDate ? abs($referenceDate->diffInDays(Carbon::parse($arrearDate))) : 0;
+        $arrearPrincipal = (float) ($this->arrear_principal ?? 0);
+        $arrearInterest = (float) ($this->arrear_interest ?? 0);
+        $totalArrearDue = round($arrearPrincipal + $arrearInterest, 2);
+        $penaltyDue = round($aging * $this->resolvePenaltyRate(), 2);
+        $penaltyPaid = (float) ($this->penalty_paid_total ?? 0);
+
+        $status = 'Active';
+        if ($totalArrearDue <= 0.01) {
+            $status = 'OK';
+        } elseif (! empty($this->last_transaction_date) && $this->last_transaction_date !== '-') {
+            $status = 'Partial';
+        }
 
         return [
             'branches' => 'Main Office',
@@ -45,14 +63,34 @@ class ArrearReportResource extends JsonResource
             'date_disbursement' => $this->start_date,
             'disb_amount' => $this->amount,
             'outstanding' => $this->calculated_outstanding ?? 0,
-            'arrear_amount' => $this->arrear_principal ?? 0,
-            'arrear_interest' => $this->arrear_interest ?? 0,
+            'arrear_amount' => $arrearPrincipal,
+            'arrear_interest' => $arrearInterest,
             'arrear_fee' => 0,
-            'penalty' => $this->arrear_penalty ?? 0,
-            'prepayment' => 0,
-            'status' => $this->status,
+            'penalty_due' => $penaltyDue,
+            'penalty_paid' => $penaltyPaid,
+            'status' => $status,
             'currency' => $this->currency,
         ];
+    }
+
+    private function resolvePenaltyRate(): float
+    {
+        if (self::$penaltyRates === null) {
+            $settings = Setting::query()
+                ->whereIn('key', ['default_penalty_usd', 'default_penalty_khr'])
+                ->pluck('value', 'key');
+
+            self::$penaltyRates = [
+                'USD' => (float) ($settings['default_penalty_usd'] ?? 2.5),
+                'KHR' => (float) ($settings['default_penalty_khr'] ?? 10000),
+            ];
+        }
+
+        $currency = strtoupper((string) $this->currency);
+
+        return str_contains($currency, 'KHR')
+            ? self::$penaltyRates['KHR']
+            : self::$penaltyRates['USD'];
     }
 
     /**

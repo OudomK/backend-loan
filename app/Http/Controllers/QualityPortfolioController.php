@@ -174,11 +174,14 @@ class QualityPortfolioController extends Controller
                         return (float) ($transaction->fee_paid ?? 0)
                             + (float) ($transaction->interest_paid ?? 0)
                             + (float) ($transaction->principal_paid ?? 0)
+                            + (float) ($transaction->prepayment_paid ?? 0)
                             + (float) ($transaction->paid_off_amount ?? 0);
                     });
 
                     $cumulativeDue = 0.0;
+                    $cumulativePrincipalDue = 0.0;
                     $earliestOverdueDate = null;
+                    $earliestPrincipalArrearDate = null;
 
                     foreach ($loan->payments as $payment) {
                         if ($payment->payment_date >= $toDateStr) {
@@ -188,18 +191,24 @@ class QualityPortfolioController extends Controller
                         $cumulativeDue += (float) ($payment->principal_amount ?? 0)
                             + (float) ($payment->interest_amount ?? 0)
                             + (float) ($payment->fee_amount ?? 0);
+                        $cumulativePrincipalDue += (float) ($payment->principal_amount ?? 0);
 
-                        if (($cumulativeDue - $scheduledPaidAtEnd) > 0.01) {
+                        if (($cumulativeDue - $scheduledPaidAtEnd) > 0.01 && $earliestOverdueDate === null) {
                             $earliestOverdueDate = $payment->payment_date;
-                            break;
+                        }
+
+                        if (($cumulativePrincipalDue - $principalPaidAtEnd) > 0.01 && $earliestPrincipalArrearDate === null) {
+                            $earliestPrincipalArrearDate = $payment->payment_date;
                         }
                     }
 
-                    if (!$earliestOverdueDate) {
+                    $effectiveArrearDate = $earliestOverdueDate ?? $earliestPrincipalArrearDate;
+
+                    if (!$effectiveArrearDate) {
                         continue;
                     }
 
-                    $aging = abs($toDate->diffInDays(Carbon::parse($earliestOverdueDate)));
+                    $aging = abs($toDate->startOfDay()->diffInDays(Carbon::parse($effectiveArrearDate)->startOfDay()));
 
                     if ($aging >= 1) {
                         $par1Count++;
