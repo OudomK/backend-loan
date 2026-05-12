@@ -8,14 +8,17 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Services\BalloonPaymentCalculator;
+use App\Services\CommissionIncomeService;
 
 class LoanController extends Controller
 {
-    protected $calculator;
+    protected \App\Services\LoanCalculator $calculator;
+    protected CommissionIncomeService $commissionIncomeService;
 
-    public function __construct(\App\Services\LoanCalculator $calculator)
+    public function __construct(\App\Services\LoanCalculator $calculator, CommissionIncomeService $commissionIncomeService)
     {
         $this->calculator = $calculator;
+        $this->commissionIncomeService = $commissionIncomeService;
     }
 
     public function getPaymentQrs()
@@ -75,7 +78,7 @@ class LoanController extends Controller
             'payment_frequency' => 'nullable|string',
             'loan_officer_id' => 'nullable|exists:loan_officers,id',
             'admin_fee' => 'nullable|numeric',
-            'admin_fee_type' => 'nullable|string|in:one_time,monthly',
+            'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
             'guarantor_id' => 'nullable|exists:guarantors,id',
@@ -91,9 +94,25 @@ class LoanController extends Controller
             'payment_qr_id' => 'nullable|exists:payment_qrs,id',
         ]);
 
-        // Ensure admin_fee is always set from request (fee %)
-        $validated['admin_fee'] = (float) ($request->input('admin_fee') ?? $validated['admin_fee'] ?? 0);
-        $validated['admin_fee_type'] = $request->input('admin_fee_type') ?: ($validated['admin_fee_type'] ?? 'one_time');
+        $requestedAmount = (float) ($validated['amount'] ?? 0);
+        $adminFeePercent = (float) ($request->input('admin_fee') ?? $validated['admin_fee'] ?? 0);
+        $adminFeeValue = ($requestedAmount * $adminFeePercent) / 100;
+        
+        $feeType = $request->input('admin_fee_type') ?: ($validated['admin_fee_type'] ?? 'one_time');
+
+        $validated['admin_fee'] = $adminFeePercent;
+        $validated['admin_fee_type'] = $feeType;
+
+        if ($feeType === 'deducted_upfront') {
+            $validated['disbursed_amount'] = round($requestedAmount - $adminFeeValue, 2);
+            $validated['amount'] = $requestedAmount; // Schedule runs on requested amount
+        } elseif ($feeType === 'capitalized_upfront') {
+            $validated['disbursed_amount'] = $requestedAmount;
+            $validated['amount'] = round($requestedAmount + $adminFeeValue, 2); // Schedule runs on higher amount
+        } else {
+            $validated['disbursed_amount'] = $requestedAmount;
+            $validated['amount'] = $requestedAmount;
+        }
 
         // Calculate Cycle
         $cycle = Loan::where('borrower_id', $validated['borrower_id'])->count() + 1;
@@ -109,6 +128,7 @@ class LoanController extends Controller
         }
 
         $loan = Loan::create($validated);
+        $this->commissionIncomeService->syncForLoan($loan);
 
         // Save collaterals if any
         if (isset($validated['collaterals'])) {
@@ -239,7 +259,7 @@ class LoanController extends Controller
             'start_date' => 'required|date',
             'currency' => 'nullable|string',
             'admin_fee' => 'nullable|numeric',
-            'admin_fee_type' => 'nullable|string|in:one_time,monthly',
+            'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
         ]);
 
         try {
@@ -272,8 +292,16 @@ class LoanController extends Controller
                     ];
                 }, $scheduleRaw);
             } else {
+                $scheduleAmount = (float) $validated['amount'];
+                $feeType = $validated['admin_fee_type'] ?? 'one_time';
+                if ($feeType === 'capitalized_upfront') {
+                    $adminFeePercent = (float) ($validated['admin_fee'] ?? 0);
+                    $adminFeeValue = ($scheduleAmount * $adminFeePercent) / 100;
+                    $scheduleAmount += $adminFeeValue;
+                }
+
                 $schedule = $this->calculator->calculateLoanWithDates(
-                    $validated['amount'],
+                    $scheduleAmount,
                     $validated['interest_rate'],
                     $validated['duration_months'],
                     // For negotiable, default to fixed_monthly as a starting point
@@ -281,7 +309,7 @@ class LoanController extends Controller
                     $validated['start_date'],
                     $validated['currency'] ?? 'USD',
                     $validated['admin_fee'] ?? 0,
-                    $validated['admin_fee_type'] ?? 'one_time'
+                    $feeType
                 );
             }
 
@@ -317,7 +345,7 @@ class LoanController extends Controller
             'status' => 'sometimes|required|in:pending,active,completed,paid_off',
             'purpose' => 'nullable|string|max:255',
             'admin_fee' => 'nullable|numeric',
-            'admin_fee_type' => 'nullable|string|in:one_time,monthly',
+            'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
             'guarantor_id' => 'nullable|exists:guarantors,id',

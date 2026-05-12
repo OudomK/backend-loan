@@ -6,6 +6,7 @@ use App\Filament\Resources\Loans\LoanResource;
 use App\Models\Borrower;
 use App\Models\Loan;
 use App\Services\BalloonPaymentCalculator;
+use App\Services\CommissionIncomeService;
 use App\Services\LoanCalculator;
 use Carbon\Carbon;
 use Filament\Notifications\Notification;
@@ -56,6 +57,8 @@ class CreateLoan extends CreateRecord
         if (!$this->record instanceof Loan) {
             return;
         }
+
+        app(CommissionIncomeService::class)->syncForLoan($this->record);
 
         if (!$this->canGenerateSchedule($this->record)) {
             return;

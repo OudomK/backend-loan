@@ -49,6 +49,7 @@ class Loan extends Model
     protected $fillable = [
         'borrower_id',
         'amount',
+        'disbursed_amount',
         'total_paid',
         'interest_rate',
         'duration_months',

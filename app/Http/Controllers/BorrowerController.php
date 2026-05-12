@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Borrower;
+use App\Models\Loan;
 use Illuminate\Http\Request;
 
 class BorrowerController extends Controller
@@ -11,19 +12,68 @@ class BorrowerController extends Controller
     {
         $query = Borrower::query();
 
-        if ($request->has('search')) {
-            $search = $request->query('search');
+        if ($request->filled('search')) {
+            $search = trim((string) $request->query('search'));
+            $like = "%{$search}%";
+
             $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere('id_number', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('customer_code', 'like', "%{$search}%")
+                $like = "%{$search}%";
+                $q->where('first_name', 'like', $like)
+                    ->orWhere('last_name', 'like', $like)
+                    ->orWhere('id_number', 'like', $like)
+                    ->orWhere('phone', 'like', $like)
+                    ->orWhere('customer_code', 'like', $like)
                     ->orWhereHas('loans', function ($q) use ($search) {
                         $q->where('loan_code', 'like', "%{$search}%");
                     });
             });
-            $query->limit(25);
+
+            $results = $query
+                ->select([
+                    'id',
+                    'first_name',
+                    'last_name',
+                    'phone',
+                    'id_number',
+                    'customer_code',
+                ])
+                ->addSelect([
+                    'latest_loan_code' => Loan::query()
+                        ->select('loan_code')
+                        ->whereColumn('loans.borrower_id', 'borrowers.id')
+                        ->whereNull('loans.deleted_at')
+                        ->latest('id')
+                        ->limit(1),
+                ])
+                ->orderByRaw(
+                    "CASE
+                        WHEN customer_code LIKE ? THEN 0
+                        WHEN phone LIKE ? THEN 1
+                        WHEN id_number LIKE ? THEN 2
+                        WHEN first_name LIKE ? THEN 3
+                        WHEN last_name LIKE ? THEN 4
+                        ELSE 5
+                    END",
+                    ["{$search}%", "{$search}%", "{$search}%", "{$search}%", "{$search}%"]
+                )
+                ->limit(15)
+                ->get()
+                ->map(function (Borrower $borrower) {
+                    return [
+                        'id' => (string) $borrower->id,
+                        'first_name' => (string) ($borrower->first_name ?? ''),
+                        'last_name' => (string) ($borrower->last_name ?? ''),
+                        'name' => trim(($borrower->last_name ?? '') . ' ' . ($borrower->first_name ?? '')),
+                        'phone' => (string) ($borrower->phone ?? ''),
+                        'id_number' => (string) ($borrower->id_number ?? ''),
+                        'customer_code' => (string) ($borrower->customer_code ?? ''),
+                        'code' => (string) ($borrower->customer_code ?? ''),
+                        'latest_loan_code' => (string) ($borrower->latest_loan_code ?? ''),
+                    ];
+                })
+                ->values();
+
+            return response()->json($results);
         }
 
         if ($request->has('customer_type')) {

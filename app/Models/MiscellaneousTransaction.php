@@ -20,6 +20,7 @@ class MiscellaneousTransaction extends Model
     }
 
     protected $fillable = [
+        'loan_id',
         'type',
         'category',
         'amount',
@@ -32,4 +33,9 @@ class MiscellaneousTransaction extends Model
         'amount' => 'decimal:2',
         'transaction_date' => 'date',
     ];
+
+    public function loan(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Loan::class);
+    }
 }

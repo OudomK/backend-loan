@@ -100,6 +100,7 @@ class ManageSettings extends Page implements HasForms
             'copyright_text' => $dbSettings['copyright_text'] ?? '© ' . date('Y') . ' ' . config('app.company_name'),
             'exchange_rate_khr_to_usd' => $dbSettings['exchange_rate_khr_to_usd'] ?? 4000,
             'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,
+            'commission_income_rate' => $dbSettings['commission_income_rate'] ?? 20,
             'default_penalty_usd' => $dbSettings['default_penalty_usd'] ?? 2.5,
             'default_penalty_khr' => $dbSettings['default_penalty_khr'] ?? 10000,
             'enable_dividend_tax' => $this->toBool($dbSettings['enable_dividend_tax'] ?? false, false),
@@ -257,6 +258,13 @@ class ManageSettings extends Page implements HasForms
                             ->label('Default Interest Rate (%)')
                             ->numeric()
                             ->step('0.01'),
+                        TextInput::make('commission_income_rate')
+                            ->label('Commission Income Rate (%)')
+                            ->helperText('Used to auto-calculate Commission Income from Admin Fee value when a new loan is created.')
+                            ->numeric()
+                            ->step('0.01')
+                            ->minValue(0)
+                            ->default(20),
                         TextInput::make('default_penalty_usd')
                             ->label('Default Penalty (USD/Day)')
                             ->numeric()

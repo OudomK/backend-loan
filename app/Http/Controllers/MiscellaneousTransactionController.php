@@ -41,6 +41,7 @@ class MiscellaneousTransactionController extends Controller
     public function store(Request $request)
     {
         $request->validate([
+            'loan_id' => 'nullable|exists:loans,id',
             'type' => 'required|in:revenue,expense',
             'category' => 'required|string',
             'amount' => 'required|numeric',

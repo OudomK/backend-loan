@@ -93,4 +93,9 @@ class CoBorrower extends Model
     {
         return $this->hasMany(Loan::class, 'co_borrower_id');
     }
+
+    public function latestLoan()
+    {
+        return $this->hasOne(Loan::class, 'co_borrower_id')->latestOfMany();
+    }
 }

@@ -80,4 +80,17 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Logged out']);
     }
+    /**
+     * Generate SSO Token for Admin Panel Auto-login
+     */
+    public function getSsoUrl(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $token = \Illuminate\Support\Str::random(64);
+        
+        // Store the user ID in cache for 5 minutes associated with this token
+        \Illuminate\Support\Facades\Cache::put('sso_token_' . $token, $user->id, now()->addMinutes(5));
+
+        return response()->json(['token' => $token]);
+    }
 }

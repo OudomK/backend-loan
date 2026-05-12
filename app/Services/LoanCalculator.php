@@ -7,7 +7,7 @@ use DateInterval;
 
 class LoanCalculator
 {
-    public function calculateLoanWithDates($principal, $rate, $duration, $option, $startDate, $currency, $adminFee = 0, $adminFeeType = 'one_time')
+    public function calculateLoanWithDates(float $principal, float $rate, int $duration, string $option, string $startDate, string $currency, float $adminFee = 0, string $adminFeeType = 'one_time')
     {
         $results = [];
         $startDateObj = new DateTime($startDate);
@@ -41,6 +41,9 @@ class LoanCalculator
 
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
             if ($adminFee <= 0) return 0;
+            if ($adminFeeType === 'deducted_upfront' || $adminFeeType === 'capitalized_upfront') {
+                return 0;
+            }
             $totalFeeAmount = $principal * ($adminFee / 100);
             if ($adminFeeType === 'one_time') {
                 return ($periodNumber === 1) ? $applyRounding($totalFeeAmount, $currency) : 0;

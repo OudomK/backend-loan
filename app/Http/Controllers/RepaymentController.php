@@ -18,9 +18,11 @@ class RepaymentController extends Controller
     {
         $today = Carbon::today();
 
-        $dueToday = Loan::with(['borrower' => function ($q) {
-            $q->withTrashed();
-        }])
+        $dueToday = Loan::with([
+            'borrower' => function ($q) {
+                $q->withTrashed();
+            }
+        ])
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('payment_date', $today)
@@ -36,7 +38,7 @@ class RepaymentController extends Controller
                     ->orderBy('payment_date', 'asc')
                     ->first();
 
-                if (! $nextPayment) {
+                if (!$nextPayment) {
                     $nextPayment = $loan->payments()
                         ->whereRaw('total_paid < (principal_amount + interest_amount)')
                         ->orderBy('payment_date', 'asc')
@@ -64,9 +66,11 @@ class RepaymentController extends Controller
         };
 
         $overdueRows = collect();
-        $overdueLoans = Loan::with(['borrower' => function ($q) {
-            $q->withTrashed();
-        }])
+        $overdueLoans = Loan::with([
+            'borrower' => function ($q) {
+                $q->withTrashed();
+            }
+        ])
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('payment_date', '<', $today)
@@ -116,17 +120,27 @@ class RepaymentController extends Controller
      */
     public function search(Request $request)
     {
-        $query = $request->input('query');
+        $query = trim((string) $request->input('query', ''));
+        if ($query === '') {
+            return response()->json([]);
+        }
 
-        $loans = Loan::with(['borrower' => function ($q) {
-            $q->withTrashed();
-        }])
+        $like = '%' . $query . '%';
+
+        $loans = Loan::with([
+            'borrower' => function ($q) {
+                $q->withTrashed();
+            }
+        ])
             ->where('status', 'active')
             ->where(function ($q) use ($query) {
-                $q->where('loan_code', 'LIKE', "%$query%")
-                    ->orWhereHas('borrower', function ($bq) use ($query) {
-                        $bq->where('first_name', 'LIKE', "%$query%")
-                            ->orWhere('last_name', 'LIKE', "%$query%");
+                $like = '%' . $query . '%';
+                $q->where('loan_code', 'LIKE', $like)
+                    ->orWhereHas('borrower', function ($bq) use ($like) {
+                        $bq->where('first_name', 'LIKE', $like)
+                            ->orWhere('last_name', 'LIKE', $like)
+                            ->orWhereRaw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) LIKE ?", [$like])
+                            ->orWhereRaw("CONCAT(COALESCE(last_name, ''), ' ', COALESCE(first_name, '')) LIKE ?", [$like]);
                     });
             })
             ->limit(10)

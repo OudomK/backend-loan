@@ -93,4 +93,9 @@ class Guarantor extends Model
     {
         return $this->hasMany(Loan::class, 'guarantor_id');
     }
+
+    public function latestLoan()
+    {
+        return $this->hasOne(Loan::class, 'guarantor_id')->latestOfMany();
+    }
 }

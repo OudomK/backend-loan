@@ -96,6 +96,7 @@ Route::get('/app/settings', function () {
 // ——— Protected routes (auth:sanctum) ———
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/admin/sso', [AuthController::class, 'getSsoUrl']);
 
     Route::get('/user', function (Request $request) {
         $user = $request->user();

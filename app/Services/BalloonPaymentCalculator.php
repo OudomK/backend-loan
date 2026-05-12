@@ -41,7 +41,9 @@ class BalloonPaymentCalculator
             $totalFeeAmount = $principal * ($adminFee / 100);
             $feeAmount = 0;
             if ($adminFee > 0) {
-                if ($adminFeeType === 'one_time') {
+                if ($adminFeeType === 'deducted_upfront' || $adminFeeType === 'capitalized_upfront') {
+                    $feeAmount = 0;
+                } elseif ($adminFeeType === 'one_time') {
                     $feeAmount = ($month === 1) ? round($totalFeeAmount, 2) : 0;
                 } else {
                     $feeAmount = round($totalFeeAmount / $durationMonths, 2);
@@ -119,7 +121,9 @@ class BalloonPaymentCalculator
             $totalFeeAmount = $principal * ($adminFee / 100);
             $feeAmount = 0;
             if ($adminFee > 0) {
-                if ($adminFeeType === 'one_time') {
+                if ($adminFeeType === 'deducted_upfront' || $adminFeeType === 'capitalized_upfront') {
+                    $feeAmount = 0;
+                } elseif ($adminFeeType === 'one_time') {
                     $feeAmount = ($month === 1) ? round($totalFeeAmount, 2) : 0;
                 } else {
                     $feeAmount = round($totalFeeAmount / $durationMonths, 2);

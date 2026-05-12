@@ -52,14 +52,28 @@ class IncomeStatementController extends Controller
                 'interest_income' => ['label' => 'Interest Income', 'amounts' => [], 'total_usd' => 0],
                 'penalty_income' => ['label' => 'Penalty / Late Fees', 'amounts' => [], 'total_usd' => 0],
                 'admin_fee' => ['label' => 'Admin / Service Fees', 'amounts' => [], 'total_usd' => 0],
+                'commission_income' => ['label' => 'Commission Income', 'amounts' => [], 'total_usd' => 0],
                 'other_revenue' => ['label' => 'Other Revenue', 'amounts' => [], 'total_usd' => 0],
             ];
             $expenseItems = [
                 'salary' => ['label' => 'Salary Expense', 'amounts' => [], 'total_usd' => 0],
-                'allowance' => ['label' => 'Allowance Expense', 'amounts' => [], 'total_usd' => 0],
-                'bonus' => ['label' => 'Bonus Expense', 'amounts' => [], 'total_usd' => 0],
                 'borrowing_interest' => ['label' => 'Borrowing Interest Expense', 'amounts' => [], 'total_usd' => 0],
-                'other_expenses' => ['label' => 'Other Expenses', 'amounts' => [], 'total_usd' => 0],
+                'staff_benefit' => ['label' => 'Staff Benefit Expense', 'amounts' => [], 'total_usd' => 0],
+                'office_rental' => ['label' => 'Office Rental Expense', 'amounts' => [], 'total_usd' => 0],
+                'utilities' => ['label' => 'Utilities Expense', 'amounts' => [], 'total_usd' => 0],
+                'internet_telephone' => ['label' => 'Internet & Telephone Expense', 'amounts' => [], 'total_usd' => 0],
+                'rental_photo_stage' => ['label' => 'Rental Photo Stage Expense', 'amounts' => [], 'total_usd' => 0],
+                'fuel_transportation' => ['label' => 'Fuel & Transportation Expense', 'amounts' => [], 'total_usd' => 0],
+                'marketing' => ['label' => 'Marketing Expense', 'amounts' => [], 'total_usd' => 0],
+                'maintenance' => ['label' => 'Maintenance Expense', 'amounts' => [], 'total_usd' => 0],
+                'office_supplies' => ['label' => 'Office Supplies Expense', 'amounts' => [], 'total_usd' => 0],
+                'depreciation' => ['label' => 'Depreciation Expense', 'amounts' => [], 'total_usd' => 0],
+                'software_subscription' => ['label' => 'Software Subscription Expense', 'amounts' => [], 'total_usd' => 0],
+                'professional_service' => ['label' => 'Professional Service Expense', 'amounts' => [], 'total_usd' => 0],
+                'bank_charge' => ['label' => 'Bank Charge Expense', 'amounts' => [], 'total_usd' => 0],
+                'training' => ['label' => 'Training Expense', 'amounts' => [], 'total_usd' => 0],
+                'other_administrative' => ['label' => 'Other Administrative Expense', 'amounts' => [], 'total_usd' => 0],
+                'other_expenses' => ['label' => 'Other Expense', 'amounts' => [], 'total_usd' => 0],
             ];
 
             $totalRevenue = [];
@@ -69,6 +83,20 @@ class IncomeStatementController extends Controller
             $grandTotalExpensesUSD = 0;
 
             foreach ($currencies as $curr) {
+                $sumMiscExpense = function (array $categories) use ($curr, $fromDate, $toDate) {
+                    return (double) DB::table('miscellaneous_transactions')
+                        ->where('type', 'expense')
+                        ->whereNull('deleted_at')
+                        ->where('currency', 'LIKE', $curr . '%')
+                        ->whereBetween('transaction_date', [$fromDate, $toDate])
+                        ->where(function ($q) use ($categories) {
+                            foreach ($categories as $category) {
+                                $q->orWhereRaw('LOWER(category) = ?', [strtolower($category)]);
+                            }
+                        })
+                        ->sum('amount');
+                };
+
                 // Initialize totals
                 $totalRevenue[$curr] = 0;
                 $totalExpenses[$curr] = 0;
@@ -105,11 +133,29 @@ class IncomeStatementController extends Controller
                 $totalRevenue[$curr] += $admin;
                 $revenueItems['admin_fee']['total_usd'] += ($curr === 'USD' ? $admin : $admin / $exchangeRate);
 
+                $commission = (double) DB::table('miscellaneous_transactions')
+                    ->where('type', 'revenue')
+                    ->whereNull('deleted_at')
+                    ->where('currency', 'LIKE', $curr . '%')
+                    ->whereBetween('transaction_date', [$fromDate, $toDate])
+                    ->where(function ($q) {
+                        $q->whereRaw('LOWER(category) = ?', ['commission income'])
+                            ->orWhereRaw('LOWER(category) = ?', ['commission']);
+                    })
+                    ->sum('amount');
+                $revenueItems['commission_income']['amounts'][$curr] = $commission;
+                $totalRevenue[$curr] += $commission;
+                $revenueItems['commission_income']['total_usd'] += ($curr === 'USD' ? $commission : $commission / $exchangeRate);
+
                 $otherRev = (double) DB::table('miscellaneous_transactions')
                     ->where('type', 'revenue')
                     ->whereNull('deleted_at')
                     ->where('currency', 'LIKE', $curr . '%')
                     ->whereBetween('transaction_date', [$fromDate, $toDate])
+                    ->where(function ($q) {
+                        $q->whereRaw('LOWER(category) <> ?', ['commission income'])
+                            ->whereRaw('LOWER(category) <> ?', ['commission']);
+                    })
                     ->sum('amount');
                 $revenueItems['other_revenue']['amounts'][$curr] = $otherRev;
                 $totalRevenue[$curr] += $otherRev;
@@ -121,23 +167,19 @@ class IncomeStatementController extends Controller
                     
                     // Salary Expense = Base Salary - Deduction
                     $salary = (double) (clone $pQuery)->sum('salary') - (double) (clone $pQuery)->sum('deduction');
-                    $allowance = (double) (clone $pQuery)->sum('allowance');
-                    $bonus = (double) (clone $pQuery)->sum('bonus');
+                    $staffBenefit = (double) (clone $pQuery)->sum('allowance') + (double) (clone $pQuery)->sum('bonus');
 
                     $expenseItems['salary']['amounts'][$curr] = $salary;
-                    $expenseItems['allowance']['amounts'][$curr] = $allowance;
-                    $expenseItems['bonus']['amounts'][$curr] = $bonus;
+                    $expenseItems['staff_benefit']['amounts'][$curr] = $staffBenefit;
                     
                     // Add explicitly to total expenses so it perfectly matches the UI items
-                    $totalExpenses[$curr] += ($salary + $allowance + $bonus);
+                    $totalExpenses[$curr] += ($salary + $staffBenefit);
 
                     $expenseItems['salary']['total_usd'] += $expenseItems['salary']['amounts'][$curr];
-                    $expenseItems['allowance']['total_usd'] += $expenseItems['allowance']['amounts'][$curr];
-                    $expenseItems['bonus']['total_usd'] += $expenseItems['bonus']['amounts'][$curr];
+                    $expenseItems['staff_benefit']['total_usd'] += $expenseItems['staff_benefit']['amounts'][$curr];
                 } else {
                     $expenseItems['salary']['amounts'][$curr] = 0;
-                    $expenseItems['allowance']['amounts'][$curr] = 0;
-                    $expenseItems['bonus']['amounts'][$curr] = 0;
+                    $expenseItems['staff_benefit']['amounts'][$curr] = 0;
                 }
 
                 $borrInt = (double) DB::table('borrowing_repayments')
@@ -151,15 +193,50 @@ class IncomeStatementController extends Controller
                 $totalExpenses[$curr] += $borrInt;
                 $expenseItems['borrowing_interest']['total_usd'] += ($curr === 'USD' ? $borrInt : $borrInt / $exchangeRate);
 
-                $otherExp = (double) DB::table('miscellaneous_transactions')
+                $miscExpenseCategoryMap = [
+                    'office_rental' => ['Office Rental Expense', 'Office Rental'],
+                    'utilities' => ['Utilities Expense', 'Utilities'],
+                    'internet_telephone' => ['Internet & Telephone Expense', 'Internet and Telephone Expense', 'Internet & Telephone', 'Internet and Telephone'],
+                    'rental_photo_stage' => ['Rental Photo Stage Expense', 'Rental Photo Stage'],
+                    'fuel_transportation' => ['Fuel & Transportation Expense', 'Fuel and Transportation Expense', 'Fuel & Transportation', 'Fuel and Transportation'],
+                    'marketing' => ['Marketing Expense', 'Marketing'],
+                    'maintenance' => ['Maintenance Expense', 'Maintenance'],
+                    'office_supplies' => ['Office Supplies Expense', 'Office Supplies'],
+                    'depreciation' => ['Depreciation Expense', 'Depreciation'],
+                    'software_subscription' => ['Software Subscription Expense', 'Software Subscription', 'Software Subscription Expense.'],
+                    'professional_service' => ['Professional Service Expense', 'Professional Service'],
+                    'bank_charge' => ['Bank Charge Expense', 'Bank Charge'],
+                    'training' => ['Training Expense', 'Training'],
+                    'other_administrative' => ['Other Administrative Expense', 'Other Administrative'],
+                ];
+
+                foreach ($miscExpenseCategoryMap as $key => $categories) {
+                    $amount = $sumMiscExpense($categories);
+                    $expenseItems[$key]['amounts'][$curr] = $amount;
+                    $totalExpenses[$curr] += $amount;
+                    $expenseItems[$key]['total_usd'] += ($curr === 'USD' ? $amount : $amount / $exchangeRate);
+                }
+
+                $mappedExpenseCategories = [];
+                foreach ($miscExpenseCategoryMap as $categories) {
+                    foreach ($categories as $category) {
+                        $mappedExpenseCategories[] = strtolower($category);
+                    }
+                }
+
+                $otherExpense = (double) DB::table('miscellaneous_transactions')
                     ->where('type', 'expense')
                     ->whereNull('deleted_at')
                     ->where('currency', 'LIKE', $curr . '%')
                     ->whereBetween('transaction_date', [$fromDate, $toDate])
+                    ->where(function ($q) use ($mappedExpenseCategories) {
+                        $q->whereRaw('LOWER(category) = ?', ['other expense'])
+                            ->orWhereNotIn(DB::raw('LOWER(category)'), $mappedExpenseCategories);
+                    })
                     ->sum('amount');
-                $expenseItems['other_expenses']['amounts'][$curr] = $otherExp;
-                $totalExpenses[$curr] += $otherExp;
-                $expenseItems['other_expenses']['total_usd'] += ($curr === 'USD' ? $otherExp : $otherExp / $exchangeRate);
+                $expenseItems['other_expenses']['amounts'][$curr] = $otherExpense;
+                $totalExpenses[$curr] += $otherExpense;
+                $expenseItems['other_expenses']['total_usd'] += ($curr === 'USD' ? $otherExpense : $otherExpense / $exchangeRate);
 
                 $netIncome[$curr] = $totalRevenue[$curr] - $totalExpenses[$curr];
 

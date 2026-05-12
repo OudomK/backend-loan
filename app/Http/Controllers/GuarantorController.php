@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Guarantor;
+use App\Models\Loan;
 use Illuminate\Http\Request;
 
 class GuarantorController extends Controller
@@ -11,20 +12,67 @@ class GuarantorController extends Controller
     {
         $query = Guarantor::query();
 
-        if ($request->has('search')) {
-            $search = $request->query('search');
+        if ($request->filled('search')) {
+            $search = trim((string) $request->query('search'));
             $query->where(function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere('id_number', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('age', 'like', "%{$search}%")
-                    ->orWhere('customer_code', 'like', "%{$search}%")
+                $like = "%{$search}%";
+                $q->where('first_name', 'like', $like)
+                    ->orWhere('last_name', 'like', $like)
+                    ->orWhere('id_number', 'like', $like)
+                    ->orWhere('phone', 'like', $like)
+                    ->orWhere('age', 'like', $like)
+                    ->orWhere('customer_code', 'like', $like)
                     ->orWhereHas('loans', function ($q) use ($search) {
                         $q->where('loan_code', 'like', "%{$search}%");
                     });
             });
-            $query->limit(25);
+
+            $results = $query
+                ->select([
+                    'id',
+                    'first_name',
+                    'last_name',
+                    'phone',
+                    'id_number',
+                    'customer_code',
+                ])
+                ->addSelect([
+                    'latest_loan_code' => Loan::query()
+                        ->select('loan_code')
+                        ->whereColumn('loans.guarantor_id', 'guarantors.id')
+                        ->whereNull('loans.deleted_at')
+                        ->latest('id')
+                        ->limit(1),
+                ])
+                ->orderByRaw(
+                    "CASE
+                        WHEN customer_code LIKE ? THEN 0
+                        WHEN phone LIKE ? THEN 1
+                        WHEN id_number LIKE ? THEN 2
+                        WHEN first_name LIKE ? THEN 3
+                        WHEN last_name LIKE ? THEN 4
+                        ELSE 5
+                    END",
+                    ["{$search}%", "{$search}%", "{$search}%", "{$search}%", "{$search}%"]
+                )
+                ->limit(15)
+                ->get()
+                ->map(function (Guarantor $guarantor) {
+                    return [
+                        'id' => (string) $guarantor->id,
+                        'first_name' => (string) ($guarantor->first_name ?? ''),
+                        'last_name' => (string) ($guarantor->last_name ?? ''),
+                        'name' => trim(($guarantor->last_name ?? '') . ' ' . ($guarantor->first_name ?? '')),
+                        'phone' => (string) ($guarantor->phone ?? ''),
+                        'id_number' => (string) ($guarantor->id_number ?? ''),
+                        'customer_code' => (string) ($guarantor->customer_code ?? ''),
+                        'code' => (string) ($guarantor->customer_code ?? ''),
+                        'latest_loan_code' => (string) ($guarantor->latest_loan_code ?? ''),
+                    ];
+                })
+                ->values();
+
+            return response()->json($results);
         }
 
         // Laravel SoftDeletes will automatically filter out deleted records.
