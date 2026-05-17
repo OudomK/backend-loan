@@ -15,6 +15,7 @@ class DisbursementLineChart extends ChartWidget
     protected ?string $heading = 'Disbursement Trend';
     protected ?string $description = 'Last 12 months (USD-normalized)';
     protected static ?int $sort = 2;
+    protected ?string $pollingInterval = null;
     protected ?string $maxHeight = '300px';
 
     protected function getData(): array

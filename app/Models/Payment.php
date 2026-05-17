@@ -36,11 +36,14 @@ class Payment extends Model
         'principal_amount',
         'interest_amount',
         'fee_amount',
+        'fee_paid',
+        'total_due',
         'prepayment',
         'penalty_amount',
         'total_paid',
         'payment_date',
-        'payment_method'
+        'payment_method',
+        'repayment_transaction_id',
     ];
 
     public function loan(): \Illuminate\Database\Eloquent\Relations\BelongsTo

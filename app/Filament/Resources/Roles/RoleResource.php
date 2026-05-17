@@ -127,6 +127,93 @@ class RoleResource extends Resource
         return $expanded->unique()->values();
     }
 
+    public static function isResourceDisabled(string $fqcn): bool
+    {
+        /** @var \App\Models\User|null $user */
+        $user = \Filament\Facades\Filament::auth()->user();
+
+        if (!\App\Services\FeatureToggle::isAccessible('expense_categories', $user) && $fqcn === \App\Filament\Resources\ExpenseCategories\ExpenseCategoryResource::class) {
+            return true;
+        }
+        if (!\App\Services\FeatureToggle::isAccessible('revenue_categories', $user) && $fqcn === \App\Filament\Resources\RevenueCategories\RevenueCategoryResource::class) {
+            return true;
+        }
+        if (!\App\Services\FeatureToggle::isAccessible('payment_qrs', $user) && $fqcn === \App\Filament\Resources\PaymentQrs\PaymentQrResource::class) {
+            return true;
+        }
+        if (!\App\Services\FeatureToggle::isAccessible('activity_logs', $user) && $fqcn === \App\Filament\Resources\ActivityLogs\ActivityLogResource::class) {
+            return true;
+        }
+        if (!\App\Services\FeatureToggle::isAccessible('collateral_management', $user) && $fqcn === \App\Filament\Resources\CollateralResource::class) {
+            return true;
+        }
+
+        if ($fqcn === \App\Filament\Resources\Expenses\ExpenseResource::class) {
+            return !\App\Services\FeatureToggle::isAccessible('general_expenses', $user);
+        }
+
+        if ($fqcn === \App\Filament\Resources\Revenues\RevenueResource::class) {
+            return !\App\Services\FeatureToggle::isAccessible('general_revenues', $user);
+        }
+
+        if (!\App\Services\FeatureToggle::isAccessible('hr_payroll', $user)) {
+            if (in_array($fqcn, [
+                \App\Filament\Resources\Employees\EmployeeResource::class,
+                \App\Filament\Resources\Positions\PositionResource::class,
+                \App\Filament\Resources\Payrolls\PayrollResource::class,
+                \App\Filament\Resources\MiscellaneousTransactions\MiscellaneousTransactionResource::class,
+            ])) {
+                return true;
+            }
+        }
+
+        if (!\App\Services\FeatureToggle::isAccessible('capital_share', $user)) {
+            if (in_array($fqcn, [
+                \App\Filament\Resources\CapitalShares\CapitalShareResource::class,
+                \App\Filament\Resources\CapitalShareTransactions\CapitalShareTransactionResource::class,
+                \App\Filament\Resources\Investors\InvestorResource::class,
+            ])) {
+                return true;
+            }
+        }
+
+        if (!\App\Services\FeatureToggle::isAccessible('savings', $user)) {
+            if (in_array($fqcn, [
+                \App\Filament\Resources\SavingAccounts\SavingAccountResource::class,
+                \App\Filament\Resources\BorrowingRepayments\BorrowingRepaymentResource::class,
+            ])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public static function getResourceEntitiesSchema(): ?array
+    {
+        return collect(\BezhanSalleh\FilamentShield\Facades\FilamentShield::getResources())
+            ->filter(function (array $entity) {
+                return !static::isResourceDisabled($entity['resourceFqcn']);
+            })
+            ->map(function (array $entity): Section {
+                $sectionLabel = strval(
+                    static::shield()->hasLocalizedPermissionLabels()
+                    ? \BezhanSalleh\FilamentShield\Facades\FilamentShield::getLocalizedResourceLabel($entity['resourceFqcn'])
+                    : $entity['model']
+                );
+
+                return Section::make($sectionLabel)
+                    ->description(fn (): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<span style="word-break: break-word;">' . Utils::showModelPath($entity['modelFqcn']) . '</span>'))
+                    ->compact()
+                    ->schema([
+                        static::getCheckBoxListComponentForResource($entity),
+                    ])
+                    ->columnSpan(static::shield()->getSectionColumnSpan())
+                    ->collapsible();
+            })
+            ->toArray();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return $schema
@@ -330,7 +417,11 @@ class RoleResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
-            ->when(!auth()->user()->hasRole(Utils::getSuperAdminName()), function (Builder $query) {
+            ->when(function () {
+                /** @var \App\Models\User|null $user */
+                $user = Filament::auth()->user();
+                return !$user?->hasRole(Utils::getSuperAdminName());
+            }, function (Builder $query) {
                 $query->where('name', '!=', Utils::getSuperAdminName());
             });
     }

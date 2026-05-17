@@ -14,6 +14,7 @@ class RepaymentsBarChart extends ChartWidget
     protected ?string $heading = 'Collection Trend';
     protected ?string $description = 'Monthly repayments (USD-normalized)';
     protected static ?int $sort = 3;
+    protected ?string $pollingInterval = null;
     protected ?string $maxHeight = '300px';
 
     protected function getData(): array

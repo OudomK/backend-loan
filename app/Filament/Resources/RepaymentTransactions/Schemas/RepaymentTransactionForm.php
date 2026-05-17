@@ -177,6 +177,8 @@ class RepaymentTransactionForm
             return;
         }
 
+        $usesInstallmentFee = static::loanUsesInstallmentFee($loan);
+
         /** @var Payment|null $installment */
         $installment = $loan->payments()
             ->whereRaw('total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0) + COALESCE(fee_amount, 0) - 0.01)')
@@ -190,7 +192,9 @@ class RepaymentTransactionForm
         }
 
         $feePaidSoFar = (float) ($installment->fee_paid ?? 0);
-        $dueFee = max(0, (float) ($installment->fee_amount ?? 0) - $feePaidSoFar);
+        $dueFee = $usesInstallmentFee
+            ? max(0, (float) ($installment->fee_amount ?? 0) - $feePaidSoFar)
+            : 0;
 
         $alreadyPaidToPrincipalAndInterest = max(0, (float) ($installment->total_paid ?? 0) - $feePaidSoFar);
         $interestAmount = (float) ($installment->interest_amount ?? 0);
@@ -210,6 +214,11 @@ class RepaymentTransactionForm
         $set('penalty_paid', static::formatMoney($penalty));
         $set('fee_paid', static::formatMoney($fee));
         $set('amount_paid', static::formatMoney($principal + $interest));
+    }
+
+    protected static function loanUsesInstallmentFee(Loan $loan): bool
+    {
+        return trim((string) ($loan->admin_fee_type ?? 'one_time')) === 'monthly';
     }
 
     protected static function syncTotalAmount(callable $set, callable $get): void

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MiscellaneousTransactions\Schemas;
 
+use App\Models\ExpenseCategory;
 use App\Support\CurrencyHelper;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -29,6 +30,7 @@ class MiscellaneousTransactionForm
                                 Select::make('type')
                                     ->label('Type')
                                     ->native(false)
+                                    ->live()
                                     ->options([
                                         'revenue' => 'Revenue',
                                         'expense' => 'Expense',
@@ -40,11 +42,41 @@ class MiscellaneousTransactionForm
                                     })
                                     ->default('expense')
                                     ->required(),
-                                TextInput::make('category')
-                                    ->label('Category / Name')
-                                    ->required()
-                                    ->maxLength(100)
-                                    ->placeholder('e.g. Rent, Utilities, Fees'),
+                                Select::make('category')
+                                    ->label('Revenue Category')
+                                    ->native(false)
+                                    ->required(fn (callable $get): bool => $get('type') === 'revenue')
+                                    ->visible(fn (callable $get): bool => $get('type') === 'revenue')
+                                    ->options(fn (): array => \App\Models\RevenueCategory::query()
+                                        ->where('is_active', true)
+                                        ->orderBy('sort_order')
+                                        ->orderBy('name')
+                                        ->pluck('name', 'name')
+                                        ->toArray()),
+                                Select::make('expense_category_id')
+                                    ->label('Expense Category')
+                                    ->native(false)
+                                    ->searchable()
+                                    ->preload()
+                                    ->live()
+                                    ->required(fn (callable $get): bool => $get('type') === 'expense')
+                                    ->visible(fn (callable $get): bool => $get('type') === 'expense')
+                                    ->options(fn (): array => ExpenseCategory::query()
+                                        ->where('is_active', true)
+                                        ->orderBy('sort_order')
+                                        ->orderBy('name')
+                                        ->pluck('name', 'id')
+                                        ->toArray())
+                                    ->afterStateUpdated(function ($state, callable $set): void {
+                                        if (blank($state)) {
+                                            return;
+                                        }
+
+                                        $category = ExpenseCategory::query()->find($state);
+                                        if ($category) {
+                                            $set('category', $category->name);
+                                        }
+                                    }),
                             ]),
                         Grid::make([
                             'default' => 1,

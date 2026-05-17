@@ -41,14 +41,11 @@ class LoanCalculator
 
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
             if ($adminFee <= 0) return 0;
-            if ($adminFeeType === 'deducted_upfront' || $adminFeeType === 'capitalized_upfront') {
+            // Upfront fee types are recognized when the loan is created, not during repayment.
+            if ($adminFeeType !== 'monthly') {
                 return 0;
             }
             $totalFeeAmount = $principal * ($adminFee / 100);
-            if ($adminFeeType === 'one_time') {
-                return ($periodNumber === 1) ? $applyRounding($totalFeeAmount, $currency) : 0;
-            }
-            // Monthly: spread total fee amount over all payments
             return $applyRounding($totalFeeAmount / $totalPayments, $currency);
         };
 

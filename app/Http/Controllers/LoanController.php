@@ -86,6 +86,8 @@ class LoanController extends Controller
             'product_id' => 'nullable|exists:loan_products,id',
             'collaterals' => 'nullable|array',
             'collaterals.*.type' => 'nullable|string',
+            'collaterals.*.certificate_number' => 'nullable|string',
+            'collaterals.*.license_plate' => 'nullable|string',
             'collaterals.*.owner_name' => 'nullable|string',
             'collaterals.*.value' => 'nullable|numeric',
             'collaterals.*.currency' => 'nullable|string',

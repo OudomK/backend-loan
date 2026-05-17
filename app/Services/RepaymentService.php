@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Loan;
 use App\Models\Payment;
 use App\Models\RepaymentTransaction;
+use App\Models\Revenue;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -19,10 +20,12 @@ class RepaymentService
         return DB::transaction(function () use ($validated): array {
             // Acquire pessimistic lock to prevent double-processing the same loan.
             $loan = Loan::whereKey($validated['loan_id'])->lockForUpdate()->firstOrFail();
+            $feeType = trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time';
+            $usesInstallmentFee = $feeType === 'monthly';
 
             $principalInterestAmount = (float) ($validated['amount_paid'] ?? 0);
             $waivedAmount = (float) ($validated['waived_amount'] ?? 0);
-            $feePaid = (float) ($validated['fee_amount'] ?? 0);
+            $feePaid = $usesInstallmentFee ? (float) ($validated['fee_amount'] ?? 0) : 0.0;
             $penaltyAmountToPay = (float) ($validated['penalty_amount'] ?? 0);
             $penaltyDue = array_key_exists('penalty_due', $validated)
                 ? (float) $validated['penalty_due']
@@ -67,8 +70,15 @@ class RepaymentService
                 $totalToDistribute = round($principalInterestAmount + $feePaid, 2);
             }
 
+            $installmentDueExpression = $usesInstallmentFee
+                ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0))'
+                : 'total_paid < (principal_amount + interest_amount)';
+            $completedLoanExpression = $usesInstallmentFee
+                ? 'total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0) + COALESCE(fee_amount, 0))'
+                : 'total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0))';
+
             $installments = Payment::where('loan_id', $loan->id)
-                ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0))')
+                ->whereRaw($installmentDueExpression)
                 ->orderBy('payment_date', 'asc')
                 ->get();
 
@@ -78,7 +88,7 @@ class RepaymentService
 
             if ($validated['repayment_type'] === 'Normal') {
                 $firstInst = $installments->first();
-                $dueForFirstPI = ($firstInst->principal_amount + $firstInst->interest_amount + $firstInst->fee_amount) - $firstInst->total_paid;
+                $dueForFirstPI = ($firstInst->principal_amount + $firstInst->interest_amount + ($usesInstallmentFee ? $firstInst->fee_amount : 0)) - $firstInst->total_paid;
 
                 if (abs($totalToDistribute - $dueForFirstPI) > 0.01) {
                     throw new \RuntimeException(
@@ -98,7 +108,9 @@ class RepaymentService
                     $principalPaidSoFar = max(0, $alreadyPaidToPrinInt - $interestPaidSoFar);
 
                     $totalPrincipalRemaining += ((float) $inst->principal_amount - $principalPaidSoFar);
-                    $dueFee += ((float) ($inst->fee_amount ?? 0) - (float) ($inst->fee_paid ?? 0));
+                    if ($usesInstallmentFee) {
+                        $dueFee += ((float) ($inst->fee_amount ?? 0) - (float) ($inst->fee_paid ?? 0));
+                    }
 
                     if ($idx === 0) {
                         $dueInterest += ((float) $inst->interest_amount - $interestPaidSoFar);
@@ -143,6 +155,11 @@ class RepaymentService
             $lastUpdatedInst = null;
             $now = Carbon::now();
 
+            /** @var \App\Models\Payment|null $firstInst */
+            $firstInst = $installments->first();
+            /** @var \App\Models\Payment|null $secondInst */
+            $secondInst = $installments->get(1);
+
             /** @var \App\Models\Payment $inst */
             foreach ($installments as $inst) {
                 if ($totalToDistribute <= 0.001) {
@@ -169,7 +186,7 @@ class RepaymentService
                 $dueInterest = (float) $inst->interest_amount - $interestPaidSoFar;
 
                 $interestToPay = 0.0;
-                $isFirstOrSecond = ($inst->is($installments->first()) || ($installments->count() > 1 && $inst->is($installments[1])));
+                $isFirstOrSecond = $inst->is($firstInst) || $inst->is($secondInst);
 
                 if ($validated['repayment_type'] !== 'Pay Off' || $isFirstOrSecond) {
                     $interestToPay = round(min($totalToDistribute, $dueInterest), 2);
@@ -186,7 +203,7 @@ class RepaymentService
                     $totalPrincipalPaid += $principalToPay;
                     $totalToDistribute -= $principalToPay;
 
-                    if ($inst->is($installments->first())) {
+                    if ($inst->is($firstInst)) {
                         $firstRowPrincipalPaid = $principalToPay;
                     }
                 }
@@ -249,7 +266,7 @@ class RepaymentService
             $loan->updateAging();
 
             $unpaidCount = Payment::where('loan_id', $loan->id)
-                ->whereRaw('total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0))')
+                ->whereRaw($completedLoanExpression)
                 ->count();
 
             if ($unpaidCount === 0) {
@@ -257,6 +274,41 @@ class RepaymentService
             }
 
             $loan->update(['total_paid' => $loan->payments()->sum('total_paid')]);
+
+            // Automatically record Penalty and Fees as General Revenue
+            if ($totalPenaltyPaid > 0.001) {
+                $penaltyCategory = \App\Models\RevenueCategory::where('name', 'LIKE', '%Penalty%')->first();
+                if ($penaltyCategory) {
+                    Revenue::create([
+                        'revenue_category_id' => $penaltyCategory->id,
+                        'loan_id' => $loan->id,
+                        'repayment_transaction_id' => $transaction->id,
+                        'amount' => $totalPenaltyPaid,
+                        'currency' => $loan->currency,
+                        'transaction_date' => $validated['transaction_date'],
+                        'payment_method' => $validated['payment_method'],
+                        'description' => "Penalty for loan {$loan->loan_code}",
+                        'status' => 'completed',
+                    ]);
+                }
+            }
+
+            if ($feePaid > 0.001) {
+                $serviceFeeCategory = \App\Models\RevenueCategory::where('name', 'LIKE', '%Service%Fee%')->first();
+                if ($serviceFeeCategory) {
+                    Revenue::create([
+                        'revenue_category_id' => $serviceFeeCategory->id,
+                        'loan_id' => $loan->id,
+                        'repayment_transaction_id' => $transaction->id,
+                        'amount' => $feePaid,
+                        'currency' => $loan->currency,
+                        'transaction_date' => $validated['transaction_date'],
+                        'payment_method' => $validated['payment_method'],
+                        'description' => "Service fee for loan {$loan->loan_code}",
+                        'status' => 'completed',
+                    ]);
+                }
+            }
 
             return [
                 'transaction' => $transaction->fresh(),
@@ -343,14 +395,21 @@ class RepaymentService
                     }
                 }
 
+                // Also delete associated Revenue records
+                Revenue::where('repayment_transaction_id', $transaction->id)->delete();
+
                 $transaction->delete();
             }
 
             $loan->recalculateSchedule();
             $loan->updateAging();
 
+            $usesInstallmentFee = (trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time') === 'monthly';
+            $completedLoanExpression = $usesInstallmentFee
+                ? 'total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0) + COALESCE(fee_amount, 0))'
+                : 'total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0))';
             $unpaidCount = Payment::where('loan_id', $loan->id)
-                ->whereRaw('total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0))')
+                ->whereRaw($completedLoanExpression)
                 ->count();
 
             if ($unpaidCount > 0 && $loan->status === 'completed') {

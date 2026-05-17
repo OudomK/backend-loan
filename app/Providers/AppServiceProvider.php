@@ -24,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \App\Models\Loan::observe(\App\Observers\LoanObserver::class);
         // Disable Vite preload tags to avoid browser warnings for deferred CSS usage in SPA navigation.
         Vite::usePreloadTagAttributes(false);
 
@@ -32,6 +33,8 @@ class AppServiceProvider extends ServiceProvider
 
         Event::subscribe(AuthEventSubscriber::class);
 
+        // Let admin users from the legacy role column bypass Filament/Shield authorization.
+        // Spatie roles still work normally for users created from the Role/User screens.
         // Let admin users from the legacy role column bypass Filament/Shield authorization.
         // Spatie roles still work normally for users created from the Role/User screens.
         Gate::before(function (?object $user, string $ability): ?bool {

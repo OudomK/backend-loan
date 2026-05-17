@@ -11,6 +11,22 @@ use Illuminate\Http\Request;
 
 class RepaymentController extends Controller
 {
+    private function unpaidInstallmentExpression(): string
+    {
+        return "total_paid < (principal_amount + interest_amount + CASE WHEN COALESCE(loans.admin_fee_type, 'one_time') = 'monthly' THEN COALESCE(fee_amount, 0) ELSE 0 END - 0.01)";
+    }
+
+    private function unpaidPaymentExpressionForLoan(Loan $loan, bool $withTolerance = false): string
+    {
+        $baseExpression = trim((string) ($loan->admin_fee_type ?? '')) === 'monthly'
+            ? 'principal_amount + interest_amount + COALESCE(fee_amount, 0)'
+            : 'principal_amount + interest_amount';
+
+        return $withTolerance
+            ? "total_paid < ({$baseExpression} - 0.01)"
+            : "total_paid < ({$baseExpression})";
+    }
+
     /**
      * Get loans due today or overdue.
      */
@@ -26,21 +42,22 @@ class RepaymentController extends Controller
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('payment_date', $today)
-                    ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)');
+                    ->whereRaw($this->unpaidInstallmentExpression());
             })
             ->get();
 
         $formatDueToday = function ($loans) use ($today) {
             return $loans->map(function ($loan) use ($today) {
+                $paymentDueExpression = $this->unpaidPaymentExpressionForLoan($loan);
                 $nextPayment = $loan->payments()
-                    ->whereRaw('total_paid < (principal_amount + interest_amount)')
+                    ->whereRaw($paymentDueExpression)
                     ->where('payment_date', $today->toDateString())
                     ->orderBy('payment_date', 'asc')
                     ->first();
 
                 if (!$nextPayment) {
                     $nextPayment = $loan->payments()
-                        ->whereRaw('total_paid < (principal_amount + interest_amount)')
+                        ->whereRaw($paymentDueExpression)
                         ->orderBy('payment_date', 'asc')
                         ->first();
                 }
@@ -74,15 +91,16 @@ class RepaymentController extends Controller
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('payment_date', '<', $today)
-                    ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)');
+                    ->whereRaw($this->unpaidInstallmentExpression());
             })
             ->get();
 
         /** @var \App\Models\Loan $loan */
         foreach ($overdueLoans as $loan) {
+            $paymentDueExpression = $this->unpaidPaymentExpressionForLoan($loan);
             $overduePayments = $loan->payments()
                 ->where('payment_date', '<', $today->toDateString())
-                ->whereRaw('total_paid < (principal_amount + interest_amount)')
+                ->whereRaw($paymentDueExpression)
                 ->orderBy('payment_date', 'asc')
                 ->get();
 
@@ -165,14 +183,22 @@ class RepaymentController extends Controller
     public function getInstallments(int|string $loan_id)
     {
         $loan = Loan::find($loan_id);
+        $feeType = $loan ? (trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time') : 'one_time';
+        $usesInstallmentFee = $feeType === 'monthly';
+        $installmentDueExpression = $loan
+            ? $this->unpaidPaymentExpressionForLoan($loan)
+            : 'total_paid < (principal_amount + interest_amount)';
         $installments = Payment::where('loan_id', $loan_id)
-            ->whereRaw('total_paid < (principal_amount + interest_amount)')
+            ->whereRaw($installmentDueExpression)
             ->orderBy('payment_date', 'asc')
             ->get();
 
-        $feeType = $loan ? (trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time') : 'one_time';
-        $totalFee = $loan ? ($loan->amount * ((float) ($loan->admin_fee ?? 0) / 100)) : 0;
-        $feePaidSoFar = (float) RepaymentTransaction::where('loan_id', $loan_id)->sum('fee_paid');
+        $totalFee = $usesInstallmentFee && $loan
+            ? ($loan->amount * ((float) ($loan->admin_fee ?? 0) / 100))
+            : 0;
+        $feePaidSoFar = $usesInstallmentFee
+            ? (float) RepaymentTransaction::where('loan_id', $loan_id)->sum('fee_paid')
+            : 0;
 
         return response()->json([
             'installments' => $installments,

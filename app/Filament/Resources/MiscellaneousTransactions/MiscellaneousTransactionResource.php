@@ -7,6 +7,7 @@ use App\Filament\Resources\MiscellaneousTransactions\Pages\EditMiscellaneousTran
 use App\Filament\Resources\MiscellaneousTransactions\Pages\ListMiscellaneousTransactions;
 use App\Filament\Resources\MiscellaneousTransactions\Schemas\MiscellaneousTransactionForm;
 use App\Filament\Resources\MiscellaneousTransactions\Tables\MiscellaneousTransactionsTable;
+use App\Models\ExpenseCategory;
 use App\Models\MiscellaneousTransaction;
 use App\Support\CurrencyHelper;
 use BackedEnum;
@@ -24,11 +25,11 @@ class MiscellaneousTransactionResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';
 
-    protected static string|\UnitEnum|null $navigationGroup = 'HR & Payroll';
+    protected static string|\UnitEnum|null $navigationGroup = 'Financial Management';
 
-    protected static ?int $navigationSort = 9;
+    protected static ?int $navigationSort = 5;
 
-    protected static ?string $recordTitleAttribute = 'description';
+    protected static ?string $recordTitleAttribute = 'reference_no';
 
     public static function getGloballySearchableAttributes(): array
     {
@@ -87,6 +88,16 @@ class MiscellaneousTransactionResource extends Resource
         }
 
         $category = trim((string) ($data['category'] ?? ''));
+        $expenseCategoryId = $data['expense_category_id'] ?? null;
+
+        if ($type === 'expense' && filled($expenseCategoryId)) {
+            $expenseCategory = ExpenseCategory::query()->find($expenseCategoryId);
+            if ($expenseCategory) {
+                $category = $expenseCategory->name;
+                $data['expense_category_id'] = $expenseCategory->id;
+            }
+        }
+
         if ($category === '') {
             throw ValidationException::withMessages([
                 'category' => 'Category / Name is required.',
@@ -101,7 +112,7 @@ class MiscellaneousTransactionResource extends Resource
         }
 
         $rawCurrency = $data['currency'] ?? CurrencyHelper::USD;
-        if (! CurrencyHelper::isSupported($rawCurrency)) {
+        if (!CurrencyHelper::isSupported($rawCurrency)) {
             throw ValidationException::withMessages([
                 'currency' => 'Currency must be USD or KHR.',
             ]);

@@ -139,11 +139,16 @@ class CreateLoan extends CreateRecord
                     continue;
                 }
 
+                $principalAmt = (float) ($payment['principal_amount'] ?? 0);
+                $interestAmt = (float) ($payment['interest_amount'] ?? 0);
+                $feeAmt = (float) ($payment['fee_amount'] ?? 0);
+
                 $loan->payments()->create([
                     'payment_number' => (int) ($payment['payment_number'] ?? 0),
-                    'principal_amount' => (float) ($payment['principal_amount'] ?? 0),
-                    'interest_amount' => (float) ($payment['interest_amount'] ?? 0),
-                    'fee_amount' => (float) ($payment['fee_amount'] ?? 0),
+                    'principal_amount' => $principalAmt,
+                    'interest_amount' => $interestAmt,
+                    'fee_amount' => $feeAmt,
+                    'total_due' => round($principalAmt + $interestAmt + $feeAmt, 2),
                     'penalty_amount' => (float) ($payment['penalty_amount'] ?? 0),
                     'total_paid' => (float) ($payment['total_paid'] ?? 0),
                     'payment_date' => $paymentDate,
@@ -179,11 +184,16 @@ class CreateLoan extends CreateRecord
                     continue;
                 }
 
+                $principalAmt = (float) ($item['principal'] ?? 0);
+                $interestAmt = (float) ($item['interest'] ?? 0);
+                $feeAmt = (float) ($item['fee'] ?? 0);
+
                 $loan->payments()->create([
                     'payment_number' => (int) ($item['period'] ?? 0),
-                    'principal_amount' => (float) ($item['principal'] ?? 0),
-                    'interest_amount' => (float) ($item['interest'] ?? 0),
-                    'fee_amount' => (float) ($item['fee'] ?? 0),
+                    'principal_amount' => $principalAmt,
+                    'interest_amount' => $interestAmt,
+                    'fee_amount' => $feeAmt,
+                    'total_due' => round($principalAmt + $interestAmt + $feeAmt, 2),
                     'penalty_amount' => 0,
                     'total_paid' => 0,
                     'payment_date' => $paymentDate,

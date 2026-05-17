@@ -60,6 +60,22 @@ class EditRole extends EditRecord
             }
         }
 
+        // Preserve existing permissions for disabled features so they aren't lost on save
+        $existingPermissions = $this->record->permissions->pluck('name');
+        $allResources = \BezhanSalleh\FilamentShield\Facades\FilamentShield::getResources();
+        
+        foreach ($allResources as $entity) {
+            if (RoleResource::isResourceDisabled($entity['resourceFqcn'])) {
+                // Feature is disabled, so its checkboxes weren't in the form.
+                // Re-inject its existing permissions so syncPermissions doesn't delete them.
+                foreach ($entity['permissions'] ?? [] as $permissionName) {
+                    if ($existingPermissions->contains($permissionName)) {
+                        $this->permissions->push($permissionName);
+                    }
+                }
+            }
+        }
+
         $this->permissions = RoleResource::expandUiPermissionAliases($this->permissions);
 
         $keepKeys = ['name', 'guard_name', 'category'];

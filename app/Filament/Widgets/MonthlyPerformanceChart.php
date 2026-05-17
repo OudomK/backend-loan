@@ -16,6 +16,7 @@ class MonthlyPerformanceChart extends ChartWidget
     protected ?string $heading = 'Disbursement vs Collection';
     protected ?string $description = '12-month comparison in USD';
     protected static ?int $sort = 4;
+    protected ?string $pollingInterval = null;
     protected int|string|array $columnSpan = 'full';
     protected ?string $maxHeight = '320px';
 

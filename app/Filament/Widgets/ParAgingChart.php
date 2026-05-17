@@ -15,6 +15,7 @@ class ParAgingChart extends ChartWidget
     protected ?string $heading = 'PAR Aging Breakdown';
     protected ?string $description = 'Portfolio at risk by aging bucket (loan count)';
     protected static ?int $sort = 7;
+    protected ?string $pollingInterval = null;
     protected ?string $maxHeight = '300px';
 
     protected function getData(): array

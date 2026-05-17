@@ -102,7 +102,7 @@ class LoanService
             // Delete ALL unpaid installments to start fresh for the remaining term
             // Silence payment logs during this mass update
             Payment::withoutEvents(function () use ($loan, $data, $remainingPrincipal, $paidCount) {
-                $loan->payments()->where('total_paid', '<', 0.01)->delete();
+                $loan->payments()->where('total_paid', '<', 0.01)->forceDelete();
 
                 // Use custom schedule if provided, otherwise regenerate
                 if (!empty($data['custom_schedule'])) {
@@ -132,10 +132,16 @@ class LoanService
                         $paymentDate = \DateTime::createFromFormat('d/m/Y', $paymentDate)->format('Y-m-d');
                     }
 
+                    $principalAmt = (float) ($item['principal'] ?? ($item['principal_amount'] ?? 0));
+                    $interestAmt = (float) ($item['interest'] ?? ($item['interest_amount'] ?? 0));
+                    $feeAmt = (float) ($item['fee'] ?? ($item['fee_amount'] ?? 0));
+
                     $loan->payments()->create([
                         'payment_number' => $startingNo + $index,
-                        'principal_amount' => $item['principal'] ?? ($item['principal_amount'] ?? 0),
-                        'interest_amount' => $item['interest'] ?? ($item['interest_amount'] ?? 0),
+                        'principal_amount' => $principalAmt,
+                        'interest_amount' => $interestAmt,
+                        'fee_amount' => $feeAmt,
+                        'total_due' => round($principalAmt + $interestAmt + $feeAmt, 2),
                         'penalty_amount' => 0,
                         'total_paid' => 0,
                         'payment_date' => $paymentDate,

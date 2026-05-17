@@ -36,6 +36,11 @@ class BorrowerController extends Controller
                     'phone',
                     'id_number',
                     'customer_code',
+                    'gender',
+                    'village',
+                    'commune',
+                    'district',
+                    'province',
                 ])
                 ->addSelect([
                     'latest_loan_code' => Loan::query()
@@ -68,6 +73,11 @@ class BorrowerController extends Controller
                         'id_number' => (string) ($borrower->id_number ?? ''),
                         'customer_code' => (string) ($borrower->customer_code ?? ''),
                         'code' => (string) ($borrower->customer_code ?? ''),
+                        'gender' => (string) ($borrower->gender ?? ''),
+                        'village' => (string) ($borrower->village ?? ''),
+                        'commune' => (string) ($borrower->commune ?? ''),
+                        'district' => (string) ($borrower->district ?? ''),
+                        'province' => (string) ($borrower->province ?? ''),
                         'latest_loan_code' => (string) ($borrower->latest_loan_code ?? ''),
                     ];
                 })

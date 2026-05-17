@@ -15,6 +15,7 @@ class LoanStatusChart extends ChartWidget
     protected ?string $heading = 'Loan Status Distribution';
     protected ?string $description = 'Breakdown of all loans by status';
     protected static ?int $sort = 6;
+    protected ?string $pollingInterval = null;
     protected ?string $maxHeight = '300px';
 
     protected function getData(): array

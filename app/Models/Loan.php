@@ -146,11 +146,15 @@ class Loan extends Model
     public function updateAging(): void
     {
         $today = \Carbon\Carbon::today();
+        $usesInstallmentFee = (trim((string) ($this->admin_fee_type ?? '')) ?: 'one_time') === 'monthly';
+        $arrearExpression = $usesInstallmentFee
+            ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'
+            : 'total_paid < (principal_amount + interest_amount - 0.01)';
         
         // Find the earliest installment that is past due and not fully paid
         $earliestArrear = \App\Models\Payment::where('loan_id', $this->id)
             ->where('payment_date', '<', $today->toDateString())
-            ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
+            ->whereRaw($arrearExpression)
             ->orderBy('payment_date', 'asc')
             ->first();
 
@@ -190,105 +194,75 @@ class Loan extends Model
         if ($outstandingPrincipal <= 0) {
             Payment::where('loan_id', $this->id)
                 ->whereRaw('total_paid < 0.01')
-                ->delete();
+                ->forceDelete();
             $this->update(['status' => 'completed', 'monthly_payment' => 0]);
             return;
         }
 
-        // 2. Identify remaining term
+        // 2. Identify remaining term and untouched future installments
         $lastPaidInstallment = Payment::where('loan_id', $this->id)
             ->where('total_paid', '>', 0)
             ->orderBy('payment_number', 'desc')
             ->first();
 
         $lastPaidNumber = $lastPaidInstallment ? $lastPaidInstallment->payment_number : 0;
-        $remainingMonths = $this->duration_months - $lastPaidNumber;
 
-        if ($remainingMonths <= 0) {
-            return;
-        }
-
-        // 3. Delete all future installments that haven't been touched yet
-        Payment::where('loan_id', $this->id)
+        $futurePayments = Payment::where('loan_id', $this->id)
             ->where('payment_number', '>', $lastPaidNumber)
             ->where('total_paid', '<', 0.01)
-            ->delete();
+            ->orderBy('payment_number', 'asc')
+            ->get();
 
-        $r = ($this->interest_rate / 100);
-        $n = $remainingMonths;
-        $p = $outstandingPrincipal;
-        $method = strtolower(trim($this->repayment_method ?? ''));
-
-        if ($n <= 0) {
+        if ($futurePayments->isEmpty()) {
             $this->update(['monthly_payment' => 0]);
             return;
         }
 
-        // Determine if this is a flat/fixed-principal method
-        $isFlat = str_contains($method, 'fixed') || str_contains($method, 'flat')
-               || str_contains($method, '100%') || str_contains($method, 'declining')
-               || str_contains($method, '70%') || str_contains($method, '50%');
+        // 3. Calculate Ratio and update future installments in place
+        // This preserves complex schedules (like 15-day, custom skips, and balloon setups) 
+        // by scaling the remaining principal and interest instead of naive recreation.
+        $scheduledRemainingPrincipal = $futurePayments->sum('principal_amount');
 
-        if ($isFlat) {
-            // Fixed Principal method: principal is evenly split, interest on remaining balance
-            $fixedPrincipal = round($p / $n, 2);
-            $newMonthlyPayment = round($fixedPrincipal + ($p * $r), 2);
-            $this->update(['monthly_payment' => $newMonthlyPayment]);
-        } else {
-            // Amortization (annuity) formula: EMI = [P x R x (1+R)^N] / [(1+R)^N - 1]
-            if ($r > 0) {
-                $denominator = pow(1 + $r, $n) - 1;
-                if ($denominator == 0) {
-                    $newMonthlyPayment = $p / $n;
-                } else {
-                    $newMonthlyPayment = ($p * $r * pow(1 + $r, $n)) / $denominator;
-                }
-            } else {
-                $newMonthlyPayment = $p / $n;
-            }
-            $newMonthlyPayment = round($newMonthlyPayment, 2);
-            $this->update(['monthly_payment' => $newMonthlyPayment]);
+        // If scheduled principal is essentially zero but balance remains, or vice-versa, handle cleanup
+        if ($scheduledRemainingPrincipal <= 0.001) {
+            Payment::where('loan_id', $this->id)
+                ->where('payment_number', '>', $lastPaidNumber)
+                ->where('total_paid', '<', 0.01)
+                ->forceDelete();
+            $this->update(['monthly_payment' => 0]);
+            return;
         }
 
-        // 4. Generate new future installments
-        $lastDate = $lastPaidInstallment
-            ? \Carbon\Carbon::parse($lastPaidInstallment->payment_date)
-            : \Carbon\Carbon::parse($this->start_date);
+        $ratio = $outstandingPrincipal / $scheduledRemainingPrincipal;
+        $currentBalance = $outstandingPrincipal;
+        $newMonthlyPayment = 0;
 
-        $currentBalance = $p;
-        for ($i = 1; $i <= $n; $i++) {
-            $paymentNumber = $lastPaidNumber + $i;
-            $paymentDate = $lastDate->copy()->addMonths($i);
-
-            $interestAmount = round($currentBalance * $r, 2);
-
-            if ($isFlat) {
-                // Fixed principal each month
-                $principalAmount = round($p / $n, 2);
-                // Adjust final installment to absorb rounding
-                if ($i === $n) {
-                    $principalAmount = $currentBalance;
-                }
+        foreach ($futurePayments as $index => $payment) {
+            $isLast = ($index === $futurePayments->count() - 1);
+            
+            $newInterest = round($payment->interest_amount * $ratio, 2);
+            
+            if ($isLast) {
+                // Absorb any rounding differences in the final payment
+                $newPrincipal = $currentBalance;
             } else {
-                // Amortization: principal = EMI - interest
-                $principalAmount = round($newMonthlyPayment - $interestAmount, 2);
-                if ($i === $n) {
-                    $principalAmount = $currentBalance;
-                }
+                $newPrincipal = round($payment->principal_amount * $ratio, 2);
+            }
+            
+            if ($index === 0) {
+                // Approximate new monthly payment based on the first upcoming adjusted installment
+                $newMonthlyPayment = round($newPrincipal + $newInterest + $payment->fee_amount, 2);
             }
 
-            Payment::create([
-                'loan_id' => $this->id,
-                'payment_number' => $paymentNumber,
-                'principal_amount' => $principalAmount,
-                'interest_amount' => $interestAmount,
-                'fee_amount' => 0,
-                'total_paid' => 0,
-                'payment_date' => $paymentDate->toDateString(),
-            ]);
+            $payment->principal_amount = $newPrincipal;
+            $payment->interest_amount = $newInterest;
+            $payment->total_due = round($newPrincipal + $newInterest + ($payment->fee_amount ?? 0), 2);
+            $payment->save();
 
-            $currentBalance -= $principalAmount;
+            $currentBalance -= $newPrincipal;
         }
+
+        $this->update(['monthly_payment' => $newMonthlyPayment]);
     }
 
     public function modifications()

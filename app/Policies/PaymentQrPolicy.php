@@ -11,6 +11,14 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class PaymentQrPolicy
 {
     use HandlesAuthorization;
+
+    public function before(AuthUser $user, string $ability): ?bool
+    {
+        if (!\App\Services\FeatureToggle::isAccessible('payment_qrs', $user)) {
+            return false;
+        }
+        return null;
+    }
     
     public function viewAny(AuthUser $authUser): bool
     {

@@ -77,12 +77,12 @@ class CapitalShareTransactionResource extends Resource
     {
         return true;
     }
-    
+
     public static function canRestore(Model $record): bool
     {
         return true;
     }
-    
+
     public static function canForceDelete(Model $record): bool
     {
         return true;

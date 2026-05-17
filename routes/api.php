@@ -19,6 +19,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisbursementReportController;
 use App\Http\Controllers\DividendController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\Api\ExpenseController;
+use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\GuarantorController;
 use App\Http\Controllers\IncomeStatementController;
@@ -40,6 +42,8 @@ use App\Http\Controllers\RepaymentController;
 use App\Http\Controllers\RepaymentReportController;
 use App\Http\Controllers\RepaymentScheduleReportController;
 use App\Http\Controllers\RescheduleRefinanceController;
+use App\Http\Controllers\RevenueCategoryController;
+use App\Http\Controllers\RevenueController;
 use App\Http\Controllers\SavingAccountController;
 use App\Http\Controllers\SaverController;
 use App\Http\Controllers\WriteOffCollectionReportController;
@@ -221,9 +225,27 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('employees', EmployeeController::class);
     Route::apiResource('payrolls', PayrollController::class);
 
+    Route::get('/expense-categories', [ExpenseCategoryController::class, 'index'])->middleware('permission:ui:hr_miscellaneous:view');
+    Route::post('/expense-categories', [ExpenseCategoryController::class, 'store'])->middleware('permission:ui:hr_miscellaneous:create');
+    Route::put('/expense-categories/{id}', [ExpenseCategoryController::class, 'update'])->middleware('permission:ui:hr_miscellaneous:edit');
+    Route::delete('/expense-categories/{id}', [ExpenseCategoryController::class, 'destroy'])->middleware('permission:ui:hr_miscellaneous:delete');
+
     Route::get('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'index'])->middleware('permission:ui:hr_miscellaneous:view');
     Route::post('/miscellaneous-transactions', [MiscellaneousTransactionController::class, 'store'])->middleware('permission:ui:hr_miscellaneous:create');
     Route::delete('/miscellaneous-transactions/{id}', [MiscellaneousTransactionController::class, 'destroy'])->middleware('permission:ui:hr_miscellaneous:delete');
+
+    Route::get('/expenses', [ExpenseController::class, 'index'])->middleware('permission:ui:general_expenses:view');
+    Route::post('/expenses', [ExpenseController::class, 'store'])->middleware('permission:ui:general_expenses:create');
+    Route::delete('/expenses/{id}', [ExpenseController::class, 'destroy'])->middleware('permission:ui:general_expenses:delete');
+
+    Route::get('/revenue-categories', [RevenueCategoryController::class, 'index'])->middleware('permission:ui:general_revenue:view');
+    Route::post('/revenue-categories', [RevenueCategoryController::class, 'store'])->middleware('permission:ui:general_revenue:create');
+    Route::put('/revenue-categories/{id}', [RevenueCategoryController::class, 'update'])->middleware('permission:ui:general_revenue:edit');
+    Route::delete('/revenue-categories/{id}', [RevenueCategoryController::class, 'destroy'])->middleware('permission:ui:general_revenue:delete');
+
+    Route::get('/revenues', [RevenueController::class, 'index'])->middleware('permission:ui:general_revenue:view');
+    Route::post('/revenues', [RevenueController::class, 'store'])->middleware('permission:ui:general_revenue:create');
+    Route::delete('/revenues/{id}', [RevenueController::class, 'destroy'])->middleware('permission:ui:general_revenue:delete');
 
     Route::get('/dashboard/stats', [DashboardController::class, 'getStats']);
 });

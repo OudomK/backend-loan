@@ -22,6 +22,7 @@ class MiscellaneousTransaction extends Model
     protected $fillable = [
         'loan_id',
         'type',
+        'expense_category_id',
         'category',
         'amount',
         'currency',
@@ -37,5 +38,10 @@ class MiscellaneousTransaction extends Model
     public function loan(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Loan::class);
+    }
+
+    public function expenseCategory(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(ExpenseCategory::class);
     }
 }

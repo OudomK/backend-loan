@@ -6,6 +6,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
+use BezhanSalleh\FilamentShield\Support\Utils;
 
 class AuthController extends Controller
 {
@@ -86,6 +87,12 @@ class AuthController extends Controller
     public function getSsoUrl(Request $request): JsonResponse
     {
         $user = $request->user();
+        $superAdminRole = Utils::getSuperAdminName();
+
+        if (! $user || ! $user->hasRole($superAdminRole)) {
+            abort(403, 'Only super admin can access Admin Control.');
+        }
+
         $token = \Illuminate\Support\Str::random(64);
         
         // Store the user ID in cache for 5 minutes associated with this token

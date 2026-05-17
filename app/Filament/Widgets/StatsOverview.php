@@ -24,6 +24,7 @@ class StatsOverview extends BaseWidget
     use HasWidgetShield;
 
     protected static ?int $sort = 1;
+    protected ?string $pollingInterval = null;
 
     protected function getColumns(): int
     {
@@ -375,4 +376,3 @@ class StatsOverview extends BaseWidget
         return collect($monthlyData)->values()->all();
     }
 }
-

@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Models\Loan;
-use App\Models\MiscellaneousTransaction;
+use App\Models\Revenue;
+use App\Models\RevenueCategory;
 use App\Models\Setting;
+use App\Models\MiscellaneousTransaction;
 
 class CommissionIncomeService
 {
@@ -15,9 +17,20 @@ class CommissionIncomeService
         $adminFeeValue = ($loanAmount * $adminFeePercent) / 100;
         $commissionRate = (float) (Setting::where('key', 'commission_income_rate')->value('value') ?? 20);
 
-        $existingRecords = MiscellaneousTransaction::query()
-            ->where('type', 'revenue')
+        // Find the RevenueCategory ID for Commission Income
+        $category = RevenueCategory::where('name', 'Commission Income')->first();
+        if (!$category) {
+            return; // Or handle error
+        }
+
+        // Clean up old MiscellaneousTransaction records if any exist (to avoid duplication during migration)
+        MiscellaneousTransaction::where('type', 'revenue')
             ->where('category', 'Commission Income')
+            ->where('loan_id', $loan->id)
+            ->delete();
+
+        $existingRecords = Revenue::query()
+            ->where('revenue_category_id', $category->id)
             ->where('loan_id', $loan->id)
             ->orderByDesc('id')
             ->get();
@@ -27,7 +40,6 @@ class CommissionIncomeService
             foreach ($existingRecords as $record) {
                 $record->delete();
             }
-
             return;
         }
 
@@ -36,13 +48,11 @@ class CommissionIncomeService
             foreach ($existingRecords as $record) {
                 $record->delete();
             }
-
             return;
         }
 
         $payload = [
-            'type' => 'revenue',
-            'category' => 'Commission Income',
+            'revenue_category_id' => $category->id,
             'loan_id' => $loan->id,
             'amount' => $commissionAmount,
             'currency' => $loan->currency ?? 'USD',
@@ -53,16 +63,17 @@ class CommissionIncomeService
                 rtrim(rtrim(number_format($commissionRate, 2, '.', ''), '0'), '.'),
                 number_format($adminFeeValue, 2, '.', '')
             ),
+            'status' => 'completed',
         ];
 
         if ($primary) {
             $primary->update($payload);
         } else {
-            $primary = MiscellaneousTransaction::create($payload);
+            $primary = Revenue::create($payload);
         }
 
         $existingRecords
-            ->filter(fn (MiscellaneousTransaction $record) => $record->id !== $primary->id)
-            ->each(fn (MiscellaneousTransaction $record) => $record->delete());
+            ->filter(fn (Revenue $record) => $record->id !== $primary->id)
+            ->each(fn (Revenue $record) => $record->delete());
     }
 }

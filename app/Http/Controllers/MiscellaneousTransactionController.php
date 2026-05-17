@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ExpenseCategory;
 use App\Models\MiscellaneousTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -11,7 +12,11 @@ class MiscellaneousTransactionController extends Controller
     public function index(Request $request)
     {
         try {
-            $query = MiscellaneousTransaction::orderBy('transaction_date', 'desc');
+            $query = MiscellaneousTransaction::query()
+                ->with('expenseCategory')
+                ->orderByDesc('transaction_date')
+                ->orderByDesc('created_at')
+                ->orderByDesc('id');
 
             if ($request->has('from_date') && $request->has('to_date')) {
                 $query->whereBetween('transaction_date', [$request->from_date, $request->to_date]);
@@ -43,7 +48,8 @@ class MiscellaneousTransactionController extends Controller
         $request->validate([
             'loan_id' => 'nullable|exists:loans,id',
             'type' => 'required|in:revenue,expense',
-            'category' => 'required|string',
+            'expense_category_id' => 'nullable|exists:expense_categories,id',
+            'category' => 'nullable|string',
             'amount' => 'required|numeric',
             'currency' => 'required|string',
             'transaction_date' => 'required|date',
@@ -51,10 +57,25 @@ class MiscellaneousTransactionController extends Controller
         ]);
 
         try {
-            $transaction = MiscellaneousTransaction::create($request->all());
+            $payload = $request->all();
+            $type = strtolower((string) ($payload['type'] ?? 'expense'));
+
+            if ($type === 'expense' && filled($payload['expense_category_id'] ?? null)) {
+                $expenseCategory = ExpenseCategory::query()->findOrFail((int) $payload['expense_category_id']);
+                $payload['category'] = $expenseCategory->name;
+            }
+
+            if (blank($payload['category'] ?? null)) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Category is required.',
+                ], 422);
+            }
+
+            $transaction = MiscellaneousTransaction::create($payload);
             return response()->json([
                 'success' => true,
-                'data' => $transaction,
+                'data' => $transaction->load('expenseCategory'),
             ], 201);
         } catch (\Exception $e) {
             Log::error("Error creating miscellaneous transaction: " . $e->getMessage());

@@ -35,7 +35,7 @@ class PaymentQrResource extends Resource
     {
         return PaymentQrsTable::configure($table);
     }
-    
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()

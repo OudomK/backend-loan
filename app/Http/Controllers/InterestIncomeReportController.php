@@ -9,6 +9,33 @@ use Illuminate\Support\Facades\Log;
 
 class InterestIncomeReportController extends Controller
 {
+    private function recognizedAdminFeeAmount(object $loan): float
+    {
+        $feeType = strtolower(trim((string) ($loan->admin_fee_type ?? 'one_time')));
+        $adminFeeRate = (float) ($loan->admin_fee ?? 0);
+
+        if ($adminFeeRate <= 0 || $feeType === 'monthly') {
+            return 0.0;
+        }
+
+        $loanAmount = (double) ($loan->loan_amount ?? 0);
+        $disbursedAmount = (double) ($loan->disbursed_amount ?? $loanAmount);
+
+        if (in_array($feeType, ['deducted_upfront', 'capitalized_upfront'], true)) {
+            $storedDifference = round(abs($loanAmount - $disbursedAmount), 2);
+            if ($storedDifference > 0) {
+                return $storedDifference;
+            }
+        }
+
+        $baseAmount = $loanAmount;
+        if ($feeType === 'capitalized_upfront' && $loanAmount > 0) {
+            $baseAmount = $loanAmount / (1 + ($adminFeeRate / 100));
+        }
+
+        return round($baseAmount * ($adminFeeRate / 100), 2);
+    }
+
     public function index(Request $request)
     {
         $fromDateInput = $request->query('from_date');
@@ -38,6 +65,7 @@ class InterestIncomeReportController extends Controller
                     'loans.loan_code',
                     'loans.start_date as disb_date',
                     'loans.amount as loan_amount',
+                    'loans.disbursed_amount',
                     'loans.currency',
                     'loans.interest_rate',
                     'loans.duration_months as term',
@@ -96,7 +124,7 @@ class InterestIncomeReportController extends Controller
                     $disbursedQuery->whereBetween('loans.start_date', [$fromDateStr, $toDateStr])
                         ->where(function ($feeTypeQuery) {
                             $feeTypeQuery->whereNull('loans.admin_fee_type')
-                                ->orWhere('loans.admin_fee_type', 'one_time');
+                                ->orWhere('loans.admin_fee_type', '!=', 'monthly');
                         })
                         ->where('loans.admin_fee', '>', 0);
                 });
@@ -117,11 +145,9 @@ class InterestIncomeReportController extends Controller
                 if (
                     $loan->disb_date &&
                     substr((string) $loan->disb_date, 0, 10) >= $fromDateStr &&
-                    substr((string) $loan->disb_date, 0, 10) <= $toDateStr &&
-                    (($loan->admin_fee_type ?? 'one_time') === 'one_time')
+                    substr((string) $loan->disb_date, 0, 10) <= $toDateStr
                 ) {
-                    // admin_fee is stored as a percentage in this system.
-                    $adminFeeIncome = ((double) ($loan->loan_amount ?? 0)) * ((double) ($loan->admin_fee ?? 0)) / 100;
+                    $adminFeeIncome = $this->recognizedAdminFeeAmount($loan);
                 }
 
                 $totalFee = $scheduledFeeCollected + $penaltyCollected + $adminFeeIncome;
