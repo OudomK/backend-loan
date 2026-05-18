@@ -389,14 +389,22 @@ class RepaymentService
 
                     if ($feeToReverse <= 0.001 && $principalToReverse <= 0.001 && $interestToReverse <= 0.001) {
                         Payment::where('repayment_transaction_id', $transaction->id)
-                            ->update(['repayment_transaction_id' => null]);
+                            ->get()
+                            ->each(function (Payment $payment): void {
+                                $payment->repayment_transaction_id = null;
+                                $payment->save();
+                            });
 
                         break;
                     }
                 }
 
                 // Also delete associated Revenue records
-                Revenue::where('repayment_transaction_id', $transaction->id)->delete();
+                Revenue::where('repayment_transaction_id', $transaction->id)
+                    ->get()
+                    ->each(function (Revenue $revenue): void {
+                        $revenue->delete();
+                    });
 
                 $transaction->delete();
             }

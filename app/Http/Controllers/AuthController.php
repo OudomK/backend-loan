@@ -26,6 +26,15 @@ class AuthController extends Controller
         $loginField = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
 
         if (!Auth::attempt([$loginField => $login, 'password' => $password])) {
+            activity('auth')
+                ->withProperties([
+                    'login' => $login,
+                    'login_field' => $loginField,
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ])
+                ->log('Failed login attempt');
+
             throw ValidationException::withMessages([
                 'login' => [__('auth.failed')],
             ]);
@@ -97,6 +106,16 @@ class AuthController extends Controller
         
         // Store the user ID in cache for 5 minutes associated with this token
         \Illuminate\Support\Facades\Cache::put('sso_token_' . $token, $user->id, now()->addMinutes(5));
+
+        activity('auth')
+            ->performedOn($user)
+            ->causedBy($user)
+            ->withProperties([
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'expires_at' => now()->addMinutes(5)->toIso8601String(),
+            ])
+            ->log('Generated admin SSO token');
 
         return response()->json(['token' => $token]);
     }

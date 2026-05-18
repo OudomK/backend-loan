@@ -187,6 +187,8 @@ class LoanForm
                                                     ->required(),
                                                 Select::make('repayment_method')
                                                     ->options([
+                                                        'fixed_daily' => 'Fixed Daily (1x per day)',
+                                                        'fixed_weekly' => 'Fixed Weekly (1x per week)',
                                                         'fixed_monthly' => 'Fixed Monthly (Flat)',
                                                         'linear_monthly' => 'Linear Monthly (Declining)',
                                                         'annuity_monthly' => 'Annuity Monthly',

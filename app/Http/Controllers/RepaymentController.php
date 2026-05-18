@@ -127,9 +127,61 @@ class RepaymentController extends Controller
             }
         }
 
+        $prepaymentDays = (int) (\App\Models\Setting::where('key', 'prepayment_days')->value('value') ?? 3);
+
+        $prepaymentLoans = Loan::with([
+            'borrower' => function ($q) {
+                $q->withTrashed();
+            }
+        ])
+            ->where('status', 'active')
+            ->whereHas('payments', function ($query) use ($today, $prepaymentDays) {
+                $query->where('payment_date', '>', $today)
+                    ->where('payment_date', '<=', $today->copy()->addDays($prepaymentDays))
+                    ->whereRaw($this->unpaidInstallmentExpression());
+            })
+            ->whereDoesntHave('payments', function ($query) use ($today) {
+                $query->where('payment_date', '<=', $today)
+                    ->whereRaw($this->unpaidInstallmentExpression());
+            })
+            ->get();
+
+        $formatPrepayment = function ($loans) use ($today) {
+            return $loans->map(function ($loan) use ($today) {
+                $paymentDueExpression = $this->unpaidPaymentExpressionForLoan($loan);
+                $nextPayment = $loan->payments()
+                    ->whereRaw($paymentDueExpression)
+                    ->orderBy('payment_date', 'asc')
+                    ->first();
+
+                if (!$nextPayment) {
+                    return null;
+                }
+
+                $dueAmount = ($nextPayment->principal_amount + $nextPayment->interest_amount + ($nextPayment->fee_amount ?? 0)) - $nextPayment->total_paid;
+                $symbol = str_contains((string) $loan->currency, 'KHR') ? '៛' : '$';
+
+                return [
+                    'id' => (string) $loan->id,
+                    'name' => $loan->borrower
+                        ? ($loan->borrower->last_name . ' ' . $loan->borrower->first_name)
+                        : 'Unknown (Deleted)',
+                    'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
+                    'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
+                    'amount' => $symbol . number_format($dueAmount, 2),
+                    'principal' => (string) number_format($nextPayment->principal_amount, 2),
+                    'interest' => (string) number_format($nextPayment->interest_amount, 2),
+                    'installment_no' => (string) $nextPayment->payment_number,
+                    'dpd' => '0',
+                    'symbol' => $symbol,
+                ];
+            })->filter()->values()->all();
+        };
+
         return response()->json([
             'due_today' => $formatDueToday($dueToday),
             'overdue' => $overdueRows->values()->all(),
+            'prepayment' => $formatPrepayment($prepaymentLoans),
         ]);
     }
 

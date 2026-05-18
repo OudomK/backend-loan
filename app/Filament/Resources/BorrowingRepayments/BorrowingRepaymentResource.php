@@ -142,6 +142,14 @@ class BorrowingRepaymentResource extends Resource
             : 'active';
 
         $borrowing->saveQuietly();
+
+        activity('borrowings')
+            ->performedOn($borrowing)
+            ->withProperties([
+                'paid_principal' => round($paidPrincipal, 2),
+                'status' => $borrowing->status,
+            ])
+            ->log('Synchronized borrowing status from repayments');
     }
 
     public static function rebuildBorrowingSchedules(?int $borrowingId): void
@@ -244,6 +252,14 @@ class BorrowingRepaymentResource extends Resource
             foreach ($schedules as $schedule) {
                 $schedule->saveQuietly();
             }
+
+            activity('borrowings')
+                ->performedOn($borrowing)
+                ->withProperties([
+                    'schedule_count' => $schedules->count(),
+                    'confirmed_repayment_count' => $repayments->count(),
+                ])
+                ->log('Rebuilt borrowing repayment schedule allocations');
         });
     }
 

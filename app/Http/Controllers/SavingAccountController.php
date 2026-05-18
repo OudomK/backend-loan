@@ -199,6 +199,17 @@ class SavingAccountController extends Controller
                 'performed_by' => Auth::id(),
             ]);
 
+            activity('saving_accounts')
+                ->performedOn($account->fresh())
+                ->causedBy(Auth::user())
+                ->withProperties([
+                    'transaction_type' => 'Deposit',
+                    'amount' => (float) $validated['amount'],
+                    'balance_after' => (float) $account->fresh()->balance,
+                    'reference_no' => $validated['reference_no'] ?? null,
+                ])
+                ->log('Deposited into saving account');
+
             return response()->json($account->fresh());
         });
     }
@@ -232,6 +243,17 @@ class SavingAccountController extends Controller
                 'balance_after' => $account->balance,
                 'performed_by' => Auth::id(),
             ]);
+
+            activity('saving_accounts')
+                ->performedOn($account->fresh())
+                ->causedBy(Auth::user())
+                ->withProperties([
+                    'transaction_type' => 'Withdrawal',
+                    'amount' => (float) $validated['amount'],
+                    'balance_after' => (float) $account->fresh()->balance,
+                    'reference_no' => $validated['reference_no'] ?? null,
+                ])
+                ->log('Withdrew from saving account');
 
             return response()->json($account->fresh());
         });
@@ -280,6 +302,17 @@ class SavingAccountController extends Controller
                     'performed_by' => Auth::id(),
                 ]);
 
+                activity('saving_accounts')
+                    ->performedOn($account->fresh())
+                    ->causedBy(Auth::user())
+                    ->withProperties([
+                        'transaction_type' => 'Interest',
+                        'amount' => (float) $monthlyInterest,
+                        'balance_after' => (float) $account->fresh()->balance,
+                        'reference_no' => 'INT-' . now()->format('Ym'),
+                    ])
+                    ->log('Posted monthly interest to saving account');
+
                 $posted++;
             }
 
@@ -320,6 +353,16 @@ class SavingAccountController extends Controller
                 'balance' => 0,
                 'status' => 'Closed',
             ]);
+
+            activity('saving_accounts')
+                ->performedOn($account->fresh())
+                ->causedBy(Auth::user())
+                ->withProperties([
+                    'transaction_type' => 'Closure',
+                    'final_withdrawal' => (float) $remainingBalance,
+                    'balance_after' => 0,
+                ])
+                ->log('Closed saving account');
 
             return response()->json([
                 'message' => 'Account closed successfully',

@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class LoanOfficer extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, Auditable;
 
 
     protected $fillable = ['employee_id', 'name', 'phone', 'status', 'start_date', 'max_loan_amount', 'gender'];

@@ -1,10 +1,14 @@
 <?php
+
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 
 class LoanModification extends Model
 {
+    use Auditable;
+
     protected $fillable = [
         'loan_id',
         'type',

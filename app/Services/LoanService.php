@@ -102,6 +102,7 @@ class LoanService
             // Delete ALL unpaid installments to start fresh for the remaining term
             // Silence payment logs during this mass update
             Payment::withoutEvents(function () use ($loan, $data, $remainingPrincipal, $paidCount) {
+                $deletedInstallments = $loan->payments()->where('total_paid', '<', 0.01)->count();
                 $loan->payments()->where('total_paid', '<', 0.01)->forceDelete();
 
                 // Use custom schedule if provided, otherwise regenerate
@@ -148,6 +149,16 @@ class LoanService
                         'payment_method' => 'Cash',
                     ]);
                 }
+
+                activity('loan_schedule')
+                    ->performedOn($loan)
+                    ->withProperties([
+                        'deleted_installments' => $deletedInstallments,
+                        'generated_installments' => count($newSchedule),
+                        'remaining_principal' => round($remainingPrincipal, 2),
+                        'action' => 'reschedule',
+                    ])
+                    ->log('Regenerated loan payment schedule');
             });
 
             return $loan;
@@ -224,6 +235,7 @@ class LoanService
             // Do not artificially mark future interest as paid. The loan is completed.
             // Silence payment logs during this mass update
             Payment::withoutEvents(function () use ($oldLoan, $newLoan, $data, $newAmount) {
+                $deletedInstallments = $oldLoan->payments()->where('total_paid', '<', 0.01)->count();
                 $oldLoan->payments()->where('total_paid', '<', 0.01)->delete();
 
                 // Use custom schedule if provided, otherwise regenerate
@@ -257,6 +269,17 @@ class LoanService
                         'payment_method' => 'Cash',
                     ]);
                 }
+
+                activity('loan_schedule')
+                    ->performedOn($newLoan)
+                    ->withProperties([
+                        'deleted_installments' => $deletedInstallments,
+                        'generated_installments' => count($schedule),
+                        'new_amount' => round($newAmount, 2),
+                        'action' => 'refinance',
+                        'source_loan_id' => $oldLoan->id,
+                    ])
+                    ->log('Generated refinanced loan payment schedule');
             });
 
             return $newLoan;

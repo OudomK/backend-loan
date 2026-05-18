@@ -175,7 +175,7 @@ class Loan extends Model
     {
         // 0. Clean up orphaned payments: rows with total_paid > 0 but no repayment_transaction_id
         //    This can happen after voiding a Pay Off where some rows were not directly linked
-        Payment::where('loan_id', $this->id)
+        $orphanedPaymentsReset = Payment::where('loan_id', $this->id)
             ->where('total_paid', '>', 0.001)
             ->whereNull('repayment_transaction_id')
             ->update([
@@ -192,10 +192,20 @@ class Loan extends Model
         $outstandingPrincipal = round($this->amount - $totalPrincipalPaid, 2);
 
         if ($outstandingPrincipal <= 0) {
-            Payment::where('loan_id', $this->id)
+            $deletedPayments = Payment::where('loan_id', $this->id)
                 ->whereRaw('total_paid < 0.01')
                 ->forceDelete();
             $this->update(['status' => 'completed', 'monthly_payment' => 0]);
+
+            activity('loan_schedule')
+                ->performedOn($this)
+                ->withProperties([
+                    'orphaned_payments_reset' => $orphanedPaymentsReset,
+                    'deleted_payments' => $deletedPayments,
+                    'outstanding_principal' => 0,
+                ])
+                ->log('Recalculated loan schedule to completion');
+
             return;
         }
 
@@ -225,11 +235,21 @@ class Loan extends Model
 
         // If scheduled principal is essentially zero but balance remains, or vice-versa, handle cleanup
         if ($scheduledRemainingPrincipal <= 0.001) {
-            Payment::where('loan_id', $this->id)
+            $deletedPayments = Payment::where('loan_id', $this->id)
                 ->where('payment_number', '>', $lastPaidNumber)
                 ->where('total_paid', '<', 0.01)
                 ->forceDelete();
             $this->update(['monthly_payment' => 0]);
+
+            activity('loan_schedule')
+                ->performedOn($this)
+                ->withProperties([
+                    'orphaned_payments_reset' => $orphanedPaymentsReset,
+                    'deleted_payments' => $deletedPayments,
+                    'outstanding_principal' => $outstandingPrincipal,
+                ])
+                ->log('Trimmed empty future loan schedule');
+
             return;
         }
 
@@ -263,6 +283,16 @@ class Loan extends Model
         }
 
         $this->update(['monthly_payment' => $newMonthlyPayment]);
+
+        activity('loan_schedule')
+            ->performedOn($this)
+            ->withProperties([
+                'orphaned_payments_reset' => $orphanedPaymentsReset,
+                'updated_installments' => $futurePayments->count(),
+                'outstanding_principal' => $outstandingPrincipal,
+                'monthly_payment' => $newMonthlyPayment,
+            ])
+            ->log('Recalculated future loan schedule');
     }
 
     public function modifications()

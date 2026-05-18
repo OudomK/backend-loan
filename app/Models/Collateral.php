@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 
 class Collateral extends Model
 {
+    use Auditable;
+
     protected $fillable = [
         'loan_id',
         'type',

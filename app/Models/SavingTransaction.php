@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 
 class SavingTransaction extends Model
 {
+    use Auditable;
+
     protected $fillable = [
         'saving_account_id',
         'transaction_type',

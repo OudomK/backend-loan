@@ -23,12 +23,36 @@ class EmployeeService
             );
         } else {
             // If position changed from Loan Officer to something else, remove from loan_officers
-            LoanOfficer::where('employee_id', $employee->id)->delete();
+            LoanOfficer::where('employee_id', $employee->id)
+                ->get()
+                ->each(function (LoanOfficer $loanOfficer) use ($employee): void {
+                    activity('employees')
+                        ->performedOn($employee)
+                        ->withProperties([
+                            'loan_officer_id' => $loanOfficer->id,
+                            'reason' => 'position_changed',
+                        ])
+                        ->log('Removed linked loan officer record');
+
+                    $loanOfficer->delete();
+                });
         }
     }
 
     public function handleDeletion(Employee $employee)
     {
-        LoanOfficer::where('employee_id', $employee->id)->delete();
+        LoanOfficer::where('employee_id', $employee->id)
+            ->get()
+            ->each(function (LoanOfficer $loanOfficer) use ($employee): void {
+                activity('employees')
+                    ->performedOn($employee)
+                    ->withProperties([
+                        'loan_officer_id' => $loanOfficer->id,
+                        'reason' => 'employee_deleted',
+                    ])
+                    ->log('Removed linked loan officer record');
+
+                $loanOfficer->delete();
+            });
     }
 }

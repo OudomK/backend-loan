@@ -7,7 +7,11 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        $driver = DB::getDriverName();
+
+        if ($driver === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        }
 
         $tables = [
             'repayment_transactions',
@@ -43,7 +47,9 @@ return new class extends Migration {
             }
         }
 
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        if ($driver === 'mysql') {
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        }
     }
 
     public function down(): void

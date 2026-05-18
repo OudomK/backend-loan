@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 
 class DividendTransaction extends Model
 {
+    use Auditable;
+
     protected $fillable = [
         'dividend_id',
         'capital_share_id',

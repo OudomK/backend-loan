@@ -49,6 +49,55 @@ class LoanCalculator
             return $applyRounding($totalFeeAmount / $totalPayments, $currency);
         };
 
+        $buildFixedIntervalSchedule = function (int $intervalDays) use (
+            $principal,
+            $rate,
+            $duration,
+            $startDateObj,
+            $applyRounding,
+            $calculatePeriodFee,
+            $currency
+        ) {
+            if ($principal <= 0 || $duration <= 0 || $intervalDays <= 0) {
+                return [];
+            }
+
+            $totalDays = $duration * 30;
+            $totalPayments = max(1, (int) ceil($totalDays / $intervalDays));
+            $periodPrincipalRaw = $principal / $totalPayments;
+            $periodInterestRaw = $principal * ($rate / 100) * ($intervalDays / 30);
+            $remainingBalanceLocal = $principal;
+            $rows = [];
+
+            for ($i = 1; $i <= $totalPayments; $i++) {
+                $currentPaymentDate = clone $startDateObj;
+                $currentPaymentDate->add(new DateInterval('P' . ($intervalDays * $i) . 'D'));
+
+                if ($i === $totalPayments) {
+                    $principalPay = $applyRounding($remainingBalanceLocal, $currency);
+                    $remainingBalanceLocal = 0;
+                } else {
+                    $principalPay = $applyRounding($periodPrincipalRaw, $currency);
+                    $remainingBalanceLocal = max(0, $applyRounding($remainingBalanceLocal - $principalPay, $currency));
+                }
+
+                $interestPay = $applyRounding($periodInterestRaw, $currency);
+                $feePay = $calculatePeriodFee($i, $totalPayments);
+
+                $rows[] = [
+                    'period' => $i,
+                    'date' => $currentPaymentDate->format('d/m/Y'),
+                    'principal' => $principalPay,
+                    'interest' => $interestPay,
+                    'fee' => $feePay,
+                    'payment' => $applyRounding($principalPay + $interestPay + $feePay, $currency),
+                    'balance' => $remainingBalanceLocal,
+                ];
+            }
+
+            return $rows;
+        };
+
 
 
         if (strpos($option, 'fixed_15days_70_30') !== false) {
@@ -214,6 +263,10 @@ class LoanCalculator
             }
             unset($pay);
             $results = $allPayments;
+        } elseif ($option === 'fixed_daily') {
+            $results = $buildFixedIntervalSchedule(1);
+        } elseif ($option === 'fixed_weekly') {
+            $results = $buildFixedIntervalSchedule(7);
         } elseif ($option === 'annuity_monthly') {
             if ($principal <= 0 || $duration <= 0) {
                 return [];

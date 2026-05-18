@@ -103,6 +103,7 @@ class ManageSettings extends Page implements HasForms
             'commission_income_rate' => $dbSettings['commission_income_rate'] ?? 20,
             'default_penalty_usd' => $dbSettings['default_penalty_usd'] ?? 2.5,
             'default_penalty_khr' => $dbSettings['default_penalty_khr'] ?? 10000,
+            'prepayment_days' => $dbSettings['prepayment_days'] ?? 3,
             'enable_dividend_tax' => $this->toBool($dbSettings['enable_dividend_tax'] ?? false, false),
             'auto_dividend_tax' => $this->toBool($dbSettings['auto_dividend_tax'] ?? false, false),
             'dividend_tax_rate' => $dbSettings['dividend_tax_rate'] ?? 0,
@@ -273,6 +274,12 @@ class ManageSettings extends Page implements HasForms
                             ->label('Default Penalty (KHR/Day)')
                             ->numeric()
                             ->step('100'),
+                        TextInput::make('prepayment_days')
+                            ->label('Prepayment Days Show (Days)')
+                            ->helperText('How many days in advance to show upcoming payments in the Prepayment table (e.g., 3).')
+                            ->numeric()
+                            ->minValue(1)
+                            ->default(3),
                     ])->columns(2),
 
                 Section::make('Dividend Configuration')

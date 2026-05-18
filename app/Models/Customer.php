@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, Auditable;
     protected $fillable = [
         'first_name',
         'last_name',

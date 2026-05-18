@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\Auditable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -9,7 +10,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Borrowing extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, Auditable;
 
     protected $fillable = [
         'lender_id',
@@ -72,6 +73,7 @@ class Borrowing extends Model
             return;
         }
 
+        $deletedSchedules = $this->schedules()->count();
         $this->schedules()->delete();
 
         $amount = (float) $this->amount;
@@ -114,5 +116,14 @@ class Borrowing extends Model
 
             $currentBalance -= $principal;
         }
+
+        activity('borrowings')
+            ->performedOn($this)
+            ->withProperties([
+                'deleted_schedules' => $deletedSchedules,
+                'generated_schedules' => $terms,
+                'payment_method' => $this->payment_method,
+            ])
+            ->log('Generated borrowing schedule');
     }
 }
