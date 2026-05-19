@@ -23,6 +23,8 @@ class BorrowerController extends Controller
                     ->orWhere('id_number', 'like', $like)
                     ->orWhere('phone', 'like', $like)
                     ->orWhere('customer_code', 'like', $like)
+                    ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(last_name, ' ', first_name)"), 'like', $like)
+                    ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', $like)
                     ->orWhereHas('loans', function ($q) use ($search) {
                         $q->where('loan_code', 'like', "%{$search}%");
                     });
@@ -68,7 +70,7 @@ class BorrowerController extends Controller
                         'id' => (string) $borrower->id,
                         'first_name' => (string) ($borrower->first_name ?? ''),
                         'last_name' => (string) ($borrower->last_name ?? ''),
-                        'name' => trim(($borrower->last_name ?? '') . ' ' . ($borrower->first_name ?? '')),
+                        'name' => trim(($borrower->first_name ?? '') . ' ' . ($borrower->last_name ?? '')),
                         'phone' => (string) ($borrower->phone ?? ''),
                         'id_number' => (string) ($borrower->id_number ?? ''),
                         'customer_code' => (string) ($borrower->customer_code ?? ''),

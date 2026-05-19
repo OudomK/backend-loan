@@ -62,7 +62,7 @@ class CoBorrowerController extends Controller
                         'id' => (string) $coBorrower->id,
                         'first_name' => (string) ($coBorrower->first_name ?? ''),
                         'last_name' => (string) ($coBorrower->last_name ?? ''),
-                        'name' => trim(($coBorrower->last_name ?? '') . ' ' . ($coBorrower->first_name ?? '')),
+                        'name' => trim(($coBorrower->first_name ?? '') . ' ' . ($coBorrower->last_name ?? '')),
                         'phone' => (string) ($coBorrower->phone ?? ''),
                         'id_number' => (string) ($coBorrower->id_number ?? ''),
                         'customer_code' => (string) ($coBorrower->customer_code ?? ''),

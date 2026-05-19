@@ -89,6 +89,7 @@ class IncomeStatementController extends Controller
                     'total_usd' => 0,
                     '_category_id' => $cat->id,
                     '_category_name' => $cat->name,
+                    '_category_slug' => $cat->slug,
                 ];
             }
 
@@ -147,12 +148,13 @@ class IncomeStatementController extends Controller
                 foreach ($revenueItems as $key => &$item) {
                     $catName = $item['_category_name'];
                     $catId = $item['_category_id'];
+                    $catSlug = $item['_category_slug'] ?? null;
                     $amount = 0;
 
-                    // Determine source based on category name (using keyword match to prevent rename bugs)
+                    // Determine source based on category slug or fallback to name keyword match
                     $lowerCatName = strtolower($catName);
 
-                    if (str_contains($lowerCatName, 'interest')) {
+                    if ($catSlug === 'interest_income' || str_contains($lowerCatName, 'interest')) {
                         // Interest Income: from repayment transactions
                         $amount = (double) DB::table('repayment_transactions')
                             ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
@@ -162,7 +164,7 @@ class IncomeStatementController extends Controller
                             ->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate])
                             ->sum('repayment_transactions.interest_paid');
 
-                    } elseif (str_contains($lowerCatName, 'admin')) {
+                    } elseif ($catSlug === 'admin_fee' || str_contains($lowerCatName, 'admin')) {
                         // Admin Fee: calculated from loans
                         $amount = DB::table('loans')
                             ->select(['amount', 'disbursed_amount', 'admin_fee', 'admin_fee_type'])
@@ -172,7 +174,7 @@ class IncomeStatementController extends Controller
                             ->get()
                             ->sum(fn($loan) => $this->recognizedAdminFeeAmount($loan));
 
-                    } elseif (str_contains($lowerCatName, 'other')) {
+                    } elseif ($catSlug === 'other_revenue' || str_contains($lowerCatName, 'other')) {
                         // Other Revenue: catch-all from miscellaneous_transactions
                         $amount = (double) DB::table('miscellaneous_transactions')
                             ->where('type', 'revenue')
@@ -286,7 +288,7 @@ class IncomeStatementController extends Controller
 
             // Strip internal metadata before sending response
             $cleanedRevenueItems = array_map(function ($item) {
-                unset($item['_category_id'], $item['_category_name']);
+                unset($item['_category_id'], $item['_category_name'], $item['_category_slug']);
                 return $item;
             }, $revenueItems);
 

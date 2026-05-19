@@ -27,7 +27,7 @@ class CollateralsTable
                     ->sortable(),
                 TextColumn::make('loan.borrower.last_name')
                     ->label('Client')
-                    ->getStateUsing(fn ($record) => $record->loan->borrower ? "{$record->loan->borrower->last_name} {$record->loan->borrower->first_name}" : '-')
+                    ->getStateUsing(fn ($record) => $record->loan->borrower ? "{$record->loan->borrower->first_name} {$record->loan->borrower->last_name}" : '-')
                     ->searchable(query: function ($query, string $search) {
                         return $query->whereHas('loan.borrower', function ($q) use ($search) {
                             $q->where('first_name', 'like', "%{$search}%")

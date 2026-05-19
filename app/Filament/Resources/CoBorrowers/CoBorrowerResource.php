@@ -35,7 +35,7 @@ class CoBorrowerResource extends Resource
 
     public static function getGlobalSearchResultTitle(\Illuminate\Database\Eloquent\Model $record): string|\Illuminate\Contracts\Support\Htmlable
     {
-        return "{$record->last_name} {$record->first_name} ({$record->customer_code})";
+        return "{$record->first_name} {$record->last_name} ({$record->customer_code})";
     }
 
     public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array

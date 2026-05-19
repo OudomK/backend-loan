@@ -68,7 +68,7 @@ class RepaymentController extends Controller
                 return [
                     'id' => (string) $loan->id,
                     'name' => $loan->borrower
-                        ? ($loan->borrower->last_name . ' ' . $loan->borrower->first_name)
+                        ? ($loan->borrower->first_name . ' ' . $loan->borrower->last_name)
                         : 'Unknown (Deleted)',
                     'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
                     'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
@@ -113,7 +113,7 @@ class RepaymentController extends Controller
                 $overdueRows->push([
                     'id' => (string) $loan->id,
                     'name' => $loan->borrower
-                        ? ($loan->borrower->last_name . ' ' . $loan->borrower->first_name)
+                        ? ($loan->borrower->first_name . ' ' . $loan->borrower->last_name)
                         : 'Unknown (Deleted)',
                     'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
                     'payment_date' => Carbon::parse($payment->payment_date)->format('Y-m-d'),
@@ -164,7 +164,7 @@ class RepaymentController extends Controller
                 return [
                     'id' => (string) $loan->id,
                     'name' => $loan->borrower
-                        ? ($loan->borrower->last_name . ' ' . $loan->borrower->first_name)
+                        ? ($loan->borrower->first_name . ' ' . $loan->borrower->last_name)
                         : 'Unknown (Deleted)',
                     'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
                     'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
@@ -220,7 +220,7 @@ class RepaymentController extends Controller
             return [
                 'id' => (string) $loan->id,
                 'name' => $loan->borrower
-                    ? ($loan->borrower->last_name . ' ' . $loan->borrower->first_name)
+                    ? ($loan->borrower->first_name . ' ' . $loan->borrower->last_name)
                     : 'Unknown (Deleted)',
                 'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
                 'principal' => (string) $loan->amount,

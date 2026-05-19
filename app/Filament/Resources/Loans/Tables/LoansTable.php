@@ -30,7 +30,7 @@ class LoansTable
                     ])->filter()->implode(' • ')),
                 TextColumn::make('borrower.first_name')
                     ->label('Borrower')
-                    ->getStateUsing(fn($record) => trim("{$record->borrower?->last_name} {$record->borrower?->first_name}"))
+                    ->getStateUsing(fn($record) => trim("{$record->borrower?->first_name} {$record->borrower?->last_name}"))
                     ->searchable(['first_name', 'last_name'])
                     ->sortable(['first_name', 'last_name'])
                     ->description(fn($record): ?string => collect([

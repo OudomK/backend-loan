@@ -24,15 +24,15 @@ class LoanReportResource extends JsonResource
             'disb_date' => $loan->start_date,
             'loan_no' => $loan->loan_code,
             'cid' => $borrower->customer_code,
-            'name' => $borrower->last_name . ' ' . $borrower->first_name,
+            'name' => $borrower->first_name . ' ' . $borrower->last_name,
             'village' => $borrower->village,
             'commune' => $borrower->commune,
             'district' => $borrower->district,
             'province' => $borrower->province,
 
-            'coborrower_name' => $loan->coBorrower ? $loan->coBorrower->last_name . ' ' . $loan->coBorrower->first_name : null,
+            'coborrower_name' => $loan->coBorrower ? $loan->coBorrower->first_name . ' ' . $loan->coBorrower->last_name : null,
             'coborrower_tel' => $loan->coBorrower?->phone,
-            'guarantor_name' => $loan->guarantor ? $loan->guarantor->last_name . ' ' . $loan->guarantor->first_name : null,
+            'guarantor_name' => $loan->guarantor ? $loan->guarantor->first_name . ' ' . $loan->guarantor->last_name : null,
             'guarantor_tel' => $loan->guarantor?->phone,
 
             'disb_amount' => $loan->amount,

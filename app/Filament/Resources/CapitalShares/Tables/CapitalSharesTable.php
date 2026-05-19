@@ -46,7 +46,7 @@ class CapitalSharesTable
                 TextColumn::make('owner_name')
                     ->label('Name')
                     ->getStateUsing(fn($record) => $record->investor
-                        ? trim("{$record->investor->last_name} {$record->investor->first_name}")
+                        ? trim("{$record->investor->first_name} {$record->investor->last_name}")
                         : '-')
                     ->searchable(['investor.first_name', 'investor.last_name'])
                     ->wrap()

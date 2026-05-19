@@ -61,12 +61,16 @@ class CustomerHistoryController extends Controller
             return response()->json([]);
         }
 
-        $borrowers = Borrower::where('first_name', 'like', "%$query%")
-            ->orWhere('last_name', 'like', "%$query%")
-            ->orWhere('phone', 'like', "%$query%")
-            ->orWhere('customer_code', 'like', "%$query%")
-            ->get()
-            ->map(fn($item) => $this->formatSearchItem($item, 'Borrower'));
+        $borrowers = Borrower::where(function ($q) use ($query) {
+            $q->where('first_name', 'like', "%$query%")
+                ->orWhere('last_name', 'like', "%$query%")
+                ->orWhere('phone', 'like', "%$query%")
+                ->orWhere('customer_code', 'like', "%$query%")
+                ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(last_name, ' ', first_name)"), 'like', "%$query%")
+                ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%$query%");
+        })
+        ->get()
+        ->map(fn($item) => $this->formatSearchItem($item, 'Borrower'));
 
         return response()->json($borrowers);
     }
@@ -75,7 +79,7 @@ class CustomerHistoryController extends Controller
     {
         return [
             'id' => $item->id,
-            'name' => $item->last_name . ' ' . $item->first_name,
+            'name' => $item->first_name . ' ' . $item->last_name,
             'code' => $item->customer_code,
             'phone' => $item->phone,
             'role' => $role,

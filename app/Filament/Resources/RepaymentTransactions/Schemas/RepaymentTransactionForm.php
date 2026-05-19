@@ -36,7 +36,7 @@ class RepaymentTransactionForm
                                                 Select::make('loan_id')
                                                     ->label('Loan')
                                                     ->relationship('loan', 'loan_code')
-                                                    ->getOptionLabelFromRecordUsing(fn($record) => "Loan: {$record->loan_code} - {$record->borrower?->last_name} {$record->borrower?->first_name}")
+                                                    ->getOptionLabelFromRecordUsing(fn($record) => "Loan: {$record->loan_code} - {$record->borrower?->first_name} {$record->borrower?->last_name}")
                                                     ->searchable()
                                                     ->preload()
                                                     ->live()

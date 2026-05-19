@@ -19,7 +19,7 @@ class OverdueLoansTable
             ->columns([
                 TextColumn::make('loan.borrower.name')
                     ->label('Customer')
-                    ->getStateUsing(fn($record) => trim("{$record->loan?->borrower?->last_name} {$record->loan?->borrower?->first_name}"))
+                    ->getStateUsing(fn($record) => trim("{$record->loan?->borrower?->first_name} {$record->loan?->borrower?->last_name}"))
                     ->description(fn($record): ?string => collect([
                         $record->loan?->loan_code,
                         $record->loan?->borrower?->phone,

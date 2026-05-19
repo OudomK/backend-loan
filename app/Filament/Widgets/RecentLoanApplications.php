@@ -44,7 +44,7 @@ class RecentLoanApplications extends BaseWidget
 
                 Tables\Columns\TextColumn::make('borrower')
                     ->label('Borrower')
-                    ->getStateUsing(fn ($record) => ($record->borrower->last_name ?? '') . ' ' . ($record->borrower->first_name ?? ''))
+                    ->getStateUsing(fn ($record) => ($record->borrower->first_name ?? '') . ' ' . ($record->borrower->last_name ?? ''))
                     ->limit(18)
                     ->description(fn ($record): ?string => filled($record->officer?->name) ? 'Officer ' . $record->officer->name : null),
 

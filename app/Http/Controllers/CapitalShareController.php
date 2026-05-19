@@ -46,7 +46,7 @@ class CapitalShareController extends Controller
         $type = 'Individual';
 
         if ($s->investor) {
-            $name = $s->investor->last_name . ' ' . $s->investor->first_name;
+            $name = $s->investor->first_name . ' ' . $s->investor->last_name;
             $code = $s->investor->customer_code;
             $type = $s->investor->customer_type ?? 'Individual';
         } elseif ($s->lender) {

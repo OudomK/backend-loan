@@ -126,7 +126,7 @@ class ActiveLoanReportController extends Controller
             return [
                 'disbursement_date' => $loan->start_date, // or formatted
                 'loan_code' => $loan->loan_code,
-                'client_name' => $borrower ? ($borrower->last_name . ' ' . $borrower->first_name) : '',
+                'client_name' => $borrower ? ($borrower->first_name . ' ' . $borrower->last_name) : '',
                 // Address
                 'village_name' => $borrower->village ?? '',
                 'commune_name' => $borrower->commune ?? '',

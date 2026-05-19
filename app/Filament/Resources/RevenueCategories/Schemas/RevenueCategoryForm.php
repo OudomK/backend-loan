@@ -26,6 +26,10 @@ class RevenueCategoryForm
                             TextInput::make('name')
                                 ->required()
                                 ->maxLength(255),
+                            TextInput::make('slug')
+                                ->disabled()
+                                ->dehydrated(false)
+                                ->placeholder('Auto-generated on save'),
                             Select::make('group_name')
                                 ->label('Group')
                                 ->native(false)

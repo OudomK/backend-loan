@@ -13,14 +13,14 @@ class RevenueCategorySeeder extends Seeder
     public function run(): void
     {
         $categories = [
-            ['name' => 'Commission Income', 'group_name' => 'Revenue', 'sort_order' => 1],
-            ['name' => 'Service Fees', 'group_name' => 'Revenue', 'sort_order' => 2],
-            ['name' => 'Penalty Income', 'group_name' => 'Revenue', 'sort_order' => 3],
+            ['name' => 'Commission Income', 'slug' => 'commission_income', 'group_name' => 'Revenue', 'sort_order' => 1],
+            ['name' => 'Service Fees', 'slug' => 'service_fees', 'group_name' => 'Revenue', 'sort_order' => 2],
+            ['name' => 'Penalty Income', 'slug' => 'penalty_income', 'group_name' => 'Revenue', 'sort_order' => 3],
         ];
 
         foreach ($categories as $category) {
             RevenueCategory::updateOrCreate(
-                ['name' => $category['name']],
+                ['slug' => $category['slug']],
                 $category
             );
         }

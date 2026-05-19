@@ -277,7 +277,8 @@ class RepaymentService
 
             // Automatically record Penalty and Fees as General Revenue
             if ($totalPenaltyPaid > 0.001) {
-                $penaltyCategory = \App\Models\RevenueCategory::where('name', 'LIKE', '%Penalty%')->first();
+                $penaltyCategory = \App\Models\RevenueCategory::where('slug', 'penalty_income')->first()
+                    ?? \App\Models\RevenueCategory::where('name', 'LIKE', '%Penalty%')->first();
                 if ($penaltyCategory) {
                     Revenue::create([
                         'revenue_category_id' => $penaltyCategory->id,
@@ -294,7 +295,8 @@ class RepaymentService
             }
 
             if ($feePaid > 0.001) {
-                $serviceFeeCategory = \App\Models\RevenueCategory::where('name', 'LIKE', '%Service%Fee%')->first();
+                $serviceFeeCategory = \App\Models\RevenueCategory::where('slug', 'service_fees')->first()
+                    ?? \App\Models\RevenueCategory::where('name', 'LIKE', '%Service%Fee%')->first();
                 if ($serviceFeeCategory) {
                     Revenue::create([
                         'revenue_category_id' => $serviceFeeCategory->id,

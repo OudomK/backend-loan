@@ -40,7 +40,7 @@ class CapitalShareForm
                                         Select::make('investor_id')
                                             ->label('Investor (Name)')
                                             ->relationship('investor', 'first_name', fn (Builder $query) => $query->orderBy('last_name')->orderBy('first_name'))
-                                            ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name} ({$record->customer_code})")
+                                            ->getOptionLabelFromRecordUsing(fn($record) => "{$record->first_name} {$record->last_name} ({$record->customer_code})")
                                             ->searchable()
                                             ->preload()
                                             ->live()
@@ -213,7 +213,7 @@ class CapitalShareForm
                                                 Select::make('borrower_id')
                                                     ->label('Related Borrower')
                                                     ->relationship('borrower', 'first_name')
-                                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->last_name} {$record->first_name}")
+                                                    ->getOptionLabelFromRecordUsing(fn($record) => "{$record->first_name} {$record->last_name}")
                                                     ->searchable()
                                                     ->preload(),
                                             ]),

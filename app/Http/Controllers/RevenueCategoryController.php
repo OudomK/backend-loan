@@ -24,6 +24,7 @@ class RevenueCategoryController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'slug' => 'nullable|string|max:255',
             'group_name' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'is_active' => 'boolean',
@@ -42,6 +43,7 @@ class RevenueCategoryController extends Controller
     {
         $validated = $request->validate([
             'name' => 'string|max:255',
+            'slug' => 'nullable|string|max:255',
             'group_name' => 'nullable|string|max:255',
             'description' => 'nullable|string',
             'is_active' => 'boolean',

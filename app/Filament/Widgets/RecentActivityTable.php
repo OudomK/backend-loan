@@ -40,7 +40,7 @@ class RecentActivityTable extends BaseWidget
                     ->searchable(),
                 Tables\Columns\TextColumn::make('loan.borrower.full_name')
                     ->label('Borrower')
-                    ->getStateUsing(fn($record) => ($record->loan->borrower->last_name ?? '') . ' ' . ($record->loan->borrower->first_name ?? '')),
+                    ->getStateUsing(fn($record) => ($record->loan->borrower->first_name ?? '') . ' ' . ($record->loan->borrower->last_name ?? '')),
                 Tables\Columns\TextColumn::make('amount_paid')
                     ->label('Amount')
                     ->formatStateUsing(function ($state, $record): string {

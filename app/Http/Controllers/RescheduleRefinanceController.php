@@ -41,7 +41,7 @@ class RescheduleRefinanceController extends Controller
             return [
                 'id' => $loan->id,
                 'code' => $loan->loan_code,
-                'name' => $loan->borrower->last_name . ' ' . $loan->borrower->first_name,
+                'name' => $loan->borrower->first_name . ' ' . $loan->borrower->last_name,
                 'first_name' => $loan->borrower->first_name,
                 'last_name' => $loan->borrower->last_name,
                 'gender' => $loan->borrower->gender,

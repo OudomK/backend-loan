@@ -85,7 +85,7 @@ class InactiveLoanReportController extends Controller
                 'disbursement_date' => $loan->start_date,
                 'loan_code' => $loan->loan_code,
                 'client_code' => $borrower->customer_code ?? '', // field might be id_number or code
-                'client_name' => $borrower ? ($borrower->last_name . ' ' . $borrower->first_name) : '',
+                'client_name' => $borrower ? ($borrower->first_name . ' ' . $borrower->last_name) : '',
                 'village_name' => $borrower->village ?? '',
                 'commune_name' => $borrower->commune ?? '',
                 'district_name' => $borrower->district ?? '',

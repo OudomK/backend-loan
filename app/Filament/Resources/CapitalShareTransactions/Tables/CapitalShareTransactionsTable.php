@@ -49,7 +49,7 @@ class CapitalShareTransactionsTable
                         }
 
                         if ($share->investor) {
-                            return trim(($share->investor->last_name ?? '') . ' ' . ($share->investor->first_name ?? ''));
+                            return trim(($share->investor->first_name ?? '') . ' ' . ($share->investor->last_name ?? ''));
                         }
 
                         if ($share->lender) {
@@ -57,7 +57,7 @@ class CapitalShareTransactionsTable
                         }
 
                         if ($share->borrower) {
-                            return trim(($share->borrower->last_name ?? '') . ' ' . ($share->borrower->first_name ?? ''));
+                            return trim(($share->borrower->first_name ?? '') . ' ' . ($share->borrower->last_name ?? ''));
                         }
 
                         return '-';

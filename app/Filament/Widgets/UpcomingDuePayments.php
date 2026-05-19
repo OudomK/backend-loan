@@ -48,7 +48,7 @@ class UpcomingDuePayments extends BaseWidget
 
                 Tables\Columns\TextColumn::make('loan.borrower')
                     ->label('Borrower')
-                    ->getStateUsing(fn ($record) => ($record->loan->borrower->last_name ?? '') . ' ' . ($record->loan->borrower->first_name ?? ''))
+                    ->getStateUsing(fn ($record) => ($record->loan->borrower->first_name ?? '') . ' ' . ($record->loan->borrower->last_name ?? ''))
                     ->limit(18),
 
                 Tables\Columns\TextColumn::make('total_due')

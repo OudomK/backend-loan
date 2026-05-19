@@ -32,7 +32,7 @@ class ExportController extends Controller
                 'account_number' => $account->account_number,
                 'saver_code' => $account->borrower->borrower_code ?? '-',
                 'saver_name' => $account->borrower
-                    ? trim($account->borrower->last_name . ' ' . $account->borrower->first_name)
+                    ? trim($account->borrower->first_name . ' ' . $account->borrower->last_name)
                     : 'Unknown',
                 'account_type' => $account->account_type,
                 'currency' => $account->currency,
@@ -144,7 +144,7 @@ class ExportController extends Controller
             $type = 'Individual';
 
             if ($s->investor) {
-                $name = trim($s->investor->last_name . ' ' . $s->investor->first_name);
+                $name = trim($s->investor->first_name . ' ' . $s->investor->last_name);
                 $code = $s->investor->customer_code;
                 $type = $s->investor->customer_type ?? 'Individual';
             } elseif ($s->lender) {

@@ -62,7 +62,7 @@ class GuarantorController extends Controller
                         'id' => (string) $guarantor->id,
                         'first_name' => (string) ($guarantor->first_name ?? ''),
                         'last_name' => (string) ($guarantor->last_name ?? ''),
-                        'name' => trim(($guarantor->last_name ?? '') . ' ' . ($guarantor->first_name ?? '')),
+                        'name' => trim(($guarantor->first_name ?? '') . ' ' . ($guarantor->last_name ?? '')),
                         'phone' => (string) ($guarantor->phone ?? ''),
                         'id_number' => (string) ($guarantor->id_number ?? ''),
                         'customer_code' => (string) ($guarantor->customer_code ?? ''),
