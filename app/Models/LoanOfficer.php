@@ -11,7 +11,7 @@ class LoanOfficer extends Model
     use SoftDeletes, Auditable;
 
 
-    protected $fillable = ['employee_id', 'name', 'phone', 'status', 'start_date', 'max_loan_amount', 'gender'];
+    protected $fillable = ['employee_id', 'name', 'phone', 'phone_2', 'phone_3', 'status', 'start_date', 'max_loan_amount', 'gender'];
 
     protected $casts = [
         'start_date' => 'date',

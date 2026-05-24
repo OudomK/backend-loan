@@ -94,6 +94,8 @@ Route::get('/app/settings', function () {
         'auto_dividend_tax' => $toBool($dbSettings['auto_dividend_tax'] ?? false, false),
         'dividend_tax_rate' => (float) ($dbSettings['dividend_tax_rate'] ?? 0),
         'default_payment_qr_id' => $dbSettings['default_payment_qr_id'] ?? null,
+        'co_phone_display_mode' => $dbSettings['co_phone_display_mode'] ?? 'one_line',
+        'co_phone_display_count' => $dbSettings['co_phone_display_count'] ?? '3',
     ]);
 });
 

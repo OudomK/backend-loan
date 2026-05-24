@@ -36,13 +36,17 @@ class LoansTable
                     ->description(fn($record): ?string => collect([
                         filled($record->officer?->name) ? 'Officer ' . $record->officer->name : null,
                     ])->filter()->implode(' • ')),
+                TextColumn::make('product.name')
+                    ->label('Product')
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('amount')
                     ->label('Principal')
                     ->money(fn($record): string => self::resolveCurrencyCode($record))
                     ->sortable()
                     ->description(fn($record): ?string => collect([
                         filled($record->interest_rate) ? 'Rate ' . self::formatNumber((float) $record->interest_rate) . '%' : null,
-                        filled($record->duration_months) ? $record->duration_months . ' mo' : null,
+                        filled($record->duration_months) ? $record->duration_months . ' ' . self::termUnitAbbreviation($record->payment_frequency) : null,
                         filled($record->monthly_payment)
                         ? 'Pay ' . self::formatAmount((float) $record->monthly_payment, self::resolveCurrencyCode($record))
                         : null,
@@ -54,7 +58,7 @@ class LoansTable
                     ->visibleFrom('2xl'),
                 TextColumn::make('duration_months')
                     ->label('Term')
-                    ->suffix(' mo')
+                    ->formatStateUsing(fn($state, $record) => filled($state) ? $state . ' ' . self::termUnitAbbreviation($record->payment_frequency) : null)
                     ->sortable()
                     ->visibleFrom('2xl'),
                 TextColumn::make('start_date')
@@ -91,6 +95,11 @@ class LoansTable
                         'USD' => 'USD',
                         'KHR' => 'KHR',
                     ]),
+                SelectFilter::make('product_id')
+                    ->relationship('product', 'name')
+                    ->label('Product')
+                    ->searchable()
+                    ->preload(),
             ])
             ->recordActions([
                 EditAction::make()
@@ -143,5 +152,17 @@ class LoansTable
         return $currency === 'KHR'
             ? 'KHR ' . number_format($amount, 0)
             : '$' . number_format($amount, 2);
+    }
+
+    private static function termUnitAbbreviation(?string $paymentFrequency): string
+    {
+        $normalized = strtolower(trim((string) $paymentFrequency));
+
+        return match ($normalized) {
+            'weekly' => 'wk',
+            'daily' => 'day',
+            'term' => 'inst',
+            default => 'mo',
+        };
     }
 }

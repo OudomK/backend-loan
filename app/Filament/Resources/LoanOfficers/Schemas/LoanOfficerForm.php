@@ -68,10 +68,19 @@ class LoanOfficerForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
+                            'xl' => 4,
                         ])
                             ->schema([
                                 TextInput::make('phone')
-                                    ->label('Phone')
+                                    ->label('Phone 1')
+                                    ->tel()
+                                    ->maxLength(30),
+                                TextInput::make('phone_2')
+                                    ->label('Phone 2')
+                                    ->tel()
+                                    ->maxLength(30),
+                                TextInput::make('phone_3')
+                                    ->label('Phone 3')
                                     ->tel()
                                     ->maxLength(30),
                                 Select::make('status')

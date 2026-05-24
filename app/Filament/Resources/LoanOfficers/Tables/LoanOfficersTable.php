@@ -32,9 +32,17 @@ class LoanOfficersTable
                     ->sortable()
                     ->description(fn($record): ?string => $record->employee?->employee_code),
                 TextColumn::make('phone')
-                    ->label('Phone')
+                    ->label('Phone 1')
                     ->searchable()
                     ->sortable(),
+                TextColumn::make('phone_2')
+                    ->label('Phone 2')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('phone_3')
+                    ->label('Phone 3')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('employee.name')
                     ->label('Linked Employee')
                     ->searchable()

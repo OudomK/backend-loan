@@ -23,7 +23,9 @@ class ActiveLoanReportController extends Controller
 
         // Load candidate loans and reconstruct the portfolio as of the selected date.
         $query = Loan::with([
-            'borrower' => function($q) { $q->withTrashed(); },
+            'borrower' => function ($q) {
+                $q->withTrashed();
+            },
             'officer',
             'disburseOfficer',
             'collaterals',
@@ -41,7 +43,6 @@ class ActiveLoanReportController extends Controller
                     ->orWhereDate('written_off_at', '>', $refDateStr);
             });
 
-        // Filter by Disbursement Date Range
         if ($fromDateStr) {
             $query->where('start_date', '>=', $fromDateStr);
         }
@@ -55,7 +56,6 @@ class ActiveLoanReportController extends Controller
 
         $loans = $query->get();
 
-        // Transform Data
         $data = $loans->map(function ($loan) use ($refDate) {
             $borrower = $loan->borrower;
             $officer = $loan->officer;
@@ -109,38 +109,35 @@ class ActiveLoanReportController extends Controller
                 ? $refDate->diffInDays(Carbon::parse($earliestArrearDate))
                 : 0;
 
-            // Collateral
             $collateralType = $loan->collaterals->isNotEmpty() ? $loan->collaterals->first()->type : '';
             $firstRepaymentDate = optional($loan->payments->first())->payment_date
-                ?? Carbon::parse($loan->start_date)->addMonth()->toDateString();
+                ?? $this->fallbackScheduleDate($loan->start_date, 1, $loan->payment_frequency);
             $maturityDate = $loan->maturity_date
                 ?? optional($loan->payments->last())->payment_date
-                ?? Carbon::parse($loan->start_date)->addMonths($loan->duration_months)->toDateString();
+                ?? $this->fallbackScheduleDate($loan->start_date, (int) $loan->duration_months, $loan->payment_frequency);
             $lastPaymentDate = $transactionsAtDate->max('transaction_date');
             $loanProduct = $product ? $product->name : 'General Loan';
             $isRescheduled = $transactionsAtDate->contains(function ($transaction) {
                 return $transaction->repayment_type === 'Reschedule';
             });
 
-            // Formatting
             return [
-                'disbursement_date' => $loan->start_date, // or formatted
+                'disbursement_date' => $loan->start_date,
                 'loan_code' => $loan->loan_code,
                 'client_name' => $borrower ? ($borrower->first_name . ' ' . $borrower->last_name) : '',
-                // Address
                 'village_name' => $borrower->village ?? '',
                 'commune_name' => $borrower->commune ?? '',
                 'district_name' => $borrower->district ?? '',
                 'province_name' => $borrower->province ?? '',
-
                 'disbursement_amount' => $loan->amount,
                 'currency_code' => $loan->currency,
                 'interest_rate' => $loan->interest_rate,
                 'processing_fee' => 0,
                 'monthly_interest_rate' => $loan->monthly_interest ?? ($loan->interest_rate / 12),
                 'term' => $loan->duration_months,
-                'tenor' => strtolower($loan->payment_frequency ?? '') === 'monthly' ? 'Months' : 'ដង',
+                'tenor' => $this->tenorLabel($loan->payment_frequency),
                 'payment_method' => $loan->repayment_method,
+                'payment_frequency' => $loan->payment_frequency,
                 'loan_cycle' => $loan->loan_cycle,
                 'refinance_amount' => $loan->refinanced_amount ?? 0,
                 'restructure' => $isRescheduled ? 1 : 0,
@@ -153,23 +150,18 @@ class ActiveLoanReportController extends Controller
                 'loan_product' => $loanProduct,
                 'product_name' => $loanProduct,
                 'customer_code' => $borrower ? $borrower->customer_code : 'N/A',
-
                 'outstanding_amount' => $outstanding,
                 'principal_paid' => $principalPaid,
                 'interest_paid' => $interestPaid,
-
-                // Dates
                 'maturity_date' => $maturityDate,
                 'aging_days' => $agingDays,
                 'overdue_amount' => $overdueAmount,
-
                 'sector_name' => $loan->sector ?? 'General',
                 'first_repayment_date' => $firstRepaymentDate,
                 'last_payment_date' => $lastPaymentDate,
-
                 'account_status' => 'active',
                 'account_rating' => $this->getAccountRating($agingDays),
-                'short_long_term' => $loan->duration_months > 12 ? 'Long Term' : 'Short Term',
+                'short_long_term' => $this->shortLongTermLabel((int) $loan->duration_months, $loan->payment_frequency),
                 'secure_loan_type' => $loan->collaterals->isNotEmpty() ? 'Secured' : 'Unsecured',
                 'provision_amount' => $outstanding * $this->getProvisionRate($agingDays),
             ];
@@ -180,27 +172,72 @@ class ActiveLoanReportController extends Controller
 
     private function getAccountRating($days)
     {
-        if ($days <= 30)
+        if ($days <= 30) {
             return 'Standard';
-        if ($days <= 89)
+        }
+        if ($days <= 89) {
             return 'Special Mention';
-        if ($days <= 179)
+        }
+        if ($days <= 179) {
             return 'Substandard';
-        if ($days <= 359)
+        }
+        if ($days <= 359) {
             return 'Doubtful';
+        }
         return 'Loss';
     }
 
     private function getProvisionRate($days)
     {
-        if ($days <= 30)
+        if ($days <= 30) {
             return 0.01;
-        if ($days <= 89)
+        }
+        if ($days <= 89) {
             return 0.03;
-        if ($days <= 179)
+        }
+        if ($days <= 179) {
             return 0.20;
-        if ($days <= 359)
+        }
+        if ($days <= 359) {
             return 0.50;
+        }
         return 1.00;
+    }
+
+    private function tenorLabel(?string $paymentFrequency): string
+    {
+        $normalized = strtolower(trim((string) $paymentFrequency));
+
+        return match ($normalized) {
+            'monthly' => 'Months',
+            'weekly' => 'Weeks',
+            'daily' => 'Days',
+            'term' => 'Installments',
+            'bi-monthly', 'bimonthly', 'semi-monthly' => 'Semi-Monthly',
+            default => $normalized !== '' ? ucwords(str_replace(['_', '-'], ' ', $normalized)) : '',
+        };
+    }
+
+    private function fallbackScheduleDate(string $startDate, int $term, ?string $paymentFrequency): string
+    {
+        $date = Carbon::parse($startDate);
+        $normalized = strtolower(trim((string) $paymentFrequency));
+
+        return match ($normalized) {
+            'daily' => $date->addDays($term)->toDateString(),
+            'weekly' => $date->addWeeks($term)->toDateString(),
+            default => $date->addMonths($term)->toDateString(),
+        };
+    }
+
+    private function shortLongTermLabel(int $term, ?string $paymentFrequency): string
+    {
+        $normalized = strtolower(trim((string) $paymentFrequency));
+
+        return match ($normalized) {
+            'daily' => $term > 365 ? 'Long Term' : 'Short Term',
+            'weekly' => $term > 52 ? 'Long Term' : 'Short Term',
+            default => $term > 12 ? 'Long Term' : 'Short Term',
+        };
     }
 }

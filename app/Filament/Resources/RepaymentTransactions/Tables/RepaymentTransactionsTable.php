@@ -37,7 +37,12 @@ class RepaymentTransactionsTable
                     ])->filter()->implode(' • ')),
                 TextColumn::make('amount_paid')
                     ->label('Total Paid')
-                    ->state(fn ($record): float => round((float) $record->amount_paid + (float) $record->penalty_paid, 2))
+                    ->state(fn ($record): float => round(
+                        ((string) $record->repayment_type === 'Withdraw' ? -(float) $record->amount_paid : (float) $record->amount_paid)
+                        + (float) $record->penalty_paid
+                        + (float) $record->fee_paid,
+                        2
+                    ))
                     ->money(fn ($record): string => self::resolveCurrencyCode($record))
                     ->sortable(),
                 TextColumn::make('principal_paid')

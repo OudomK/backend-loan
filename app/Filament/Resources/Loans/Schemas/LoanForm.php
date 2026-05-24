@@ -35,6 +35,29 @@ class LoanForm
                                             'xl' => 3,
                                         ])
                                             ->schema([
+                                                Select::make('product_id')
+                                                    ->relationship('product', 'name')
+                                                    ->searchable()
+                                                    ->preload()
+                                                    ->live()
+                                                    ->afterStateUpdated(function ($state, callable $set) {
+                                                        if (blank($state)) return;
+                                                        $product = \App\Models\LoanProduct::find($state);
+                                                        if ($product) {
+                                                            if ($product->interest_rate !== null) {
+                                                                $set('interest_rate', $product->interest_rate);
+                                                            }
+                                                            if ($product->duration_months !== null) {
+                                                                $set('duration_months', $product->duration_months);
+                                                            }
+                                                            if ($product->repayment_method !== null) {
+                                                                $set('repayment_method', $product->repayment_method);
+                                                            }
+                                                            if ($product->fee_percentage !== null) {
+                                                                $set('admin_fee', $product->fee_percentage);
+                                                            }
+                                                        }
+                                                    }),
                                                 TextInput::make('loan_code')
                                                     ->label('Loan Code')
                                                     ->required()

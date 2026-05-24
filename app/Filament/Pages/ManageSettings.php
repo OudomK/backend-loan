@@ -111,6 +111,8 @@ class ManageSettings extends Page implements HasForms
             'me_email' => Auth::user()->email,
             'me_avatar_url' => Auth::user()->avatar_url,
             'default_payment_qr_id' => $dbSettings['default_payment_qr_id'] ?? null,
+            'co_phone_display_mode' => $dbSettings['co_phone_display_mode'] ?? 'one_line',
+            'co_phone_display_count' => $dbSettings['co_phone_display_count'] ?? '3',
             'excel_export_font' => $dbSettings['excel_export_font'] ?? 'Khmer OS Siemreap',
         ]);
     }
@@ -323,6 +325,25 @@ class ManageSettings extends Page implements HasForms
                                 </a>
                             '))
                             ->html(),
+                        Select::make('co_phone_display_mode')
+                            ->label('CO Phone Display')
+                            ->options([
+                                'one_line' => '1 line',
+                                'two_lines' => '2 lines',
+                            ])
+                            ->default('one_line')
+                            ->native(false)
+                            ->helperText('Controls how CO phone numbers appear on the repayment schedule print screen.'),
+                        Select::make('co_phone_display_count')
+                            ->label('CO Phone Count')
+                            ->options([
+                                '1' => '1 number',
+                                '2' => '2 numbers',
+                                '3' => '3 numbers',
+                            ])
+                            ->default('3')
+                            ->native(false)
+                            ->helperText('Choose how many CO phone numbers to show on the repayment schedule print screen.'),
                     ]),
             ])
             ->statePath('data');

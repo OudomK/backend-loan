@@ -109,7 +109,8 @@ class GuarantorForm
                                 TextInput::make('phone')
                                     ->label('Phone Number')
                                     ->tel()
-                                    ->maxLength(30),
+                                    ->maxLength(60)
+                                    ->helperText('You can enter up to 3 phone numbers, separated by /, comma, semicolon, or a new line.'),
                             ]),
                         Grid::make([
                             'default' => 1,

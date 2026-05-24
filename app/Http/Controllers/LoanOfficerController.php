@@ -20,6 +20,8 @@ class LoanOfficerController extends Controller
         $validated = $request->validate([
             'name' => 'required|string',
             'phone' => 'nullable|string',
+            'phone_2' => 'nullable|string',
+            'phone_3' => 'nullable|string',
             'status' => 'required|in:active,inactive,Active,Inactive',
             'employee_id' => 'nullable|integer|exists:employees,id|unique:loan_officers,employee_id',
             'start_date' => 'nullable|date',
@@ -42,6 +44,8 @@ class LoanOfficerController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|required|string',
             'phone' => 'nullable|string',
+            'phone_2' => 'nullable|string',
+            'phone_3' => 'nullable|string',
             'status' => 'sometimes|required|in:active,inactive,Active,Inactive',
             'employee_id' => ['nullable', 'integer', 'exists:employees,id', Rule::unique('loan_officers', 'employee_id')->ignore($loanOfficer->id)],
             'start_date' => 'nullable|date',

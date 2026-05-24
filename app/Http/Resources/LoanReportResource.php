@@ -43,7 +43,7 @@ class LoanReportResource extends JsonResource
             'monthly_interest' => (float) $loan->monthly_interest,
             'monthly_interest_rate' => (float) $loan->monthly_interest,
             'term' => $loan->duration_months,
-            'tenor' => $loan->duration_months,
+            'tenor' => $this->tenorLabel($loan->payment_frequency),
             'payment_frequency' => $loan->payment_frequency,
             'payment_method' => $loan->repayment_method,
             'loan_cycle' => $loan->loan_cycle,
@@ -63,12 +63,12 @@ class LoanReportResource extends JsonResource
             'recovery' => (float) $this->recovery_amount,
             'prepayment' => (float) $this->prepayment_paid,
             'withd_prepayment' => (float) $this->withdrawn_prepayment,
-            // Total Paid = reflects actual cash collected; Subtract withdrawals from total
-            'total_paid' => $this->repayment_type === 'Withdraw' ? -(float) $this->amount_paid : (float) $this->amount_paid,
+            // Total Paid = actual cash collected across principal/interest amount + penalty + fees.
+            'total_paid' => $this->actualCollectedAmount(),
             'type_of_payment' => $this->repayment_type,
             'payment_status' => $loan->status,
             'fee_paid' => (float) $this->fee_paid,
-            'total_paid_usd' => $this->calculateUsdValue($loan, $this->repayment_type === 'Withdraw' ? -(float) $this->amount_paid : (float) $this->amount_paid),
+            'total_paid_usd' => $this->calculateUsdValue($loan, $this->actualCollectedAmount()),
             'principal_paid_usd' => $this->calculateUsdValue($loan, $this->principal_paid),
             'interest_paid_usd' => $this->calculateUsdValue($loan, $this->interest_paid),
             'penalty_paid_usd' => $this->calculateUsdValue($loan, $this->penalty_paid),
@@ -96,6 +96,19 @@ class LoanReportResource extends JsonResource
         return $rate > 0 ? (float) ($amount / $rate) : (float) $amount;
     }
 
+    private function actualCollectedAmount(): float
+    {
+        $base = (float) $this->amount_paid;
+
+        if ($this->repayment_type === 'Withdraw') {
+            return -$base;
+        }
+
+        return $base
+            + (float) $this->penalty_paid
+            + (float) $this->fee_paid;
+    }
+
     /**
      * Show collateral type (text). If type looks like a number (e.g. value stored in type by mistake), use description or null.
      */
@@ -113,5 +126,19 @@ class LoanReportResource extends JsonResource
             return !empty(trim((string) ($first->description ?? ''))) ? trim($first->description) : null;
         }
         return $type;
+    }
+
+    private function tenorLabel(?string $paymentFrequency): string
+    {
+        $normalized = strtolower(trim((string) $paymentFrequency));
+
+        return match ($normalized) {
+            'monthly' => 'Months',
+            'weekly' => 'Weeks',
+            'daily' => 'Days',
+            'term' => 'Installments',
+            'bi-monthly', 'bimonthly', 'semi-monthly' => 'Semi-Monthly',
+            default => $normalized !== '' ? ucwords(str_replace(['_', '-'], ' ', $normalized)) : '',
+        };
     }
 }

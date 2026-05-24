@@ -94,12 +94,14 @@ class LoanController extends Controller
             'collaterals.*.description' => 'nullable|string',
             'custom_schedule' => 'nullable|array', // For negotiable loans
             'payment_qr_id' => 'nullable|exists:payment_qrs,id',
+            'pay_day_1' => 'nullable|integer|min:1|max:31',
+            'pay_day_2' => 'nullable|integer|min:1|max:31',
         ]);
 
         $requestedAmount = (float) ($validated['amount'] ?? 0);
         $adminFeePercent = (float) ($request->input('admin_fee') ?? $validated['admin_fee'] ?? 0);
         $adminFeeValue = ($requestedAmount * $adminFeePercent) / 100;
-        
+
         $feeType = $request->input('admin_fee_type') ?: ($validated['admin_fee_type'] ?? 'one_time');
 
         $validated['admin_fee'] = $adminFeePercent;
@@ -219,7 +221,9 @@ class LoanController extends Controller
                         $validated['start_date'],
                         $validated['currency'] ?? 'USD',
                         $validated['admin_fee'] ?? 0,
-                        $validated['admin_fee_type'] ?? 'one_time'
+                        $validated['admin_fee_type'] ?? 'one_time',
+                        $validated['pay_day_1'] ?? null,
+                        $validated['pay_day_2'] ?? null,
                     );
 
                     if (!empty($schedule)) {
@@ -262,6 +266,8 @@ class LoanController extends Controller
             'currency' => 'nullable|string',
             'admin_fee' => 'nullable|numeric',
             'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
+            'pay_day_1' => 'nullable|integer|min:1|max:31',
+            'pay_day_2' => 'nullable|integer|min:1|max:31',
         ]);
 
         try {
@@ -311,7 +317,9 @@ class LoanController extends Controller
                     $validated['start_date'],
                     $validated['currency'] ?? 'USD',
                     $validated['admin_fee'] ?? 0,
-                    $feeType
+                    $feeType,
+                    $validated['pay_day_1'] ?? null,
+                    $validated['pay_day_2'] ?? null,
                 );
             }
 

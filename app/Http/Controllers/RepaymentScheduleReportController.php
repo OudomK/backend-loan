@@ -31,6 +31,7 @@ class RepaymentScheduleReportController extends Controller
                 'loans.currency',
                 'loans.amount as loan_amount',
                 'loans.duration_months',
+                'loans.payment_frequency',
                 'borrowers.first_name',
                 'borrowers.last_name',
                 'borrowers.phone',
@@ -77,7 +78,7 @@ class RepaymentScheduleReportController extends Controller
                 $item->outstanding_balance = 0;
             }
             // Format installment as "X/Y"
-            $item->installment_display = $item->payment_number . '/' . $item->duration_months;
+            $item->installment_display = $item->payment_number . '/' . $item->duration_months . ' ' . $this->installmentUnitLabel($item->payment_frequency);
             
             return $item;
         });
@@ -86,5 +87,18 @@ class RepaymentScheduleReportController extends Controller
             'success' => true,
             'data' => $schedules
         ]);
+    }
+
+    private function installmentUnitLabel(?string $paymentFrequency): string
+    {
+        $normalized = strtolower(trim((string) $paymentFrequency));
+
+        return match ($normalized) {
+            'monthly' => 'mo',
+            'weekly' => 'wk',
+            'daily' => 'day',
+            'term' => 'inst',
+            default => 'term',
+        };
     }
 }

@@ -7,7 +7,7 @@ use DateInterval;
 
 class LoanCalculator
 {
-    public function calculateLoanWithDates(float $principal, float $rate, int $duration, string $option, string $startDate, string $currency, float $adminFee = 0, string $adminFeeType = 'one_time')
+    public function calculateLoanWithDates(float $principal, float $rate, int $duration, string $option, string $startDate, string $currency, float $adminFee = 0, string $adminFeeType = 'one_time', ?int $payDay1 = null, ?int $payDay2 = null)
     {
         $results = [];
         $startDateObj = new DateTime($startDate);
@@ -49,7 +49,7 @@ class LoanCalculator
             return $applyRounding($totalFeeAmount / $totalPayments, $currency);
         };
 
-        $buildFixedIntervalSchedule = function (int $intervalDays) use (
+        $buildFixedIntervalSchedule = function (int $intervalDays, ?int $totalPaymentsOverride = null) use (
             $principal,
             $rate,
             $duration,
@@ -62,8 +62,9 @@ class LoanCalculator
                 return [];
             }
 
-            $totalDays = $duration * 30;
-            $totalPayments = max(1, (int) ceil($totalDays / $intervalDays));
+            $totalPayments = $totalPaymentsOverride !== null
+                ? max(1, $totalPaymentsOverride)
+                : max(1, (int) ceil(($duration * 30) / $intervalDays));
             $periodPrincipalRaw = $principal / $totalPayments;
             $periodInterestRaw = $principal * ($rate / 100) * ($intervalDays / 30);
             $remainingBalanceLocal = $principal;
@@ -100,6 +101,49 @@ class LoanCalculator
 
 
 
+        $buildSemiMonthlyDates = function (DateTime $loanStartDate, int $totalPayments, ?int $dayA, ?int $dayB): array {
+            $firstDay = max(1, min(31, $dayA ?? 11));
+            $secondDay = max(1, min(31, $dayB ?? 26));
+
+            if ($firstDay === $secondDay) {
+                $secondDay = min(31, $firstDay + 1);
+            }
+
+            $days = [$firstDay, $secondDay];
+            sort($days);
+
+            $cursor = new DateTime($loanStartDate->format('Y-m-01'));
+            $dates = [];
+
+            while (count($dates) < $totalPayments) {
+                $year = (int) $cursor->format('Y');
+                $month = (int) $cursor->format('m');
+                $lastDayOfMonth = (int) $cursor->format('t');
+
+                foreach ($days as $index => $day) {
+                    $paymentDate = new DateTime($cursor->format('Y-m-01'));
+                    $paymentDate->setDate($year, $month, min($day, $lastDayOfMonth));
+
+                    if ($paymentDate <= $loanStartDate) {
+                        continue;
+                    }
+
+                    $dates[] = [
+                        'date' => $paymentDate,
+                        'is_first_half' => $index === 0,
+                    ];
+
+                    if (count($dates) >= $totalPayments) {
+                        break;
+                    }
+                }
+
+                $cursor->modify('first day of next month');
+            }
+
+            return $dates;
+        };
+
         if (strpos($option, 'fixed_15days_70_30') !== false) {
             $percentages = explode('_', $option);
             $firstPayPercent = (int) ($percentages[2] ?? 70);
@@ -117,12 +161,17 @@ class LoanCalculator
             $remainingBalance = $principal;
             $allPayments = [];
             $loanStartDate = clone $startDateObj;
+            $paymentDates = $buildSemiMonthlyDates($loanStartDate, $totalPayments, $payDay1, $payDay2);
 
-            // Exactly 15 days between each payment: period i = start_date + (15 * i) days
             for ($i = 1; $i <= $totalPayments; $i++) {
-                $currentPaymentDate = clone $loanStartDate;
-                $currentPaymentDate->add(new DateInterval('P' . (15 * $i) . 'D'));
-                $isFirst = ($i % 2 === 1); // odd period = first half (70%), even = second half (30%)
+                $paymentMeta = $paymentDates[$i - 1] ?? null;
+                if (! $paymentMeta) {
+                    break;
+                }
+
+                /** @var DateTime $currentPaymentDate */
+                $currentPaymentDate = clone $paymentMeta['date'];
+                $isFirst = (bool) $paymentMeta['is_first_half'];
 
                 if ($i == 1) {
                     $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days;
@@ -203,12 +252,17 @@ class LoanCalculator
             $remainingBalance = $principal;
             $allPayments = [];
             $loanStartDate = clone $startDateObj;
+            $paymentDates = $buildSemiMonthlyDates($loanStartDate, $totalPayments, $payDay1, $payDay2);
 
-            // Exactly 15 days between each payment: period i = start_date + (15 * i) days
             for ($i = 1; $i <= $totalPayments; $i++) {
-                $currentPaymentDate = clone $loanStartDate;
-                $currentPaymentDate->add(new DateInterval('P' . (15 * $i) . 'D'));
-                $isFirst = ($i % 2 === 1);
+                $paymentMeta = $paymentDates[$i - 1] ?? null;
+                if (! $paymentMeta) {
+                    break;
+                }
+
+                /** @var DateTime $currentPaymentDate */
+                $currentPaymentDate = clone $paymentMeta['date'];
+                $isFirst = (bool) $paymentMeta['is_first_half'];
 
                 if ($i == 1) {
                     $days = $loanStartDate->diff($currentPaymentDate)->days;
@@ -264,9 +318,9 @@ class LoanCalculator
             unset($pay);
             $results = $allPayments;
         } elseif ($option === 'fixed_daily') {
-            $results = $buildFixedIntervalSchedule(1);
+            $results = $buildFixedIntervalSchedule(1, $duration);
         } elseif ($option === 'fixed_weekly') {
-            $results = $buildFixedIntervalSchedule(7);
+            $results = $buildFixedIntervalSchedule(7, $duration);
         } elseif ($option === 'annuity_monthly') {
             if ($principal <= 0 || $duration <= 0) {
                 return [];
