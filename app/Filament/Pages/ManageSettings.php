@@ -97,6 +97,8 @@ class ManageSettings extends Page implements HasForms
             'admin_font_family' => AdminFontRegistry::resolveKey(isset($dbSettings['admin_font_family']) ? (string) $dbSettings['admin_font_family'] : null),
             'available_fonts_count' => (string) AdminFontRegistry::count(),
             'frontend_font_family' => $frontendFont,
+            'pdf_export_font' => strtolower((string) ($dbSettings['pdf_export_font'] ?? $frontendFont)),
+            'print_schedule_font' => strtolower((string) ($dbSettings['print_schedule_font'] ?? ($dbSettings['pdf_export_font'] ?? $frontendFont))),
             'copyright_text' => $dbSettings['copyright_text'] ?? '© ' . date('Y') . ' ' . config('app.company_name'),
             'exchange_rate_khr_to_usd' => $dbSettings['exchange_rate_khr_to_usd'] ?? 4000,
             'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,
@@ -245,6 +247,20 @@ class ManageSettings extends Page implements HasForms
                             ->required()
                             ->native(false)
                             ->helperText('Used by Flutter frontend app. The app auto-syncs this setting about every 5 seconds.'),
+                        Select::make('pdf_export_font')
+                            ->label('PDF Export Font')
+                            ->options(self::FRONTEND_FONT_OPTIONS)
+                            ->default('noto_sans_khmer')
+                            ->required()
+                            ->native(false)
+                            ->helperText('Used by all PDF exports generated from the Flutter frontend app.'),
+                        Select::make('print_schedule_font')
+                            ->label('Print Schedule Font')
+                            ->options(self::FRONTEND_FONT_OPTIONS)
+                            ->default('noto_sans_khmer')
+                            ->required()
+                            ->native(false)
+                            ->helperText('Used by repayment schedule print preview and printed schedule output.'),
                         Select::make('excel_export_font')
                             ->label('Excel Export Font')
                             ->options(array_combine(array_values(AdminFontRegistry::options()), array_values(AdminFontRegistry::options())))

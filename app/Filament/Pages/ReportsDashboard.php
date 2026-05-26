@@ -87,6 +87,14 @@ class ReportsDashboard extends Page
                         'icon' => 'heroicon-o-archive-box',
                         'color' => 'gray',
                     ],
+                    [
+                        'name' => 'PAR Analysis',
+                        'description' => 'PAR 1, 30, 60, and 90 overview.',
+                        'url' => url('/admin/par-analysis'),
+                        'type' => 'Admin',
+                        'icon' => 'heroicon-o-shield-exclamation',
+                        'color' => 'warning',
+                    ],
                 ],
             ],
             'financial' => [

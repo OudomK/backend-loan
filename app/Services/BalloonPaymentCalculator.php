@@ -24,6 +24,7 @@ class BalloonPaymentCalculator
         float $annualRate,
         int $durationMonths,
         string $startDate,
+        ?int $paymentDay = null,
         float $adminFee = 0,
         string $adminFeeType = 'one_time'
     ): array {
@@ -32,9 +33,11 @@ class BalloonPaymentCalculator
         $monthlyInterest = round($principal * $monthlyInterestRate, 2);
 
         $startDateObj = Carbon::parse($startDate);
+        $resolvedPaymentDay = max(1, min(31, $paymentDay ?? (int) $startDateObj->day));
 
         for ($month = 1; $month <= $durationMonths; $month++) {
-            $paymentDate = $startDateObj->copy()->addMonths($month);
+            $paymentDate = $startDateObj->copy()->addMonthsNoOverflow($month);
+            $paymentDate->day = min($resolvedPaymentDay, $paymentDate->daysInMonth);
 
             $isFinalPayment = ($month === $durationMonths);
 
@@ -80,6 +83,7 @@ class BalloonPaymentCalculator
         int $durationMonths,
         string $startDate,
         ?float $monthlyPayment = null,
+        ?int $paymentDay = null,
         float $adminFee = 0,
         string $adminFeeType = 'one_time'
     ): array {
@@ -94,9 +98,11 @@ class BalloonPaymentCalculator
 
         $remainingPrincipal = $principal;
         $startDateObj = Carbon::parse($startDate);
+        $resolvedPaymentDay = max(1, min(31, $paymentDay ?? (int) $startDateObj->day));
 
         for ($month = 1; $month <= $durationMonths; $month++) {
-            $paymentDate = $startDateObj->copy()->addMonths($month);
+            $paymentDate = $startDateObj->copy()->addMonthsNoOverflow($month);
+            $paymentDate->day = min($resolvedPaymentDay, $paymentDate->daysInMonth);
 
             // Recalculate interest on remaining principal
             $interest = round($remainingPrincipal * $monthlyInterestRate, 2);
@@ -151,6 +157,7 @@ class BalloonPaymentCalculator
         array $loanData,
         string $balloonType = 'interest_only',
         ?float $customMonthlyPayment = null,
+        ?int $paymentDay = null,
         float $adminFee = 0,
         string $adminFeeType = 'one_time'
     ): array {
@@ -166,6 +173,7 @@ class BalloonPaymentCalculator
                 $durationMonths,
                 $startDate,
                 $customMonthlyPayment,
+                $paymentDay,
                 $adminFee,
                 $adminFeeType
             );
@@ -177,6 +185,7 @@ class BalloonPaymentCalculator
             $annualRate,
             $durationMonths,
             $startDate,
+            $paymentDay,
             $adminFee,
             $adminFeeType
         );

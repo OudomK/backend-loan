@@ -11,6 +11,7 @@ class ActiveLoanReportController extends Controller
     public function index(Request $request)
     {
         $officerId = $request->query('officer_id');
+        $currency = $request->query('currency');
         $fromDateStr = $request->query('from_date');
         $toDateStr = $request->query('to_date') ?? $request->query('report_date');
 
@@ -52,6 +53,9 @@ class ActiveLoanReportController extends Controller
 
         if ($officerId && $officerId !== 'all') {
             $query->where('loan_officer_id', $officerId);
+        }
+        if ($currency && $currency !== 'all') {
+            $query->where('currency', 'LIKE', $currency . '%');
         }
 
         $loans = $query->get();

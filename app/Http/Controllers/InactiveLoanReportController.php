@@ -10,6 +10,7 @@ class InactiveLoanReportController extends Controller
     public function index(Request $request)
     {
         $officerId = $request->query('officer_id');
+        $currency = $request->query('currency');
         $fromDate = $request->query('from_date');
         $toDate = $request->query('to_date');
 
@@ -28,6 +29,9 @@ class InactiveLoanReportController extends Controller
 
         if ($officerId && $officerId !== 'all') {
             $query->where('loan_officer_id', $officerId);
+        }
+        if ($currency && $currency !== 'all') {
+            $query->where('currency', 'LIKE', $currency . '%');
         }
 
         $query->addSelect([

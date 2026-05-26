@@ -188,6 +188,7 @@ class LoanController extends Controller
                         $loanData,
                         'interest_only',
                         null,
+                        $validated['pay_day_1'] ?? null,
                         $validated['admin_fee'] ?? 0,
                         $validated['admin_fee_type'] ?? 'one_time'
                     );
@@ -283,6 +284,7 @@ class LoanController extends Controller
                     $loanData,
                     'interest_only',
                     null,
+                    $validated['pay_day_1'] ?? null,
                     $validated['admin_fee'] ?? 0,
                     $validated['admin_fee_type'] ?? 'one_time'
                 );

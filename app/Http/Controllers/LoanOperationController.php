@@ -30,86 +30,56 @@ class LoanOperationController extends Controller
         $disbursedUSD = (float) Loan::where('status', '!=', 'completed')->where('currency', 'LIKE', 'USD%')->sum('amount');
         $disbursedKHR = (float) Loan::where('status', '!=', 'completed')->where('currency', 'LIKE', 'KHR%')->sum('amount');
 
-        $principalPaidUSD = 0.0;
-        $principalPaidKHR = 0.0;
-        try {
-            $principalPaidUSD = (float) (DB::table('payments')
-                ->join('loans', 'payments.loan_id', '=', 'loans.id')
-                ->whereNull('payments.deleted_at')
-                ->whereNull('loans.deleted_at')
-                ->where('loans.status', '!=', 'completed')
-                ->where('loans.currency', 'LIKE', 'USD%')
-                ->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0) - COALESCE(payments.interest_amount,0)))), 0) as paid')
-                ->value('paid') ?? 0);
-            $principalPaidKHR = (float) (DB::table('payments')
-                ->join('loans', 'payments.loan_id', '=', 'loans.id')
-                ->whereNull('payments.deleted_at')
-                ->whereNull('loans.deleted_at')
-                ->where('loans.status', '!=', 'completed')
-                ->where('loans.currency', 'LIKE', 'KHR%')
-                ->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0) - COALESCE(payments.interest_amount,0)))), 0) as paid')
-                ->value('paid') ?? 0);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('LoanOperation getStats: principal paid query failed', ['error' => $e->getMessage()]);
-        }
+        $portfolioLoans = Loan::with([
+            'payments' => function ($query) {
+                $query->orderBy('payment_date', 'asc');
+            },
+            'transactions' => function ($query) {
+                $query->where('transaction_date', '<=', Carbon::today('Asia/Phnom_Penh')->toDateString());
+            },
+        ])
+            ->where('status', '!=', 'completed')
+            ->whereNull('deleted_at')
+            ->get();
 
-        $outstandingUSD = max(0, $disbursedUSD - $principalPaidUSD);
-        $outstandingKHR = max(0, $disbursedKHR - $principalPaidKHR);
-
-        $totalOutstanding = $outstandingUSD + ($outstandingKHR / $exchangeRate);
-
+        $outstandingUSD = 0.0;
+        $outstandingKHR = 0.0;
         $overdueUSD = 0.0;
         $overdueKHR = 0.0;
-        $par30 = 0.0;
+        $par30AmountUSD = 0.0;
+        $par30AmountKHR = 0.0;
+
         try {
             $today = Carbon::today('Asia/Phnom_Penh');
-            $overdueUSD = (float) (DB::table('payments')
-                ->join('loans', 'payments.loan_id', '=', 'loans.id')
-                ->whereNull('payments.deleted_at')
-                ->whereNull('loans.deleted_at')
-                ->where('loans.status', '!=', 'completed')
-                ->where('loans.currency', 'LIKE', 'USD%')
-                ->where('payments.payment_date', '<', $today)
-                ->whereRaw('COALESCE(payments.total_paid,0) < (COALESCE(payments.principal_amount,0) + COALESCE(payments.interest_amount,0))')
-                ->selectRaw('COALESCE(SUM((COALESCE(payments.principal_amount,0) + COALESCE(payments.interest_amount,0)) - COALESCE(payments.total_paid,0)), 0) as overdue')
-                ->value('overdue') ?? 0);
-            $overdueKHR = (float) (DB::table('payments')
-                ->join('loans', 'payments.loan_id', '=', 'loans.id')
-                ->whereNull('payments.deleted_at')
-                ->whereNull('loans.deleted_at')
-                ->where('loans.status', '!=', 'completed')
-                ->where('loans.currency', 'LIKE', 'KHR%')
-                ->where('payments.payment_date', '<', $today)
-                ->whereRaw('COALESCE(payments.total_paid,0) < (COALESCE(payments.principal_amount,0) + COALESCE(payments.interest_amount,0))')
-                ->selectRaw('COALESCE(SUM((COALESCE(payments.principal_amount,0) + COALESCE(payments.interest_amount,0)) - COALESCE(payments.total_paid,0)), 0) as overdue')
-                ->value('overdue') ?? 0);
-            $thirtyDaysAgo = $today->copy()->subDays(30);
-            $loanIdsOverdue30 = DB::table('payments')
-                ->join('loans', 'payments.loan_id', '=', 'loans.id')
-                ->whereNull('payments.deleted_at')
-                ->whereNull('loans.deleted_at')
-                ->where('loans.status', '!=', 'completed')
-                ->where('payments.payment_date', '<', $thirtyDaysAgo)
-                ->whereRaw('COALESCE(payments.total_paid,0) < (COALESCE(payments.principal_amount,0) + COALESCE(payments.interest_amount,0))')
-                ->distinct()
-                ->pluck('loans.id')
-                ->unique()
-                ->values();
-            $par30AmountUSD = 0.0;
-            $par30AmountKHR = 0.0;
-            if ($loanIdsOverdue30->isNotEmpty()) {
-                $par30PrincipalPaidUSD = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereNull('payments.deleted_at')->whereNull('loans.deleted_at')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'USD%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0)-COALESCE(payments.interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
-                $par30DisbursedUSD = (float) Loan::whereIn('id', $loanIdsOverdue30)->where('currency', 'LIKE', 'USD%')->sum('amount');
-                $par30AmountUSD = max(0, $par30DisbursedUSD - $par30PrincipalPaidUSD);
-                $par30PrincipalPaidKHR = (float) (DB::table('payments')->join('loans', 'payments.loan_id', '=', 'loans.id')->whereNull('payments.deleted_at')->whereNull('loans.deleted_at')->whereIn('loans.id', $loanIdsOverdue30)->where('loans.currency', 'LIKE', 'KHR%')->selectRaw('COALESCE(SUM(LEAST(COALESCE(payments.principal_amount,0), GREATEST(0, COALESCE(payments.total_paid,0)-COALESCE(payments.interest_amount,0)))), 0) as paid')->value('paid') ?? 0);
-                $par30DisbursedKHR = (float) Loan::whereIn('id', $loanIdsOverdue30)->where('currency', 'LIKE', 'KHR%')->sum('amount');
-                $par30AmountKHR = max(0, $par30DisbursedKHR - $par30PrincipalPaidKHR);
+
+            foreach ($portfolioLoans as $loan) {
+                $snapshot = $this->portfolioSnapshot($loan, $today);
+                $currentOS = $snapshot['outstanding'];
+                if ($currentOS <= 0.01) {
+                    continue;
+                }
+
+                if (str_starts_with((string) $loan->currency, 'KHR')) {
+                    $outstandingKHR += $currentOS;
+                    $overdueKHR += $snapshot['overdue_amount'];
+                    if ($snapshot['aging'] >= 30) {
+                        $par30AmountKHR += $currentOS;
+                    }
+                } else {
+                    $outstandingUSD += $currentOS;
+                    $overdueUSD += $snapshot['overdue_amount'];
+                    if ($snapshot['aging'] >= 30) {
+                        $par30AmountUSD += $currentOS;
+                    }
+                }
             }
-            $par30PrincipalAmount = $par30AmountUSD + ($par30AmountKHR / $exchangeRate);
-            $par30 = ($totalOutstanding > 0) ? round(($par30PrincipalAmount / $totalOutstanding) * 100, 2) : 0;
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('LoanOperation getStats: overdue/par30 failed', ['error' => $e->getMessage()]);
         }
+
+        $totalOutstanding = $outstandingUSD + ($outstandingKHR / $exchangeRate);
+        $par30PrincipalAmount = $par30AmountUSD + ($par30AmountKHR / $exchangeRate);
+        $par30 = ($totalOutstanding > 0) ? round(($par30PrincipalAmount / $totalOutstanding) * 100, 2) : 0;
         $overdueAmount = $overdueUSD + ($overdueKHR / $exchangeRate);
 
         return response()->json([
@@ -171,5 +141,74 @@ class LoanOperationController extends Controller
         });
 
         return response()->json($loans);
+    }
+
+    private function portfolioSnapshot(Loan $loan, Carbon $referenceDate): array
+    {
+        $transactionsAtDate = $loan->transactions ?? collect();
+
+        $principalPaid = $transactionsAtDate->sum(function ($transaction) {
+            return (float) ($transaction->principal_paid ?? 0)
+                + (float) ($transaction->prepayment_paid ?? 0)
+                + (float) ($transaction->paid_off_amount ?? 0)
+                - (float) ($transaction->withdrawn_prepayment ?? 0);
+        });
+
+        $outstanding = max(0, (float) $loan->amount - $principalPaid);
+        if ($outstanding <= 0.01) {
+            return ['outstanding' => 0.0, 'overdue_amount' => 0.0, 'aging' => 0];
+        }
+
+        $scheduledPaid = $transactionsAtDate->sum(function ($transaction) {
+            return (float) ($transaction->fee_paid ?? 0)
+                + (float) ($transaction->interest_paid ?? 0)
+                + (float) ($transaction->principal_paid ?? 0)
+                + (float) ($transaction->prepayment_paid ?? 0)
+                + (float) ($transaction->paid_off_amount ?? 0);
+        });
+
+        $cumulativeDue = 0.0;
+        $cumulativePrincipalDue = 0.0;
+        $earliestArrearDate = null;
+        $earliestPrincipalArrearDate = null;
+
+        foreach ($loan->payments as $payment) {
+            if (($payment->payment_date ?? '') >= $referenceDate->toDateString()) {
+                continue;
+            }
+
+            $cumulativeDue += (float) ($payment->principal_amount ?? 0)
+                + (float) ($payment->interest_amount ?? 0)
+                + (float) ($payment->fee_amount ?? 0);
+            $cumulativePrincipalDue += (float) ($payment->principal_amount ?? 0);
+
+            if (($cumulativeDue - $scheduledPaid) > 0.01 && $earliestArrearDate === null) {
+                $earliestArrearDate = $payment->payment_date;
+            }
+
+            if (($cumulativePrincipalDue - $principalPaid) > 0.01 && $earliestPrincipalArrearDate === null) {
+                $earliestPrincipalArrearDate = $payment->payment_date;
+            }
+        }
+
+        $effectiveArrearDate = $earliestArrearDate ?? $earliestPrincipalArrearDate;
+        $overdueAmount = max(0, $cumulativeDue - $scheduledPaid);
+        $aging = 0;
+
+        if ($effectiveArrearDate) {
+            $aging = abs($referenceDate->copy()->startOfDay()->diffInDays(
+                Carbon::parse($effectiveArrearDate)->startOfDay()
+            ));
+        }
+
+        if ($aging <= 0 && $overdueAmount > 0.01) {
+            $aging = 1;
+        }
+
+        return [
+            'outstanding' => $outstanding,
+            'overdue_amount' => $overdueAmount,
+            'aging' => $aging,
+        ];
     }
 }

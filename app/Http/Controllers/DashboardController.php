@@ -4,10 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Borrower;
 use App\Models\Loan;
-use App\Models\Payment;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -28,40 +27,49 @@ class DashboardController extends Controller
 
         // Loan Amount Stats (convert KHR to USD)
         // Note: DB stores currency as 'USD ($)' and 'KHR (៛)'
-        $disbursedUSD = Loan::where('currency', 'LIKE', 'USD%')->sum('amount');
-        $disbursedKHR = Loan::where('currency', 'LIKE', 'KHR%')->sum('amount');
+        $disbursedUSD = Loan::where('status', 'active')->where('currency', 'LIKE', 'USD%')->sum('amount');
+        $disbursedKHR = Loan::where('status', 'active')->where('currency', 'LIKE', 'KHR%')->sum('amount');
         $disbursedAmount = $disbursedUSD + ($disbursedKHR / $exchangeRate);
 
-        // Outstanding = Total Principal - Total Principal Paid (per currency)
-        $paidUSD = Payment::whereHas('loan', fn($q) => $q->where('currency', 'LIKE', 'USD%'))
-            ->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
-        $paidKHR = Payment::whereHas('loan', fn($q) => $q->where('currency', 'LIKE', 'KHR%'))
-            ->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
+        $portfolioLoans = Loan::with([
+            'payments' => function ($query) {
+                $query->orderBy('payment_date', 'asc');
+            },
+            'transactions' => function ($query) use ($referenceDate) {
+                $query->where('transaction_date', '<=', $referenceDate->toDateString());
+            },
+        ])->where('status', 'active')->get();
 
-        $outstandingUSD = $disbursedUSD - $paidUSD;
-        $outstandingKHR = $disbursedKHR - $paidKHR;
-        $outstandingAmount = $outstandingUSD + ($outstandingKHR / $exchangeRate);
+        $outstandingUSD = 0.0;
+        $outstandingKHR = 0.0;
+        $overdueUSD = 0.0;
+        $overdueKHR = 0.0;
+        $parAmount = 0.0;
 
-        // PAR Calculation (Portfolio at Risk)
-        $parLoans = Loan::where('status', 'active')
-            ->whereHas('payments', function ($q) use ($referenceDate) {
-                $q->where('payment_date', '<', $referenceDate->toDateString())
-                    ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)');
-            })
-            ->get();
-
-        $parAmount = 0;
-        foreach ($parLoans as $loan) {
-            $loanPrincipalPaid = $loan->payments()->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
-            $loanOutstanding = $loan->amount - $loanPrincipalPaid;
-
-            // Convert to USD if KHR
-            if (str_starts_with($loan->currency, 'KHR')) {
-                $loanOutstanding = $loanOutstanding / $exchangeRate;
+        foreach ($portfolioLoans as $loan) {
+            $snapshot = $this->portfolioSnapshot($loan, $referenceDate);
+            $currentOS = $snapshot['outstanding'];
+            if ($currentOS <= 0.01) {
+                continue;
             }
-            $parAmount += $loanOutstanding;
+
+            if (str_starts_with((string) $loan->currency, 'KHR')) {
+                $outstandingKHR += $currentOS;
+                $overdueKHR += $snapshot['overdue_amount'];
+                if ($snapshot['aging'] >= 1) {
+                    $parAmount += $currentOS / $exchangeRate;
+                }
+            } else {
+                $outstandingUSD += $currentOS;
+                $overdueUSD += $snapshot['overdue_amount'];
+                if ($snapshot['aging'] >= 1) {
+                    $parAmount += $currentOS;
+                }
+            }
         }
 
+        $outstandingAmount = $outstandingUSD + ($outstandingKHR / $exchangeRate);
+        $overdueAmount = $overdueUSD + ($overdueKHR / $exchangeRate);
         $parRatio = $outstandingAmount > 0 ? round(($parAmount / $outstandingAmount) * 100, 2) : 0;
 
         // Portfolio Quality Classification
@@ -73,10 +81,80 @@ class DashboardController extends Controller
             'inactive_customers' => $inactiveCustomers,
             'disbursed_amount' => round($disbursedAmount, 2),
             'outstanding_amount' => round($outstandingAmount, 2),
+            'overdue_amount' => round($overdueAmount, 2),
             'par_amount' => round($parAmount, 2),
             'par_ratio' => $parRatio,
             'portfolio_quality' => $portfolioQuality,
         ]);
+    }
+
+    private function portfolioSnapshot(Loan $loan, Carbon $referenceDate): array
+    {
+        $transactionsAtDate = $loan->transactions ?? collect();
+
+        $principalPaid = $transactionsAtDate->sum(function ($transaction) {
+            return (float) ($transaction->principal_paid ?? 0)
+                + (float) ($transaction->prepayment_paid ?? 0)
+                + (float) ($transaction->paid_off_amount ?? 0)
+                - (float) ($transaction->withdrawn_prepayment ?? 0);
+        });
+
+        $outstanding = max(0, (float) $loan->amount - $principalPaid);
+        if ($outstanding <= 0.01) {
+            return ['outstanding' => 0.0, 'overdue_amount' => 0.0, 'aging' => 0];
+        }
+
+        $scheduledPaid = $transactionsAtDate->sum(function ($transaction) {
+            return (float) ($transaction->fee_paid ?? 0)
+                + (float) ($transaction->interest_paid ?? 0)
+                + (float) ($transaction->principal_paid ?? 0)
+                + (float) ($transaction->prepayment_paid ?? 0)
+                + (float) ($transaction->paid_off_amount ?? 0);
+        });
+
+        $cumulativeDue = 0.0;
+        $cumulativePrincipalDue = 0.0;
+        $earliestArrearDate = null;
+        $earliestPrincipalArrearDate = null;
+
+        foreach ($loan->payments as $payment) {
+            if (($payment->payment_date ?? '') >= $referenceDate->toDateString()) {
+                continue;
+            }
+
+            $cumulativeDue += (float) ($payment->principal_amount ?? 0)
+                + (float) ($payment->interest_amount ?? 0)
+                + (float) ($payment->fee_amount ?? 0);
+            $cumulativePrincipalDue += (float) ($payment->principal_amount ?? 0);
+
+            if (($cumulativeDue - $scheduledPaid) > 0.01 && $earliestArrearDate === null) {
+                $earliestArrearDate = $payment->payment_date;
+            }
+
+            if (($cumulativePrincipalDue - $principalPaid) > 0.01 && $earliestPrincipalArrearDate === null) {
+                $earliestPrincipalArrearDate = $payment->payment_date;
+            }
+        }
+
+        $effectiveArrearDate = $earliestArrearDate ?? $earliestPrincipalArrearDate;
+        $overdueAmount = max(0, $cumulativeDue - $scheduledPaid);
+        $aging = 0;
+
+        if ($effectiveArrearDate) {
+            $aging = abs($referenceDate->copy()->startOfDay()->diffInDays(
+                Carbon::parse($effectiveArrearDate)->startOfDay()
+            ));
+        }
+
+        if ($aging <= 0 && $overdueAmount > 0.01) {
+            $aging = 1;
+        }
+
+        return [
+            'outstanding' => $outstanding,
+            'overdue_amount' => $overdueAmount,
+            'aging' => $aging,
+        ];
     }
 
     private function calculatePortfolioQuality(Carbon $referenceDate, int $exchangeRate)

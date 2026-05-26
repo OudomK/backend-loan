@@ -144,6 +144,34 @@ class LoanCalculator
             return $dates;
         };
 
+        $monthlyRepaymentDay = max(1, min(31, $payDay1 ?? 11));
+
+        $initializeMonthlyPaymentDate = function (DateTime $loanStartDate) use ($monthlyRepaymentDay): DateTime {
+            $paymentDate = new DateTime($loanStartDate->format('Y-m-01'));
+            $year = (int) $paymentDate->format('Y');
+            $month = (int) $paymentDate->format('m');
+            $lastDayOfMonth = (int) $paymentDate->format('t');
+            $paymentDate->setDate($year, $month, min($monthlyRepaymentDay, $lastDayOfMonth));
+
+            if ($paymentDate <= $loanStartDate) {
+                $paymentDate->modify('first day of next month');
+                $year = (int) $paymentDate->format('Y');
+                $month = (int) $paymentDate->format('m');
+                $lastDayOfMonth = (int) $paymentDate->format('t');
+                $paymentDate->setDate($year, $month, min($monthlyRepaymentDay, $lastDayOfMonth));
+            }
+
+            return $paymentDate;
+        };
+
+        $advanceMonthlyPaymentDate = function (DateTime $paymentDate) use ($monthlyRepaymentDay): void {
+            $paymentDate->modify('first day of next month');
+            $year = (int) $paymentDate->format('Y');
+            $month = (int) $paymentDate->format('m');
+            $lastDayOfMonth = (int) $paymentDate->format('t');
+            $paymentDate->setDate($year, $month, min($monthlyRepaymentDay, $lastDayOfMonth));
+        };
+
         if (strpos($option, 'fixed_15days_70_30') !== false) {
             $percentages = explode('_', $option);
             $firstPayPercent = (int) ($percentages[2] ?? 70);
@@ -345,9 +373,7 @@ class LoanCalculator
 
             $loanStartDate = clone $startDateObj;
 
-            $currentPaymentDate = clone $loanStartDate;
-            $currentPaymentDate->modify('first day of next month');
-            $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+            $currentPaymentDate = $initializeMonthlyPaymentDate($loanStartDate);
 
             for ($i = 1; $i <= $duration; $i++) {
                 if ($i == 1) {
@@ -394,8 +420,7 @@ class LoanCalculator
                 ];
 
                 if ($i < $duration) {
-                    $currentPaymentDate->modify('first day of next month');
-                    $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+                    $advanceMonthlyPaymentDate($currentPaymentDate);
                 }
             }
         } elseif ($option === 'linear_monthly') {
@@ -407,9 +432,7 @@ class LoanCalculator
 
             $loanStartDate = clone $startDateObj;
 
-            $currentPaymentDate = clone $loanStartDate;
-            $currentPaymentDate->modify('first day of next month');
-            $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+            $currentPaymentDate = $initializeMonthlyPaymentDate($loanStartDate);
 
             for ($i = 1; $i <= $duration; $i++) {
                 if ($i == 1) {
@@ -448,8 +471,7 @@ class LoanCalculator
                 ];
 
                 if ($i < $duration) {
-                    $currentPaymentDate->modify('first day of next month');
-                    $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+                    $advanceMonthlyPaymentDate($currentPaymentDate);
                 }
             }
         } elseif ($option === 'fixed_monthly') {
@@ -463,9 +485,7 @@ class LoanCalculator
 
             $loanStartDate = clone $startDateObj;
 
-            $currentPaymentDate = clone $loanStartDate;
-            $currentPaymentDate->modify('first day of next month');
-            $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+            $currentPaymentDate = $initializeMonthlyPaymentDate($loanStartDate);
 
             for ($i = 1; $i <= $duration; $i++) {
                 $currentPrincipal = $monthlyPrincipal;
@@ -501,8 +521,7 @@ class LoanCalculator
                 ];
 
                 if ($i < $duration) {
-                    $currentPaymentDate->modify('first day of next month');
-                    $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+                    $advanceMonthlyPaymentDate($currentPaymentDate);
                 }
             }
         } elseif ($option === 'Balloon') {
@@ -513,9 +532,7 @@ class LoanCalculator
 
             $loanStartDate = clone $startDateObj;
 
-            $currentPaymentDate = clone $loanStartDate;
-            $currentPaymentDate->modify('first day of next month');
-            $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+            $currentPaymentDate = $initializeMonthlyPaymentDate($loanStartDate);
 
             for ($i = 1; $i <= $duration; $i++) {
                 if ($i == 1) {
@@ -551,8 +568,7 @@ class LoanCalculator
                 ];
 
                 if ($i < $duration) {
-                    $currentPaymentDate->modify('first day of next month');
-                    $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+                    $advanceMonthlyPaymentDate($currentPaymentDate);
                 }
             }
         } elseif ($option === 'negotiable') {
@@ -567,9 +583,7 @@ class LoanCalculator
 
             $loanStartDate = clone $startDateObj;
 
-            $currentPaymentDate = clone $loanStartDate;
-            $currentPaymentDate->modify('first day of next month');
-            $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+            $currentPaymentDate = $initializeMonthlyPaymentDate($loanStartDate);
 
             for ($i = 1; $i <= $duration; $i++) {
                 $currentPrincipal = $monthlyPrincipal;
@@ -605,8 +619,7 @@ class LoanCalculator
                 ];
 
                 if ($i < $duration) {
-                    $currentPaymentDate->modify('first day of next month');
-                    $currentPaymentDate->setDate($currentPaymentDate->format('Y'), $currentPaymentDate->format('m'), 11);
+                    $advanceMonthlyPaymentDate($currentPaymentDate);
                 }
             }
         }

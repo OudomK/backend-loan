@@ -121,6 +121,7 @@ class CreateLoan extends CreateRecord
                 $loanData,
                 'interest_only',
                 null,
+                isset($this->data['pay_day_1']) ? (int) $this->data['pay_day_1'] : null,
                 (float) ($loan->admin_fee ?? 0),
                 (string) ($loan->admin_fee_type ?: 'one_time')
             );

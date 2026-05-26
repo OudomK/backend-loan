@@ -79,52 +79,72 @@ class StatsOverview extends BaseWidget
 
         // Dynamic Portfolio and PAR calculations
         $activeLoansData = Cache::remember('filament.stats.active_loans_data_multi', $ttl, function() use ($referenceDate, $exchangeRate) {
-            
-            // Match exactly with Frontend (DashboardController) for Portfolio Balance
-            $disbursedUSD = Loan::where('currency', 'LIKE', 'USD%')->sum('amount');
-            $disbursedKHR = Loan::where('currency', 'LIKE', 'KHR%')->sum('amount');
-            $disbursedAmount = $disbursedUSD + ($disbursedKHR / $exchangeRate);
+            $activeLoans = Loan::with([
+                'payments' => function ($query) {
+                    $query->orderBy('payment_date', 'asc');
+                },
+                'transactions' => function ($query) use ($referenceDate) {
+                    $query->where('transaction_date', '<=', $referenceDate->toDateString());
+                },
+            ])->where('status', 'active')->get();
 
-            $paidUSD = Payment::whereHas('loan', fn($q) => $q->where('currency', 'LIKE', 'USD%'))
-                ->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
-            $paidKHR = Payment::whereHas('loan', fn($q) => $q->where('currency', 'LIKE', 'KHR%'))
-                ->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
-
-            $outstandingUSD = $disbursedUSD - $paidUSD;
-            $outstandingKHR = $disbursedKHR - $paidKHR;
-            $portfolioBalance = $outstandingUSD + ($outstandingKHR / $exchangeRate);
-
-            // Match PAR exactly with Frontend
-            $activeLoans = Loan::with('payments')->where('status', 'active')->get();
-            $parAmountUSD = 0;
-            $parAmountKHR = 0;
+            $outstandingUSD = 0.0;
+            $outstandingKHR = 0.0;
+            $parAmountUSD = 0.0;
+            $parAmountKHR = 0.0;
+            $par30AmountUSD = 0.0;
+            $par30AmountKHR = 0.0;
+            $par60AmountUSD = 0.0;
+            $par60AmountKHR = 0.0;
+            $par90AmountUSD = 0.0;
+            $par90AmountKHR = 0.0;
             $overdueLoans = 0;
 
             foreach ($activeLoans as $loan) {
-                // Determine if loan is overdue
-                $isOverdue = $loan->payments->contains(function ($payment) use ($referenceDate) {
-                    return $payment->payment_date < $referenceDate->toDateString() 
-                        && $payment->total_paid < ($payment->principal_amount + $payment->interest_amount - 0.01);
-                });
+                $snapshot = $this->portfolioSnapshot($loan, $referenceDate);
+                $currentOS = $snapshot['outstanding'];
+                if ($currentOS <= 0.01) {
+                    continue;
+                }
 
-                if ($isOverdue) {
-                    $loanPrincipalPaid = $loan->payments->sum(function ($payment) {
-                        return max(0, $payment->total_paid - $payment->interest_amount);
-                    });
-                    
-                    $loanOutstanding = $loan->amount - $loanPrincipalPaid;
-
-                    if (str_starts_with($loan->currency ?? 'USD', 'KHR')) {
-                        $parAmountKHR += $loanOutstanding;
-                    } else {
-                        $parAmountUSD += $loanOutstanding;
+                if (str_starts_with((string) ($loan->currency ?? 'USD'), 'KHR')) {
+                    $outstandingKHR += $currentOS;
+                    if ($snapshot['aging'] >= 1) {
+                        $parAmountKHR += $currentOS;
+                        $overdueLoans++;
                     }
-
-                    $overdueLoans++;
+                    if ($snapshot['aging'] >= 30) {
+                        $par30AmountKHR += $currentOS;
+                    }
+                    if ($snapshot['aging'] >= 60) {
+                        $par60AmountKHR += $currentOS;
+                    }
+                    if ($snapshot['aging'] >= 90) {
+                        $par90AmountKHR += $currentOS;
+                    }
+                } else {
+                    $outstandingUSD += $currentOS;
+                    if ($snapshot['aging'] >= 1) {
+                        $parAmountUSD += $currentOS;
+                        $overdueLoans++;
+                    }
+                    if ($snapshot['aging'] >= 30) {
+                        $par30AmountUSD += $currentOS;
+                    }
+                    if ($snapshot['aging'] >= 60) {
+                        $par60AmountUSD += $currentOS;
+                    }
+                    if ($snapshot['aging'] >= 90) {
+                        $par90AmountUSD += $currentOS;
+                    }
                 }
             }
-            
+
+            $portfolioBalance = $outstandingUSD + ($outstandingKHR / $exchangeRate);
             $parAmountUnified = $parAmountUSD + ($parAmountKHR / $exchangeRate);
+            $par30Unified = $par30AmountUSD + ($par30AmountKHR / $exchangeRate);
+            $par60Unified = $par60AmountUSD + ($par60AmountKHR / $exchangeRate);
+            $par90Unified = $par90AmountUSD + ($par90AmountKHR / $exchangeRate);
 
             return [
                 'outstandingUSD' => $outstandingUSD,
@@ -132,6 +152,15 @@ class StatsOverview extends BaseWidget
                 'parAmountUSD' => $parAmountUSD,
                 'parAmountKHR' => $parAmountKHR,
                 'parPercentage' => $portfolioBalance > 0 ? round(($parAmountUnified / $portfolioBalance) * 100, 2) : 0,
+                'par30AmountUSD' => $par30AmountUSD,
+                'par30AmountKHR' => $par30AmountKHR,
+                'par30Percentage' => $portfolioBalance > 0 ? round(($par30Unified / $portfolioBalance) * 100, 2) : 0,
+                'par60AmountUSD' => $par60AmountUSD,
+                'par60AmountKHR' => $par60AmountKHR,
+                'par60Percentage' => $portfolioBalance > 0 ? round(($par60Unified / $portfolioBalance) * 100, 2) : 0,
+                'par90AmountUSD' => $par90AmountUSD,
+                'par90AmountKHR' => $par90AmountKHR,
+                'par90Percentage' => $portfolioBalance > 0 ? round(($par90Unified / $portfolioBalance) * 100, 2) : 0,
                 'overdueLoans' => $overdueLoans,
             ];
         });
@@ -141,6 +170,15 @@ class StatsOverview extends BaseWidget
         $parAmountUSD = $activeLoansData['parAmountUSD'];
         $parAmountKHR = $activeLoansData['parAmountKHR'];
         $parPercentage = $activeLoansData['parPercentage'];
+        $par30AmountUSD = $activeLoansData['par30AmountUSD'];
+        $par30AmountKHR = $activeLoansData['par30AmountKHR'];
+        $par30Percentage = $activeLoansData['par30Percentage'];
+        $par60AmountUSD = $activeLoansData['par60AmountUSD'];
+        $par60AmountKHR = $activeLoansData['par60AmountKHR'];
+        $par60Percentage = $activeLoansData['par60Percentage'];
+        $par90AmountUSD = $activeLoansData['par90AmountUSD'];
+        $par90AmountKHR = $activeLoansData['par90AmountKHR'];
+        $par90Percentage = $activeLoansData['par90Percentage'];
         $overdueLoans = $activeLoansData['overdueLoans'];
 
         // Currencies mapping helpers
@@ -276,14 +314,14 @@ class StatsOverview extends BaseWidget
                 ->color('gray'),
 
             // ── Row 2: Risk & Fund Metrics ───────────────────────────────
-            Stat::make('Portfolio At Risk (PAR%)', $parPercentage . '%')
+            Stat::make('Portfolio At Risk (PAR 1%)', $parPercentage . '%')
                 ->description(new \Illuminate\Support\HtmlString('$' . number_format($parAmountUSD, 0) . ' &bull; ៛' . number_format($parAmountKHR, 0) . ' at risk'))
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->icon('heroicon-m-shield-exclamation')
                 ->chart([3, 5, 4, 6, 5, 7, $parPercentage])
                 ->color($parPercentage > 5 ? 'danger' : ($parPercentage > 2 ? 'warning' : 'success')),
 
-            Stat::make('Overdue Loans', new \Illuminate\Support\HtmlString($overdueLoans . ' <span class="text-sm font-normal text-gray-500">| $' . number_format($parAmountUSD, 0) . '</span>'))
+            Stat::make('Overdue Loans', new \Illuminate\Support\HtmlString($overdueLoans . ' <span class="text-sm font-normal text-gray-500">| $' . number_format($parAmountUSD, 0) . ' • ៛' . number_format($parAmountKHR, 0) . '</span>'))
                 ->description('Loans past due date')
                 ->descriptionIcon('heroicon-m-bell-alert')
                 ->icon('heroicon-m-bell-alert')
@@ -374,5 +412,72 @@ class StatsOverview extends BaseWidget
         }
 
         return collect($monthlyData)->values()->all();
+    }
+
+    private function portfolioSnapshot(Loan $loan, Carbon $referenceDate): array
+    {
+        $transactionsAtDate = $loan->transactions ?? collect();
+
+        $principalPaid = $transactionsAtDate->sum(function ($transaction) {
+            return (float) ($transaction->principal_paid ?? 0)
+                + (float) ($transaction->prepayment_paid ?? 0)
+                + (float) ($transaction->paid_off_amount ?? 0)
+                - (float) ($transaction->withdrawn_prepayment ?? 0);
+        });
+
+        $outstanding = max(0, (float) $loan->amount - $principalPaid);
+        if ($outstanding <= 0.01) {
+            return ['outstanding' => 0.0, 'aging' => 0];
+        }
+
+        $scheduledPaid = $transactionsAtDate->sum(function ($transaction) {
+            return (float) ($transaction->fee_paid ?? 0)
+                + (float) ($transaction->interest_paid ?? 0)
+                + (float) ($transaction->principal_paid ?? 0)
+                + (float) ($transaction->prepayment_paid ?? 0)
+                + (float) ($transaction->paid_off_amount ?? 0);
+        });
+
+        $cumulativeDue = 0.0;
+        $cumulativePrincipalDue = 0.0;
+        $earliestArrearDate = null;
+        $earliestPrincipalArrearDate = null;
+
+        foreach ($loan->payments as $payment) {
+            if (($payment->payment_date ?? '') >= $referenceDate->toDateString()) {
+                continue;
+            }
+
+            $cumulativeDue += (float) ($payment->principal_amount ?? 0)
+                + (float) ($payment->interest_amount ?? 0)
+                + (float) ($payment->fee_amount ?? 0);
+            $cumulativePrincipalDue += (float) ($payment->principal_amount ?? 0);
+
+            if (($cumulativeDue - $scheduledPaid) > 0.01 && $earliestArrearDate === null) {
+                $earliestArrearDate = $payment->payment_date;
+            }
+
+            if (($cumulativePrincipalDue - $principalPaid) > 0.01 && $earliestPrincipalArrearDate === null) {
+                $earliestPrincipalArrearDate = $payment->payment_date;
+            }
+        }
+
+        $effectiveArrearDate = $earliestArrearDate ?? $earliestPrincipalArrearDate;
+        $aging = 0;
+
+        if ($effectiveArrearDate) {
+            $aging = abs($referenceDate->copy()->startOfDay()->diffInDays(
+                Carbon::parse($effectiveArrearDate)->startOfDay()
+            ));
+        }
+
+        if ($aging <= 0 && ($cumulativeDue - $scheduledPaid) > 0.01) {
+            $aging = 1;
+        }
+
+        return [
+            'outstanding' => $outstanding,
+            'aging' => $aging,
+        ];
     }
 }
