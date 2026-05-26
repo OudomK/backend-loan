@@ -215,7 +215,7 @@ class BalloonPaymentCalculator
                     'principal_amount' => $payment['principal_amount'],
                     'interest_amount' => $payment['interest_amount'],
                     'penalty_amount' => $payment['penalty_amount'] ?? 0,
-                    'total_paid' => $payment['total_paid'],
+                    'total_paid' => 0,
                     'payment_method' => 'Cash', // Default
                     'created_at' => now(),
                     'updated_at' => now(),

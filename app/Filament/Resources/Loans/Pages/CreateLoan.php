@@ -150,7 +150,7 @@ class CreateLoan extends CreateRecord
                     'interest_amount' => $interestAmt,
                     'fee_amount' => $feeAmt,
                     'penalty_amount' => (float) ($payment['penalty_amount'] ?? 0),
-                    'total_paid' => (float) ($payment['total_paid'] ?? 0),
+                    'total_paid' => 0,
                     'payment_date' => $paymentDate,
                     'payment_method' => 'Cash',
                 ]);
