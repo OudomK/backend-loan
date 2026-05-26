@@ -135,6 +135,14 @@ class LoanService
 
                     $principalAmt = (float) ($item['principal'] ?? ($item['principal_amount'] ?? 0));
                     $interestAmt = (float) ($item['interest'] ?? ($item['interest_amount'] ?? 0));
+                    // Fix date format if it's in DD/MM/YYYY
+                    $paymentDate = $item['date'] ?? ($item['payment_date'] ?? null);
+                    if ($paymentDate && preg_match('/^\d{2}\/\d{2}\/\d{4}$/', $paymentDate)) {
+                        $paymentDate = \DateTime::createFromFormat('d/m/Y', $paymentDate)->format('Y-m-d');
+                    }
+
+                    $principalAmt = (float) ($item['principal'] ?? ($item['principal_amount'] ?? 0));
+                    $interestAmt = (float) ($item['interest'] ?? ($item['interest_amount'] ?? 0));
                     $feeAmt = (float) ($item['fee'] ?? ($item['fee_amount'] ?? 0));
 
                     $loan->payments()->create([
@@ -142,7 +150,6 @@ class LoanService
                         'principal_amount' => $principalAmt,
                         'interest_amount' => $interestAmt,
                         'fee_amount' => $feeAmt,
-                        'total_due' => round($principalAmt + $interestAmt + $feeAmt, 2),
                         'penalty_amount' => 0,
                         'total_paid' => 0,
                         'payment_date' => $paymentDate,
