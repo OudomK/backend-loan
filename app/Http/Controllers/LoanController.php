@@ -7,6 +7,7 @@ use App\Models\Loan;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use App\Services\BalloonPaymentCalculator;
 use App\Services\CommissionIncomeService;
 
@@ -131,28 +132,30 @@ class LoanController extends Controller
             $validated['monthly_interest'] = round(($validated['amount'] * $validated['interest_rate']) / 100, 2);
         }
 
-        $loan = Loan::create($validated);
-        $this->commissionIncomeService->syncForLoan($loan);
+        DB::beginTransaction();
+        try {
+            $loan = Loan::create($validated);
+            $this->commissionIncomeService->syncForLoan($loan);
 
-        // Save collaterals if any
-        if (isset($validated['collaterals'])) {
-            foreach ($validated['collaterals'] as $collateralData) {
-                // Only save if type or value is provided
-                if (!empty($collateralData['type']) || !empty($collateralData['value'])) {
-                    $loan->collaterals()->create($collateralData);
+            // Save collaterals if any
+            if (isset($validated['collaterals'])) {
+                foreach ($validated['collaterals'] as $collateralData) {
+                    // Only save if type or value is provided
+                    if (!empty($collateralData['type']) || !empty($collateralData['value'])) {
+                        $loan->collaterals()->create($collateralData);
+                    }
                 }
             }
-        }
 
-        // Calculate schedule if essential data is provided
-        if (
-            !empty($validated['amount']) &&
-            !empty($validated['interest_rate']) &&
-            !empty($validated['duration_months']) &&
-            !empty($validated['repayment_method']) &&
-            !empty($validated['start_date'])
-        ) {
-            try {
+            $requiresSchedule =
+                !empty($validated['amount']) &&
+                !empty($validated['interest_rate']) &&
+                !empty($validated['duration_months']) &&
+                !empty($validated['repayment_method']) &&
+                !empty($validated['start_date']);
+
+            // Calculate schedule if essential data is provided
+            if ($requiresSchedule) {
                 // Handle Negotiable (Custom Schedule)
                 if ($validated['repayment_method'] === 'negotiable' && !empty($validated['custom_schedule'])) {
                     $schedule = $validated['custom_schedule'];
@@ -247,13 +250,23 @@ class LoanController extends Controller
                         }
                     }
                 }
-            } catch (\Exception $e) {
-                // Silently skip schedule if calculation fails (optional fields might cause math errors)
-                Log::error("Loan schedule calculation failed: " . $e->getMessage());
-            }
-        }
 
-        return response()->json($loan->load(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'payments', 'product', 'paymentQr']), 201);
+                $savedPaymentsCount = $loan->payments()->count();
+                if ($savedPaymentsCount === 0) {
+                    throw new \RuntimeException('Schedule generation failed: no payment rows were created. Please verify repayment method, dates, and terms.');
+                }
+            }
+
+            DB::commit();
+            return response()->json($loan->load(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'payments', 'product', 'paymentQr']), 201);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error("Loan create failed: " . $e->getMessage());
+            return response()->json([
+                'error' => 'Create loan failed.',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
     }
 
     public function previewSchedule(Request $request)
