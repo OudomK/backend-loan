@@ -170,7 +170,7 @@ class LoanController extends Controller
                             'interest_amount' => $item['interest'],
                             'fee_amount' => (float) ($item['fee'] ?? 0),
                             'penalty_amount' => 0,
-                            'total_paid' => $item['payment'],
+                            'total_paid' => 0,
                             'payment_date' => $this->normalizeScheduleDate($item['date']),
                             'payment_method' => 'Cash',
                         ]);
@@ -207,7 +207,7 @@ class LoanController extends Controller
                                 'interest_amount' => $payment['interest_amount'],
                                 'fee_amount' => (float) ($payment['fee_amount'] ?? 0),
                                 'penalty_amount' => (float) ($payment['penalty_amount'] ?? 0),
-                                'total_paid' => $payment['total_paid'],
+                                'total_paid' => 0,
                                 'payment_date' => $payment['payment_date'],
                                 'payment_method' => 'Cash',
                             ]);
