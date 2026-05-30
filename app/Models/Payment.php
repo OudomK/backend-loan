@@ -22,6 +22,13 @@ class Payment extends Model
 {
     use SoftDeletes, LogsActivity;
 
+    protected static function booted()
+    {
+        static::saving(function ($payment) {
+            unset($payment->total_due);
+        });
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

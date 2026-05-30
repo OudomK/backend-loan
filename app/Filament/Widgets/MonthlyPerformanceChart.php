@@ -25,8 +25,8 @@ class MonthlyPerformanceChart extends ChartWidget
         $months = [];
         $labels = [];
         for ($i = 11; $i >= 0; $i--) {
-            $months[] = now()->subMonths($i)->format('Y-m');
-            $labels[] = now()->subMonths($i)->format('M');
+            $months[] = now()->startOfMonth()->subMonths($i)->format('Y-m');
+            $labels[] = now()->startOfMonth()->subMonths($i)->format('M');
         }
 
         $exchangeRate = (float) (\App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
@@ -36,34 +36,30 @@ class MonthlyPerformanceChart extends ChartWidget
 
         // Fetch disbursements grouped by month and currency
         $disbursementsRaw = Loan::where('status', 'active')
-            ->where('start_date', '>=', now()->subMonths(11)->startOfMonth())
+            ->where('start_date', '>=', now()->startOfMonth()->subMonths(11))
             ->selectRaw('DATE_FORMAT(start_date, "%Y-%m") as month, currency, SUM(amount) as total_amount')
             ->groupBy('month', 'currency')
             ->get();
 
-        $disbursements = collect($months)->mapWithKeys(function ($m) {
-            return [$m => 0];
-        });
+        $disbursements = array_fill_keys($months, 0);
 
         foreach ($disbursementsRaw as $d) {
             $amount = $d->total_amount;
             if (str_starts_with($d->currency, 'KHR')) {
                 $amount = $amount / $exchangeRate;
             }
-            $disbursements[$d->month] += $amount;
+            $disbursements[$d->month] = ($disbursements[$d->month] ?? 0) + $amount;
         }
 
         // Fetch collections grouped by month and currency
-        $collectionsRaw = RepaymentTransaction::where('transaction_date', '>=', now()->subMonths(11)->startOfMonth())
+        $collectionsRaw = RepaymentTransaction::where('transaction_date', '>=', now()->startOfMonth()->subMonths(11))
             ->with('loan') // Need loan to check currency
             ->get()
             ->groupBy(function ($item) {
                 return Carbon::parse($item->transaction_date)->format('Y-m');
             });
 
-        $collections = collect($months)->mapWithKeys(function ($m) {
-            return [$m => 0];
-        });
+        $collections = array_fill_keys($months, 0);
 
         foreach ($collectionsRaw as $month => $transactions) {
             $totalForMonth = 0;
@@ -77,8 +73,8 @@ class MonthlyPerformanceChart extends ChartWidget
             $collections[$month] = $totalForMonth;
         }
 
-        $disbursementData = collect($months)->map(fn($m) => round($disbursements->get($m, 0), 2))->toArray();
-        $collectionData = collect($months)->map(fn($m) => round($collections->get($m, 0), 2))->toArray();
+        $disbursementData = collect($months)->map(fn($m) => round($disbursements[$m] ?? 0, 2))->toArray();
+        $collectionData = collect($months)->map(fn($m) => round($collections[$m] ?? 0, 2))->toArray();
 
         return [
             'datasets' => [

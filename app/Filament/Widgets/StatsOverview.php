@@ -101,6 +101,7 @@ class StatsOverview extends BaseWidget
             $overdueLoans = 0;
 
             foreach ($activeLoans as $loan) {
+                /** @var Loan $loan */
                 $snapshot = $this->portfolioSnapshot($loan, $referenceDate);
                 $currentOS = $snapshot['outstanding'];
                 if ($currentOS <= 0.01) {
@@ -233,7 +234,7 @@ class StatsOverview extends BaseWidget
 
         // ── Trends ───────────────────────────────────────────────────────
         
-        $pendingTrend = Cache::remember('filament.stats.trend.pending_count', $ttl, fn() => $this->buildMonthlyCountSeries(Loan::where('status', 'pending'), 'created_at'));
+        $pendingTrend = Cache::remember('filament.stats.trend.pending_count', $ttl, fn() => $this->buildMonthlyCountSeries(Loan::query()->where('status', 'pending'), 'created_at'));
         
         $portfolioTrend = Cache::remember('filament.stats.trend.portfolio_balance', $ttl, fn() => $this->buildMonthlySeries(
             Loan::query()->where('status', 'active'),
@@ -251,7 +252,7 @@ class StatsOverview extends BaseWidget
             false
         ));
 
-        $overdueTrend = Cache::remember('filament.stats.trend.overdue_count', $ttl, fn() => $this->buildMonthlyCountSeries(Loan::where('status', 'active')->where('aging', '>', 0), 'updated_at'));
+        $overdueTrend = Cache::remember('filament.stats.trend.overdue_count', $ttl, fn() => $this->buildMonthlyCountSeries(Loan::query()->where('status', 'active')->where('aging', '>', 0), 'updated_at'));
         
         $writtenOffTrend = Cache::remember('filament.stats.trend.written_off_sum', $ttl, fn() => $this->buildMonthlySeries(
             Loan::query()->whereNotNull('written_off_at'),
@@ -365,7 +366,7 @@ class StatsOverview extends BaseWidget
             ?? 4000);
         $exchangeRate = max(1, $exchangeRate);
 
-        $from = now()->copy()->subMonths($months - 1)->startOfMonth();
+        $from = now()->startOfMonth()->subMonths($months - 1);
 
         $recordsQuery = (clone $query)->where($dateColumn, '>=', $from);
         if ($isLoanRelation) {
@@ -376,7 +377,7 @@ class StatsOverview extends BaseWidget
 
         $monthlyData = [];
         foreach (range($months - 1, 0) as $offset) {
-            $monthlyData[now()->subMonths($offset)->format('Y-m')] = 0;
+            $monthlyData[now()->startOfMonth()->subMonths($offset)->format('Y-m')] = 0;
         }
 
         foreach ($records as $record) {
@@ -396,12 +397,12 @@ class StatsOverview extends BaseWidget
 
     private function buildMonthlyCountSeries(Builder $query, string $dateColumn, int $months = 6): array
     {
-        $from = now()->copy()->subMonths($months - 1)->startOfMonth();
+        $from = now()->startOfMonth()->subMonths($months - 1);
         $records = (clone $query)->where($dateColumn, '>=', $from)->get();
 
         $monthlyData = [];
         foreach (range($months - 1, 0) as $offset) {
-            $monthlyData[now()->subMonths($offset)->format('Y-m')] = 0;
+            $monthlyData[now()->startOfMonth()->subMonths($offset)->format('Y-m')] = 0;
         }
 
         foreach ($records as $record) {

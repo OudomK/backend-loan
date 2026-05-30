@@ -22,8 +22,8 @@ class RepaymentsBarChart extends ChartWidget
         $months = [];
         $labels = [];
         for ($i = 11; $i >= 0; $i--) {
-            $months[] = now()->subMonths($i)->format('Y-m');
-            $labels[] = now()->subMonths($i)->format('M');
+            $months[] = now()->startOfMonth()->subMonths($i)->format('Y-m');
+            $labels[] = now()->startOfMonth()->subMonths($i)->format('M');
         }
 
         $exchangeRate = (float) cache()->remember('setting.exchange_rate_khr_to_usd', 3600, function () {
@@ -36,14 +36,14 @@ class RepaymentsBarChart extends ChartWidget
 
         // Aggregate in DB instead of loading all rows (much faster)
         $collectionsRaw = RepaymentTransaction::query()
-            ->where('transaction_date', '>=', now()->subMonths(11)->startOfMonth())
+            ->where('transaction_date', '>=', now()->startOfMonth()->subMonths(11))
             ->whereNull('repayment_transactions.deleted_at')
             ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
             ->selectRaw('DATE_FORMAT(repayment_transactions.transaction_date, "%Y-%m") as month, loans.currency, SUM(repayment_transactions.amount_paid) as total')
             ->groupBy('month', 'loans.currency')
             ->get();
 
-        $collections = collect($months)->mapWithKeys(fn ($m) => [$m => 0])->all();
+        $collections = array_fill_keys($months, 0);
 
         foreach ($collectionsRaw as $d) {
             $amount = (float) $d->total;

@@ -40,7 +40,8 @@ class LoanCalculator
         };
 
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
-            if ($adminFee <= 0) return 0;
+            if ($adminFee <= 0)
+                return 0;
             // Upfront fee types are recognized when the loan is created, not during repayment.
             if ($adminFeeType !== 'monthly') {
                 return 0;
@@ -49,15 +50,7 @@ class LoanCalculator
             return $applyRounding($totalFeeAmount / $totalPayments, $currency);
         };
 
-        $buildFixedIntervalSchedule = function (int $intervalDays, ?int $totalPaymentsOverride = null) use (
-            $principal,
-            $rate,
-            $duration,
-            $startDateObj,
-            $applyRounding,
-            $calculatePeriodFee,
-            $currency
-        ) {
+        $buildFixedIntervalSchedule = function (int $intervalDays, ?int $totalPaymentsOverride = null) use ($principal, $rate, $duration, $startDateObj, $applyRounding, $calculatePeriodFee, $currency) {
             if ($principal <= 0 || $duration <= 0 || $intervalDays <= 0) {
                 return [];
             }
@@ -124,7 +117,10 @@ class LoanCalculator
                     $paymentDate = new DateTime($cursor->format('Y-m-01'));
                     $paymentDate->setDate($year, $month, min($day, $lastDayOfMonth));
 
-                    if ($paymentDate <= $loanStartDate) {
+                    $interval = $loanStartDate->diff($paymentDate);
+                    $daysDiff = (int) $interval->format('%r%a');
+
+                    if ($daysDiff < 5) {
                         continue;
                     }
 
@@ -153,7 +149,10 @@ class LoanCalculator
             $lastDayOfMonth = (int) $paymentDate->format('t');
             $paymentDate->setDate($year, $month, min($monthlyRepaymentDay, $lastDayOfMonth));
 
-            if ($paymentDate <= $loanStartDate) {
+            $interval = $loanStartDate->diff($paymentDate);
+            $daysDiff = (int) $interval->format('%r%a');
+
+            if ($daysDiff < 5) {
                 $paymentDate->modify('first day of next month');
                 $year = (int) $paymentDate->format('Y');
                 $month = (int) $paymentDate->format('m');
@@ -193,7 +192,7 @@ class LoanCalculator
 
             for ($i = 1; $i <= $totalPayments; $i++) {
                 $paymentMeta = $paymentDates[$i - 1] ?? null;
-                if (! $paymentMeta) {
+                if (!$paymentMeta) {
                     break;
                 }
 
@@ -282,7 +281,7 @@ class LoanCalculator
 
             for ($i = 1; $i <= $totalPayments; $i++) {
                 $paymentMeta = $paymentDates[$i - 1] ?? null;
-                if (! $paymentMeta) {
+                if (!$paymentMeta) {
                     break;
                 }
 
@@ -339,9 +338,9 @@ class LoanCalculator
             unset($pay);
             $results = $allPayments;
         } elseif ($option === 'fixed_daily') {
-            $results = $buildFixedIntervalSchedule(1, $duration);
+            $results = $buildFixedIntervalSchedule(1);
         } elseif ($option === 'fixed_weekly') {
-            $results = $buildFixedIntervalSchedule(7, $duration);
+            $results = $buildFixedIntervalSchedule(7);
         } elseif ($option === 'annuity_monthly') {
             if ($principal <= 0 || $duration <= 0) {
                 return [];
@@ -359,7 +358,7 @@ class LoanCalculator
             } else {
                 $monthlyPayment = $principal / $duration;
             }
-            
+
             $monthlyPayment = $applyRounding($monthlyPayment, $currency);
 
             $remainingBalance = $principal;
