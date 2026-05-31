@@ -25,14 +25,19 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Fieldset;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
+use Illuminate\Support\HtmlString;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Unique;
+use Livewire\Component as Livewire;
 
 use Illuminate\Database\Eloquent\Builder;
 
@@ -81,6 +86,10 @@ class RoleResource extends Resource
                 'hr_employee' => 'Employee & Salary (HR)',
                 'hr_miscellaneous' => 'Miscellaneous Transactions (HR)',
             ],
+            'Financial Management' => [
+                'general_expenses' => 'General Expenses',
+                'general_revenue' => 'General Revenues',
+            ],
             'Reports' => [
                 'reports' => 'Reports Dashboard',
                 'income_statement' => 'Income Statement',
@@ -103,6 +112,55 @@ class RoleResource extends Resource
             'delete' => 'Delete',
             'export' => 'Export',
         ];
+    }
+
+    public static function getSelectAllFormComponent(): Component
+    {
+        return Toggle::make('select_all')
+            ->onIcon('heroicon-s-shield-check')
+            ->offIcon('heroicon-s-shield-exclamation')
+            ->label(__('filament-shield::filament-shield.field.select_all.name'))
+            ->helperText(fn (): HtmlString => new HtmlString(__('filament-shield::filament-shield.field.select_all.message')))
+            ->live()
+            ->afterStateUpdated(function (Livewire $livewire, Set $set, Get $get, bool $state): void {
+                if (($get('category') ?? 'admin') === 'system_ui') {
+                    static::toggleSystemUiViaSelectAll($set, $state);
+
+                    return;
+                }
+
+                static::toggleEntitiesViaSelectAll($livewire, $set, $state);
+            })
+            ->dehydrated(fn (bool $state): bool => $state);
+    }
+
+    protected static function toggleSystemUiViaSelectAll(Set $set, bool $state): void
+    {
+        foreach (static::getUiFeatureGroups() as $groupName => $features) {
+            foreach (array_keys($features) as $key) {
+                $set("ui_feature_{$key}_show", $state);
+
+                if ($groupName === 'Menu Visibility') {
+                    $set("ui_feature_{$key}_actions", []);
+
+                    continue;
+                }
+
+                $set(
+                    "ui_feature_{$key}_actions",
+                    $state ? array_keys(static::getSystemUiActionsForGroup($groupName)) : []
+                );
+            }
+        }
+    }
+
+    protected static function getSystemUiActionsForGroup(string $groupName): array
+    {
+        if ($groupName === 'Reports') {
+            return ['export' => 'Export'];
+        }
+
+        return static::getUiActions();
     }
 
     public static function expandUiPermissionAliases(Collection $permissions): Collection
@@ -251,6 +309,8 @@ class RoleResource extends Resource
                                     ->required()
                                     ->live()
                                     ->afterStateUpdated(function ($state, $set) {
+                                        $set('select_all', false);
+
                                         if ($state === 'system_ui') {
                                             $set('guard_name', 'web');
                                         }
@@ -306,13 +366,7 @@ class RoleResource extends Resource
                                             }),
                                         CheckboxList::make("ui_feature_{$key}_actions")
                                             ->label('Actions')
-                                            ->options(function () use ($groupName) {
-                                                if ($groupName === 'Reports') {
-                                                    return ['export' => 'Export'];
-                                                }
-
-                                                return static::getUiActions();
-                                            })
+                                            ->options(fn () => static::getSystemUiActionsForGroup($groupName))
                                             ->columns(2)
                                             ->visible(fn($get) => $get("ui_feature_{$key}_show") && $groupName !== 'Menu Visibility')
                                             ->afterStateHydrated(function (CheckboxList $component, $record) use ($key) {

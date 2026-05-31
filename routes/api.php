@@ -130,8 +130,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/user', function (Request $request) {
         $user = $request->user();
-        $perms = $user->getAllPermissions()->pluck('name');
-        $roles = $user->roles->pluck('name');
+        $perms = method_exists($user, 'effectivePermissionNames')
+            ? $user->effectivePermissionNames()
+            : $user->getAllPermissions()->pluck('name');
+        $roles = method_exists($user, 'effectiveRoleNames')
+            ? $user->effectiveRoleNames()
+            : $user->roles->pluck('name');
 
         return response()->json([
             'id' => $user->id,

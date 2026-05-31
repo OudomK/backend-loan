@@ -2,8 +2,11 @@
 
 namespace App\Filament\Resources\Users\Tables;
 
+use BezhanSalleh\FilamentShield\Support\Utils;
+use Filament\Facades\Filament;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ForceDeleteAction;
@@ -17,12 +20,25 @@ use Filament\Tables\Table;
 
 class UsersTable
 {
+    private static function isTrashed($record): bool
+    {
+        return method_exists($record, 'trashed') && $record->trashed();
+    }
+
+    private static function canManageRecord($record): bool
+    {
+        /** @var \App\Models\User|null $user */
+        $user = Filament::auth()->user();
+        $superAdminRole = Utils::getSuperAdminName();
+
+        return $user?->hasRole($superAdminRole) || ! $record->hasRole($superAdminRole);
+    }
+
     public static function configure(Table $table): Table
     {
         return $table
             ->heading('Users')
             ->description('Manage system users, their access credentials, and assigned roles.')
-            ->persistFiltersInSession()
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
@@ -55,14 +71,28 @@ class UsersTable
             ->filters([
                 TrashedFilter::make(),
                 SelectFilter::make('roles')
-                    ->relationship('roles', 'name'),
+                    ->relationship('roles', 'name', function ($query) {
+                        $superAdminRole = Utils::getSuperAdminName();
+                        /** @var \App\Models\User|null $user */
+                        $user = Filament::auth()->user();
+
+                        if (! $user?->hasRole($superAdminRole)) {
+                            $query->where('name', '!=', $superAdminRole);
+                        }
+                    }),
             ])
+            ->checkIfRecordIsSelectableUsing(fn ($record): bool => self::canManageRecord($record))
             ->recordActions([
                 EditAction::make()
                     ->iconButton()
-                    ->tooltip('Manage user'),
-                RestoreAction::make(),
-                ForceDeleteAction::make(),
+                    ->tooltip('Manage user')
+                    ->visible(fn ($record): bool => self::canManageRecord($record) && ! self::isTrashed($record)),
+                DeleteAction::make()
+                    ->visible(fn ($record): bool => self::canManageRecord($record) && ! self::isTrashed($record)),
+                RestoreAction::make()
+                    ->visible(fn ($record): bool => self::canManageRecord($record) && self::isTrashed($record)),
+                ForceDeleteAction::make()
+                    ->visible(fn ($record): bool => self::canManageRecord($record) && self::isTrashed($record)),
             ])
             ->headerActions([
                 CreateAction::make()

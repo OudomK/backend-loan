@@ -10,10 +10,11 @@ use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Support\Facades\Storage;
 
+use BezhanSalleh\FilamentShield\Support\Utils;
 use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable implements FilamentUser, HasAvatar
@@ -30,6 +31,66 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
     public function getFilamentAvatarUrl(): ?string
     {
         return $this->avatar_url ? asset('storage/' . $this->avatar_url) : null;
+    }
+
+    public function effectiveRoleNames(): Collection
+    {
+        $roles = $this->relationLoaded('roles')
+            ? $this->roles->pluck('name')
+            : $this->roles()->pluck('name');
+
+        $legacyRole = trim((string) ($this->role ?? ''));
+
+        if ($legacyRole !== '') {
+            $roles->push($legacyRole);
+        }
+
+        return $roles
+            ->filter()
+            ->unique(fn (string $role): string => strtolower($role))
+            ->values();
+    }
+
+    public function effectivePermissionNames(): Collection
+    {
+        return $this->getAllPermissions()
+            ->pluck('name')
+            ->merge($this->legacyRolePermissionNames())
+            ->unique()
+            ->values();
+    }
+
+    public function hasEffectivePermission(string $ability): bool
+    {
+        $superAdminRole = Utils::getSuperAdminName();
+
+        if ($this->hasRole($superAdminRole) || strtolower((string) ($this->role ?? '')) === strtolower($superAdminRole)) {
+            return true;
+        }
+
+        return $this->effectivePermissionNames()->contains($ability);
+    }
+
+    private function legacyRolePermissionNames(): Collection
+    {
+        $legacyRole = trim((string) ($this->role ?? ''));
+
+        if ($legacyRole === '') {
+            return collect();
+        }
+
+        $roleModel = config('permission.models.role');
+
+        if (! is_string($roleModel) || ! class_exists($roleModel)) {
+            return collect();
+        }
+
+        $role = $roleModel::query()
+            ->with('permissions')
+            ->whereRaw('LOWER(name) = ?', [strtolower($legacyRole)])
+            ->first();
+
+        return $role?->permissions?->pluck('name') ?? collect();
     }
 
     /**

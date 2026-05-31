@@ -9,6 +9,8 @@ use App\Filament\Resources\Users\Schemas\UserForm;
 use App\Filament\Resources\Users\Tables\UsersTable;
 use App\Models\User;
 use BackedEnum;
+use BezhanSalleh\FilamentShield\Support\Utils;
+use Filament\Facades\Filament;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -35,10 +37,20 @@ class UserResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()
+        $query = parent::getEloquentQuery()
             ->withoutGlobalScopes([
                 SoftDeletingScope::class,
             ]);
+
+        /** @var \App\Models\User|null $user */
+        $user = Filament::auth()->user();
+        $superAdminRole = Utils::getSuperAdminName();
+
+        if (! $user?->hasRole($superAdminRole)) {
+            $query->whereDoesntHave('roles', fn (Builder $query) => $query->where('name', $superAdminRole));
+        }
+
+        return $query;
     }
 
     public static function form(Schema $schema): Schema
@@ -67,4 +79,3 @@ class UserResource extends Resource
         ];
     }
 }
-

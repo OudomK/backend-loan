@@ -51,14 +51,18 @@ class AuthController extends Controller
             if (method_exists($user, 'roles') && $user->relationLoaded('roles') === false) {
                 $user->load('roles');
             }
-            $roles = $user->roles?->pluck('name') ?? collect();
+            $roles = method_exists($user, 'effectiveRoleNames')
+                ? $user->effectiveRoleNames()
+                : ($user->roles?->pluck('name') ?? collect());
             if ($roles->isNotEmpty()) {
                 $role = $roles->first();
             }
-            $permissions = $user->roles?->flatMap(fn ($r) => $r->permissions ?? collect())->pluck('name')
-                ->merge($user->permissions?->pluck('name') ?? collect())
-                ->unique()
-                ->values() ?? collect();
+            $permissions = method_exists($user, 'effectivePermissionNames')
+                ? $user->effectivePermissionNames()
+                : ($user->roles?->flatMap(fn ($r) => $r->permissions ?? collect())->pluck('name')
+                    ->merge($user->permissions?->pluck('name') ?? collect())
+                    ->unique()
+                    ->values() ?? collect());
         } catch (\Throwable $e) {
             // Spatie not set up or no roles: use $user->role only
         }
