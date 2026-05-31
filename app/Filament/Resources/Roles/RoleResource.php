@@ -141,6 +141,9 @@ class RoleResource extends Resource
         if (!\App\Services\FeatureToggle::isAccessible('payment_qrs', $user) && $fqcn === \App\Filament\Resources\PaymentQrs\PaymentQrResource::class) {
             return true;
         }
+        if (!\App\Services\FeatureToggle::isAccessible('custom_fonts', $user) && $fqcn === \App\Filament\Resources\CustomFonts\CustomFontResource::class) {
+            return true;
+        }
         if (!\App\Services\FeatureToggle::isAccessible('activity_logs', $user) && $fqcn === \App\Filament\Resources\ActivityLogs\ActivityLogResource::class) {
             return true;
         }

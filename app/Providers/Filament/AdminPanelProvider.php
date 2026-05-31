@@ -117,11 +117,48 @@ class AdminPanelProvider extends PanelProvider
 
     private function renderAdminFontStyle(): string
     {
+        $fontFaceCss = '';
+        try {
+            if (Schema::hasTable('custom_fonts')) {
+                $activeCustomFonts = \App\Models\CustomFont::query()
+                    ->where('is_active', true)
+                    ->when(
+                        Schema::hasColumn('custom_fonts', 'is_system'),
+                        fn ($query) => $query->where('is_system', false),
+                    )
+                    ->get();
+                foreach ($activeCustomFonts as $font) {
+                    $url = asset('storage/' . $font->file_path);
+                    $format = str_ends_with(strtolower($font->file_path), '.otf') ? 'opentype' : 'truetype';
+                    $fontFaceCss .= "
+                    @font-face {
+                        font-family: '{$font->name}';
+                        src: url('{$url}') format('{$format}');
+                        font-weight: normal;
+                        font-style: normal;
+                        font-display: swap;
+                    }
+                    ";
+                }
+            }
+        } catch (\Throwable $e) {}
+
         return sprintf(
-            '<style id="admin-font-family-override">
-                :root{--font-family:%s;}
+            '%s
+            <style id="admin-font-family-override">
+                :root, html.fi, body.fi-body {
+                    --font-family: %s !important;
+                    --fi-font-family: %s !important;
+                    font-family: var(--font-family) !important;
+                }
+                .fi-body,
+                .fi-body :where(.fi-page, .fi-header, .fi-sidebar, .fi-ta, .fi-fo, .fi-btn, .fi-input, .fi-select-input, .fi-dropdown, .fi-modal, .fi-section, .fi-tabs, .fi-breadcrumbs) {
+                    font-family: var(--font-family) !important;
+                }
                 .fi-logo, .fi-sidebar-header img, .fi-sidebar-header a img { border-radius: 0.70rem !important; overflow: hidden !important; }
             </style>',
+            $fontFaceCss ? "<style>{$fontFaceCss}</style>" : '',
+            $this->resolveAdminFontStack(),
             $this->resolveAdminFontStack(),
         );
     }

@@ -45,6 +45,7 @@ class AdminControl extends Page implements HasForms
             'capital_share' => FeatureToggle::isEnabled('capital_share'),
             'savings' => FeatureToggle::isEnabled('savings'),
             'payment_qrs' => FeatureToggle::isEnabled('payment_qrs'),
+            'custom_fonts' => FeatureToggle::isEnabled('custom_fonts'),
             'activity_logs' => FeatureToggle::isEnabled('activity_logs'),
         ]);
     }
@@ -59,6 +60,10 @@ class AdminControl extends Page implements HasForms
                         Toggle::make('payment_qrs')
                             ->label('Enable Payment QRs')
                             ->helperText('Manage QR codes for accepting payments.')
+                            ->default(true),
+                        Toggle::make('custom_fonts')
+                            ->label('Enable Custom Fonts')
+                            ->helperText('Allow admins to import and manage custom fonts.')
                             ->default(true),
                         Toggle::make('activity_logs')
                             ->label('Enable Activity Logs')
@@ -129,6 +134,7 @@ class AdminControl extends Page implements HasForms
         FeatureToggle::set('capital_share', $data['capital_share']);
         FeatureToggle::set('savings', $data['savings']);
         FeatureToggle::set('payment_qrs', $data['payment_qrs']);
+        FeatureToggle::set('custom_fonts', $data['custom_fonts']);
         FeatureToggle::set('activity_logs', $data['activity_logs']);
         $this->ensureAdminRoleHasPermissions();
 

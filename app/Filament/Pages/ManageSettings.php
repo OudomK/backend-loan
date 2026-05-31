@@ -24,16 +24,7 @@ class ManageSettings extends Page implements HasForms
     use InteractsWithForms;
     use HasPageShield;
 
-    /**
-     * @var array<string, string>
-     */
-    private const FRONTEND_FONT_OPTIONS = [
-        'battambang' => 'Battambang',
-        'kantumruy_pro' => 'Kantumruy Pro',
-        'krasar' => 'Krasar',
-        'moul' => 'Moul',
-        'noto_sans_khmer' => 'Noto Sans Khmer',
-    ];
+
 
     public static function getNavigationIcon(): string|\BackedEnum|\Illuminate\Contracts\Support\Htmlable|null
     {
@@ -86,7 +77,7 @@ class ManageSettings extends Page implements HasForms
     {
         $dbSettings = Setting::pluck('value', 'key')->toArray();
         $frontendFont = strtolower((string) ($dbSettings['frontend_font_family'] ?? 'battambang'));
-        if (!array_key_exists($frontendFont, self::FRONTEND_FONT_OPTIONS)) {
+        if (!array_key_exists($frontendFont, AdminFontRegistry::options())) {
             $frontendFont = 'battambang';
         }
 
@@ -123,6 +114,7 @@ class ManageSettings extends Page implements HasForms
     {
         return $schema
             ->components([
+                // ── Me ──────────────────────────────────────────────────────
                 // ── Me ──────────────────────────────────────────────────────
                 Section::make('My Account')
                     ->hidden(fn() => $this->activeTab !== 'me')
@@ -171,6 +163,7 @@ class ManageSettings extends Page implements HasForms
                     ])->columns(2),
 
                 // ── Company Profile ─────────────────────────────────────────
+                // ── Company Profile ─────────────────────────────────────────
                 Section::make('Company Profile')
                     ->hidden(fn() => $this->activeTab !== 'profile')
                     ->schema([
@@ -213,6 +206,7 @@ class ManageSettings extends Page implements HasForms
                     ])->columns(2),
 
                 // ── Exchange Rate ────────────────────────────────────────────
+                // ── Exchange Rate ────────────────────────────────────────────
                 Section::make('Exchange Rate')
                     ->hidden(fn() => $this->activeTab !== 'exchange_rate')
                     ->schema([
@@ -224,10 +218,71 @@ class ManageSettings extends Page implements HasForms
                             ->required(),
                     ]),
 
-                // ── Loan Configuration ───────────────────────────────────────
+                // ── Font Settings ───────────────────────────────────────
+                // ── Font Settings ───────────────────────────────────────
                 Section::make('Font Settings')
                     ->hidden(fn() => $this->activeTab !== 'font')
                     ->schema([
+                        FileUpload::make('import_font_file')
+                            ->label('Import New Font File (.ttf, .otf)')
+                            ->disk('public')
+                            ->directory('custom-fonts')
+                            ->acceptedFileTypes(['font/ttf', 'font/otf', 'application/x-font-truetype', 'application/x-font-opentype', 'font/sfnt'])
+                            ->dehydrated(false)
+                            ->live()
+                            ->helperText('Upload a .ttf or .otf file from your computer to import it instantly into the system as a custom font.')
+                            ->afterStateUpdated(function ($state, callable $set) {
+                                if (empty($state)) return;
+                                
+                                try {
+                                    $filePath = $state;
+                                    $basename = pathinfo($filePath, PATHINFO_FILENAME);
+                                    
+                                    // Make name pretty, e.g. "KANTUMRUYPRO-BOLD" -> "Kantumruypro Bold"
+                                    $cleanName = preg_replace('/[^a-zA-Z0-9\s]/', ' ', $basename);
+                                    $cleanName = ucwords(trim(preg_replace('/\s+/', ' ', strtolower($cleanName))));
+                                    
+                                    // Key must be unique slug
+                                    $key = strtolower(str_replace(' ', '_', $cleanName));
+                                    
+                                    \App\Models\CustomFont::updateOrCreate(
+                                        ['key' => $key],
+                                        [
+                                            'name' => $cleanName,
+                                            'file_path' => $filePath,
+                                            'is_system' => false,
+                                            'is_active' => true,
+                                        ]
+                                    );
+                                    
+                                    $set('import_font_file', null);
+                                    
+                                    Notification::make()
+                                        ->title("Font '{$cleanName}' imported successfully!")
+                                        ->success()
+                                        ->send();
+                                        
+                                    $set('available_fonts_count', (string) \App\Support\AdminFontRegistry::count());
+                                    
+                                } catch (\Throwable $e) {
+                                    Notification::make()
+                                        ->title('Failed to import font')
+                                        ->danger()
+                                        ->body($e->getMessage())
+                                        ->send();
+                                }
+                            }),
+
+                        TextEntry::make('manage_fonts')
+                            ->label('Manage Imported Fonts')
+                            ->state(new \Illuminate\Support\HtmlString('
+                                <a href="' . \App\Filament\Resources\CustomFonts\CustomFontResource::getUrl() . '" 
+                                   class="text-primary-600 font-bold underline hover:text-primary-500">
+                                    Click here to edit, remove, or deactivate imported fonts
+                                </a>
+                            '))
+                            ->html(),
+
                         TextInput::make('available_fonts_count')
                             ->label('Total Available Fonts')
                             ->default((string) AdminFontRegistry::count())
@@ -235,35 +290,35 @@ class ManageSettings extends Page implements HasForms
                             ->dehydrated(false),
                         Select::make('admin_font_family')
                             ->label('Admin Panel Font')
-                            ->options(AdminFontRegistry::options())
+                            ->options(fn () => AdminFontRegistry::options())
                             ->default(AdminFontRegistry::defaultKey())
                             ->required()
                             ->native(false)
-                            ->helperText('Available fonts: ' . AdminFontRegistry::count() . ' (' . AdminFontRegistry::labelsAsText() . ')'),
+                            ->helperText('System fonts: ' . AdminFontRegistry::coreCount() . '. Imported active fonts: ' . AdminFontRegistry::activeCustomCount() . '.'),
                         Select::make('frontend_font_family')
                             ->label('QuickFund App Font')
-                            ->options(self::FRONTEND_FONT_OPTIONS)
+                            ->options(fn () => AdminFontRegistry::options())
                             ->default('battambang')
                             ->required()
                             ->native(false)
                             ->helperText('Used by Flutter frontend app. The app auto-syncs this setting about every 5 seconds.'),
                         Select::make('pdf_export_font')
                             ->label('PDF Export Font')
-                            ->options(self::FRONTEND_FONT_OPTIONS)
+                            ->options(fn () => AdminFontRegistry::options())
                             ->default('noto_sans_khmer')
                             ->required()
                             ->native(false)
                             ->helperText('Used by all PDF exports generated from the Flutter frontend app.'),
                         Select::make('print_schedule_font')
                             ->label('Print Schedule Font')
-                            ->options(self::FRONTEND_FONT_OPTIONS)
+                            ->options(fn () => AdminFontRegistry::options())
                             ->default('noto_sans_khmer')
                             ->required()
                             ->native(false)
                             ->helperText('Used by repayment schedule print preview and printed schedule output.'),
                         Select::make('excel_export_font')
                             ->label('Excel Export Font')
-                            ->options(array_combine(array_values(AdminFontRegistry::options()), array_values(AdminFontRegistry::options())))
+                            ->options(fn () => array_combine(array_values(AdminFontRegistry::options()), array_values(AdminFontRegistry::options())))
                             ->default('Khmer OS Siemreap')
                             ->required()
                             ->native(false)

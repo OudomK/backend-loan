@@ -62,6 +62,27 @@ Route::get('/app/footer-user', function () {
 
 Route::get('/app/settings', function () {
     $dbSettings = \App\Models\Setting::pluck('value', 'key')->toArray();
+    $customFonts = [];
+    if (\Illuminate\Support\Facades\Schema::hasTable('custom_fonts')) {
+        $query = \App\Models\CustomFont::query()
+            ->where('is_active', true);
+
+        if (\Illuminate\Support\Facades\Schema::hasColumn('custom_fonts', 'is_system')) {
+            $query->where('is_system', false);
+        }
+
+        $customFonts = $query
+            ->orderBy('name')
+            ->get(['key', 'name', 'file_path'])
+            ->map(fn ($font) => [
+                'key' => $font->key,
+                'name' => $font->name,
+                'url' => asset('storage/' . $font->file_path),
+            ])
+            ->values()
+            ->all();
+    }
+
     $toBool = static function (mixed $value, bool $fallback = false): bool {
         if ($value === null) {
             return $fallback;
@@ -86,6 +107,7 @@ Route::get('/app/settings', function () {
         'frontend_font_family' => $dbSettings['frontend_font_family'] ?? 'battambang',
         'pdf_export_font' => $dbSettings['pdf_export_font'] ?? ($dbSettings['frontend_font_family'] ?? 'noto_sans_khmer'),
         'print_schedule_font' => $dbSettings['print_schedule_font'] ?? ($dbSettings['pdf_export_font'] ?? ($dbSettings['frontend_font_family'] ?? 'noto_sans_khmer')),
+        'custom_fonts' => $customFonts,
         'excel_export_font' => $dbSettings['excel_export_font'] ?? 'Khmer OS Siemreap',
         'copyright_text' => $dbSettings['copyright_text'] ?? ('© ' . date('Y') . ' ' . Config::get('app.company_name')),
         'exchange_rate' => $dbSettings['exchange_rate_khr_to_usd'] ?? $dbSettings['exchange_rate'] ?? 4000,

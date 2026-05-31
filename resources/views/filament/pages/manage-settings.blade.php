@@ -142,7 +142,7 @@
 
     <div class="settings-layout">
 
-        {{-- ── Sidebar ─────────────────────────────────────────────────── --}}
+        {{-- ── Sidebar ─────────────────────────────────────────────────────────── --}}
         <nav class="settings-sidebar">
             @foreach ($navItems as $item)
                 <button
@@ -162,7 +162,7 @@
             @endforeach
         </nav>
 
-        {{-- ── Content ──────────────────────────────────────────────────── --}}
+        {{-- ── Content ─────────────────────────────────────────────────────────── --}}
         <div class="settings-content">
             <form wire:submit="save">
                 {{ $this->form }}
