@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Payment;
+use App\Support\CurrencyHelper;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -53,13 +54,10 @@ class UpcomingDuePayments extends BaseWidget
 
                 Tables\Columns\TextColumn::make('total_due')
                     ->label('Amount Due')
-                    ->formatStateUsing(function ($state, $record) {
-                        $amount = (float) $state;
-                        $isKhr = str_starts_with((string) ($record->loan->currency ?? ''), 'KHR');
-                        return $isKhr
-                            ? '៛ ' . number_format($amount, 0)
-                            : '$' . number_format($amount, 2);
-                    })
+                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan->currency ?? CurrencyHelper::USD,
+                    ))
                     ->alignEnd()
                     ->weight('bold')
                     ->color('warning'),

@@ -10,6 +10,7 @@ use App\Models\Loan;
 use App\Models\Payment;
 use App\Models\RepaymentTransaction;
 use App\Models\Setting;
+use App\Support\CurrencyHelper;
 use Carbon\Carbon;
 use Filament\Widgets\StatsOverviewWidget as BaseWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -272,14 +273,14 @@ class StatsOverview extends BaseWidget
 
         return [
             // ── Row 1: Core KPIs ─────────────────────────────────────────
-            Stat::make('Pending Approvals', new \Illuminate\Support\HtmlString($pendingLoansData['count'] . ' <span class="text-sm font-normal text-gray-500">| $' . number_format($pendingLoansData['usd'], 0) . '</span>'))
+            Stat::make('Pending Approvals', new \Illuminate\Support\HtmlString($pendingLoansData['count'] . ' <span class="text-sm font-normal text-gray-500">| ' . CurrencyHelper::displayDualPlain($pendingLoansData['usd'], $pendingLoansData['khr']) . '</span>'))
                 ->description('Applications waiting for review')
                 ->descriptionIcon('heroicon-m-clock')
                 ->icon('heroicon-m-document-text')
                 ->chart($pendingTrend)
                 ->color('warning'),
 
-            Stat::make('Portfolio Balance', new \Illuminate\Support\HtmlString('$' . number_format($outstandingUSD, 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($outstandingKHR, 0) . '</span>'))
+            Stat::make('Portfolio Balance', new \Illuminate\Support\HtmlString(CurrencyHelper::displayDual($outstandingUSD, $outstandingKHR)))
                 ->description('Active outstanding principal')
                 ->descriptionIcon('heroicon-m-banknotes')
                 ->icon('heroicon-m-wallet')
@@ -293,21 +294,21 @@ class StatsOverview extends BaseWidget
                 ->chart($borrowersTrend)
                 ->color('success'),
 
-            Stat::make('MTD Disbursements', new \Illuminate\Support\HtmlString('$' . number_format($disbursements['usd'], 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($disbursements['khr'], 0) . '</span>'))
+            Stat::make('MTD Disbursements', new \Illuminate\Support\HtmlString(CurrencyHelper::displayDual($disbursements['usd'], $disbursements['khr'])))
                 ->description('Disbursed this month')
                 ->descriptionIcon('heroicon-m-arrow-up-right')
                 ->icon('heroicon-m-arrow-trending-up')
                 ->chart($disbursementTrend)
                 ->color('success'),
 
-            Stat::make('MTD Collections', new \Illuminate\Support\HtmlString('$' . number_format($collections['usd'], 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($collections['khr'], 0) . '</span>'))
+            Stat::make('MTD Collections', new \Illuminate\Support\HtmlString(CurrencyHelper::displayDual($collections['usd'], $collections['khr'])))
                 ->description('Repayments this month')
                 ->descriptionIcon('heroicon-m-check-badge')
                 ->icon('heroicon-m-arrow-down-left')
                 ->chart($collectionTrend)
                 ->color('info'),
 
-            Stat::make('Total Borrowing', new \Illuminate\Support\HtmlString('$' . number_format($borrowing['usd'], 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($borrowing['khr'], 0) . '</span>'))
+            Stat::make('Total Borrowing', new \Illuminate\Support\HtmlString(CurrencyHelper::displayDual($borrowing['usd'], $borrowing['khr'])))
                 ->description('Active external funding')
                 ->descriptionIcon('heroicon-m-building-library')
                 ->icon('heroicon-m-building-library')
@@ -316,13 +317,18 @@ class StatsOverview extends BaseWidget
 
             // ── Row 2: Risk & Fund Metrics ───────────────────────────────
             Stat::make('Portfolio At Risk (PAR 1%)', $parPercentage . '%')
-                ->description(new \Illuminate\Support\HtmlString('$' . number_format($parAmountUSD, 0) . ' &bull; ៛' . number_format($parAmountKHR, 0) . ' at risk'))
+                ->description(new \Illuminate\Support\HtmlString(
+                    CurrencyHelper::display($parAmountUSD, CurrencyHelper::USD, 0)
+                    . ' &bull; '
+                    . CurrencyHelper::display($parAmountKHR, CurrencyHelper::KHR, 0)
+                    . ' at risk'
+                ))
                 ->descriptionIcon('heroicon-m-exclamation-triangle')
                 ->icon('heroicon-m-shield-exclamation')
                 ->chart([3, 5, 4, 6, 5, 7, $parPercentage])
                 ->color($parPercentage > 5 ? 'danger' : ($parPercentage > 2 ? 'warning' : 'success')),
 
-            Stat::make('Overdue Loans', new \Illuminate\Support\HtmlString($overdueLoans . ' <span class="text-sm font-normal text-gray-500">| $' . number_format($parAmountUSD, 0) . ' • ៛' . number_format($parAmountKHR, 0) . '</span>'))
+            Stat::make('Overdue Loans', new \Illuminate\Support\HtmlString($overdueLoans . ' <span class="text-sm font-normal text-gray-500">| ' . CurrencyHelper::displayDualPlain($parAmountUSD, $parAmountKHR) . '</span>'))
                 ->description('Loans past due date')
                 ->descriptionIcon('heroicon-m-bell-alert')
                 ->icon('heroicon-m-bell-alert')
@@ -336,7 +342,7 @@ class StatsOverview extends BaseWidget
                 ->chart([85, 90, 88, 92, 87, 91, $collectionRate])
                 ->color($collectionRate >= 90 ? 'success' : ($collectionRate >= 70 ? 'warning' : 'danger')),
 
-            Stat::make('Written-Off', new \Illuminate\Support\HtmlString($writtenOffData['count'] . ' <span class="text-sm font-normal text-gray-500">| $' . number_format($writtenOffData['usd'], 0) . '</span>'))
+            Stat::make('Written-Off', new \Illuminate\Support\HtmlString($writtenOffData['count'] . ' <span class="text-sm font-normal text-gray-500">| ' . CurrencyHelper::displayDualPlain($writtenOffData['usd'], $writtenOffData['khr']) . '</span>'))
                 ->description('Total loans written off')
                 ->descriptionIcon('heroicon-m-x-circle')
                 ->icon('heroicon-m-trash')
@@ -350,7 +356,7 @@ class StatsOverview extends BaseWidget
                 ->chart($investorsTrend)
                 ->color('primary'),
 
-            Stat::make('Capital Shares', new \Illuminate\Support\HtmlString('$' . number_format($capital['usd'], 0) . ' <span class="text-sm font-normal text-gray-500">| ៛' . number_format($capital['khr'], 0) . '</span>'))
+            Stat::make('Capital Shares', new \Illuminate\Support\HtmlString(CurrencyHelper::displayDual($capital['usd'], $capital['khr'])))
                 ->description('Active share capital')
                 ->descriptionIcon('heroicon-m-currency-dollar')
                 ->icon('heroicon-m-banknotes')

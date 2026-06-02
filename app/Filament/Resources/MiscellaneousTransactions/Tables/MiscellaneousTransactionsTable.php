@@ -59,7 +59,12 @@ class MiscellaneousTransactionsTable
                     ->visibleFrom('2xl'),
                 TextColumn::make('amount')
                     ->label('Amount')
-                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format($state, $record->currency, true, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::format(
+                        $state,
+                        $record->currency,
+                        false,
+                        CurrencyHelper::decimals($record->currency),
+                    ))
                     ->alignEnd()
                     ->sortable(),
                 TextColumn::make('description')

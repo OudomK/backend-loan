@@ -5,6 +5,7 @@ namespace App\Filament\Widgets;
 use App\Models\Loan;
 use App\Models\LoanOfficer;
 use App\Models\RepaymentTransaction;
+use App\Support\CurrencyHelper;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -50,7 +51,7 @@ class LoanOfficerPerformance extends BaseWidget
 
                 Tables\Columns\TextColumn::make('portfolio_sum')
                     ->label('Portfolio')
-                    ->formatStateUsing(fn ($state) => '$' . number_format((float) ($state ?? 0), 2))
+                    ->formatStateUsing(fn ($state) => CurrencyHelper::display((float) ($state ?? 0), CurrencyHelper::USD))
                     ->alignEnd()
                     ->color('success')
                     ->weight('bold'),
@@ -68,7 +69,7 @@ class LoanOfficerPerformance extends BaseWidget
                             ->whereYear('transaction_date', now()->year)
                             ->where('collector_id', $record->id)
                             ->sum('amount_paid');
-                        return '$' . number_format($total, 2);
+                        return CurrencyHelper::display($total, CurrencyHelper::USD);
                     })
                     ->alignEnd()
                     ->color('info')

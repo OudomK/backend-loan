@@ -10,6 +10,7 @@ use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
+use App\Support\CurrencyHelper;
 use Filament\Tables\Table;
 
 class ExpensesTable
@@ -32,7 +33,7 @@ class ExpensesTable
 
                 TextColumn::make('amount')
                     ->label('Amount')
-                    ->formatStateUsing(fn ($state, $record) => ($record->currency === 'KHR' ? '៛' : '$') . number_format($state, $record->currency === 'KHR' ? 0 : 2))
+                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display($state, $record->currency ?? CurrencyHelper::USD))
                     ->sortable()
                     ->alignEnd()
                     ->weight('bold'),

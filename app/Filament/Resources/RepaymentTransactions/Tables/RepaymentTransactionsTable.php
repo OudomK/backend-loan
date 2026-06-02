@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\RepaymentTransactions\Tables;
 
+use App\Support\CurrencyHelper;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
@@ -37,18 +38,32 @@ class RepaymentTransactionsTable
                     ])->filter()->implode(' • ')),
                 TextColumn::make('amount_paid')
                     ->label('Total Paid')
-                    ->state(fn ($record): float => round(
+                    ->getStateUsing(fn ($record): float => round(
                         ((string) $record->repayment_type === 'Withdraw' ? -(float) $record->amount_paid : (float) $record->amount_paid)
                         + (float) $record->penalty_paid
                         + (float) $record->fee_paid,
                         2
                     ))
-                    ->money(fn ($record): string => self::resolveCurrencyCode($record))
+                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan?->currency ?? CurrencyHelper::USD,
+                    ))
+                    ->alignEnd()
                     ->sortable(),
                 TextColumn::make('principal_paid')
-                    ->money(fn ($record): string => self::resolveCurrencyCode($record)),
+                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan?->currency ?? CurrencyHelper::USD,
+                    ))
+                    ->alignEnd()
+                    ->sortable(),
                 TextColumn::make('interest_paid')
-                    ->money(fn ($record): string => self::resolveCurrencyCode($record)),
+                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan?->currency ?? CurrencyHelper::USD,
+                    ))
+                    ->alignEnd()
+                    ->sortable(),
                 TextColumn::make('repayment_type')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
@@ -116,11 +131,6 @@ class RepaymentTransactionsTable
             ->bulkActions([]);
     }
 
-    private static function resolveCurrencyCode(object $record): string
-    {
-        return str_starts_with(strtoupper((string) $record->loan?->currency), 'KHR') ? 'KHR' : 'USD';
-    }
-
     private static function formatDate(?string $date): ?string
     {
         if (blank($date)) {
@@ -132,12 +142,5 @@ class RepaymentTransactionsTable
         } catch (\Throwable) {
             return $date;
         }
-    }
-
-    private static function formatAmount(float $amount, string $currency): string
-    {
-        return $currency === 'KHR'
-            ? 'KHR ' . number_format($amount, 0)
-            : '$' . number_format($amount, 2);
     }
 }

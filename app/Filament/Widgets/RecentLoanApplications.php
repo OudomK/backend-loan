@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\Loan;
+use App\Support\CurrencyHelper;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -50,13 +51,10 @@ class RecentLoanApplications extends BaseWidget
 
                 Tables\Columns\TextColumn::make('amount')
                     ->label('Amount')
-                    ->formatStateUsing(function ($state, $record) {
-                        $amount = (float) $state;
-                        $isKhr = str_starts_with((string) ($record->currency ?? ''), 'KHR');
-                        return $isKhr
-                            ? '៛ ' . number_format($amount, 0)
-                            : '$' . number_format($amount, 2);
-                    })
+                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                        (float) $state,
+                        $record->currency ?? CurrencyHelper::USD,
+                    ))
                     ->alignEnd()
                     ->weight('bold')
                     ->color('success'),

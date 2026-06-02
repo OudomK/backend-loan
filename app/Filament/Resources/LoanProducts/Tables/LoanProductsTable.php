@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LoanProducts\Tables;
 
+use App\Support\CurrencyHelper;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -79,8 +80,28 @@ class LoanProductsTable
                         TextColumn::make('total_outstanding')
                             ->state(function ($record) {
                                 $loans = $record->loans()->where('status', 'active')->get();
-                                $outstanding = $loans->sum('amount') - $loans->sum('total_paid');
-                                return '$' . number_format($outstanding, 2);
+                                $outstandingUsd = 0.0;
+                                $outstandingKhr = 0.0;
+
+                                foreach ($loans as $loan) {
+                                    $outstanding = (float) $loan->amount - (float) ($loan->total_paid ?? 0);
+                                    if ($outstanding <= 0.01) {
+                                        continue;
+                                    }
+
+                                    if (str_starts_with((string) ($loan->currency ?? 'USD'), 'KHR')) {
+                                        $outstandingKhr += $outstanding;
+                                    } else {
+                                        $outstandingUsd += $outstanding;
+                                    }
+                                }
+
+                                return CurrencyHelper::displayDualPlain(
+                                    $outstandingUsd,
+                                    $outstandingKhr,
+                                    2,
+                                    0,
+                                );
                             })
                             ->description('Outstanding', position: 'above')
                             ->weight('bold')

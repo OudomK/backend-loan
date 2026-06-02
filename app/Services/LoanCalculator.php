@@ -68,11 +68,12 @@ class LoanCalculator
                 $currentPaymentDate->add(new DateInterval('P' . ($intervalDays * $i) . 'D'));
 
                 if ($i === $totalPayments) {
-                    $principalPay = $applyRounding($remainingBalanceLocal, $currency);
+                    $principalPay = $remainingBalanceLocal;
                     $remainingBalanceLocal = 0;
                 } else {
                     $principalPay = $applyRounding($periodPrincipalRaw, $currency);
-                    $remainingBalanceLocal = max(0, $applyRounding($remainingBalanceLocal - $principalPay, $currency));
+                    $principalPay = min($principalPay, $remainingBalanceLocal);
+                    $remainingBalanceLocal = max(0, $remainingBalanceLocal - $principalPay);
                 }
 
                 $interestPay = $applyRounding($periodInterestRaw, $currency);
@@ -203,13 +204,14 @@ class LoanCalculator
                 if ($i == 1) {
                     // Flat method: no pro-rate on first payment, use full split percentage
                     $firstPaymentInterest = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
-                    $principalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
+                    $principalPay = $applyRounding($isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal, $currency);
+                    $principalPay = min($principalPay, $remainingBalance);
 
                     $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
-                        'principal' => $applyRounding($principalPay, $currency),
+                        'principal' => $principalPay,
                         'interest' => $firstPaymentInterest,
                         'fee' => $feePay,
                         'payment' => $applyRounding($principalPay + $firstPaymentInterest + $feePay, $currency),
@@ -224,7 +226,7 @@ class LoanCalculator
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
-                        'principal' => $applyRounding($remainingBalance, $currency),
+                        'principal' => $remainingBalance,
                         'interest' => $finalInterest,
                         'fee' => $feePay,
                         'payment' => $applyRounding($remainingBalance + $finalInterest + $feePay, $currency),
@@ -233,13 +235,14 @@ class LoanCalculator
                     ];
                     break;
                 } else {
-                    $principalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
+                    $principalPay = $applyRounding($isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal, $currency);
+                    $principalPay = min($principalPay, $remainingBalance);
                     $interestPay = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
                     $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [
                         'period' => $i,
                         'date' => $currentPaymentDate->format('Y-m-d'),
-                        'principal' => $applyRounding($principalPay, $currency),
+                        'principal' => $principalPay,
                         'interest' => $interestPay,
                         'fee' => $feePay,
                         'payment' => $applyRounding($principalPay + $interestPay + $feePay, $currency),
@@ -257,7 +260,7 @@ class LoanCalculator
                     $pay['balance'] = 0;
                 } else {
                     $runningBalance -= $pay['principal'];
-                    $pay['balance'] = $applyRounding($runningBalance, $currency);
+                    $pay['balance'] = max(0, $runningBalance);
                 }
                 $pay['date'] = date('d/m/Y', strtotime($pay['date']));
             }
@@ -293,7 +296,7 @@ class LoanCalculator
                 $interestPay = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
 
                 if ($i == $totalPayments) {
-                    $principalPay = $applyRounding($remainingBalance, $currency);
+                    $principalPay = $remainingBalance;
                     $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [
                         'period' => $i,
@@ -309,6 +312,7 @@ class LoanCalculator
                 } else {
                     $rawPrincipalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
                     $principalPay = $applyRounding($rawPrincipalPay, $currency);
+                    $principalPay = min($principalPay, $remainingBalance);
                     $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [
                         'period' => $i,
@@ -331,7 +335,7 @@ class LoanCalculator
                     $pay['balance'] = 0;
                 } else {
                     $runningBalance -= $pay['principal'];
-                    $pay['balance'] = $applyRounding($runningBalance, $currency);
+                    $pay['balance'] = max(0, $runningBalance);
                 }
                 $pay['date'] = date('d/m/Y', strtotime($pay['date']));
             }
@@ -392,12 +396,14 @@ class LoanCalculator
                 }
 
                 $monthlyPrincipal = $applyRounding($monthlyPrincipal, $currency);
-                $remainingBalance = $applyRounding($remainingBalance - $monthlyPrincipal, $currency);
+                $monthlyPrincipal = min($monthlyPrincipal, $remainingBalance);
 
-                if ($i == $duration && $remainingBalance !== 0) {
-                    $monthlyPrincipal += $remainingBalance;
+                if ($i == $duration) {
+                    $monthlyPrincipal = $remainingBalance;
                     $totalPayment = $monthlyPrincipal + $monthlyInterest;
                     $remainingBalance = 0;
+                } else {
+                    $remainingBalance = max(0, $remainingBalance - $monthlyPrincipal);
                 }
 
                 $feePay = $calculatePeriodFee($i, $duration);
@@ -445,11 +451,11 @@ class LoanCalculator
                 if ($i == $duration) {
                     $currentPrincipal = $remainingBalance;
                 } else {
-                    $currentPrincipal = $monthlyPrincipal;
+                    $currentPrincipal = min($monthlyPrincipal, $remainingBalance);
                 }
 
                 $monthlyPayment = $applyRounding($currentPrincipal + $monthlyInterest, $currency);
-                $remainingBalance = $applyRounding($remainingBalance - $currentPrincipal, $currency);
+                $remainingBalance = max(0, $remainingBalance - $currentPrincipal);
 
                 $feePay = $calculatePeriodFee($i, $duration);
                 $results[] = [
@@ -488,14 +494,15 @@ class LoanCalculator
                     $currentPrincipal = $remainingBalance;
                     $remainingBalance = 0;
                 } else {
-                    $remainingBalance = $applyRounding($remainingBalance - $monthlyPrincipal, $currency);
+                    $currentPrincipal = min($currentPrincipal, $remainingBalance);
+                    $remainingBalance = max(0, $remainingBalance - $currentPrincipal);
                 }
 
                 $feePay = $calculatePeriodFee($i, $duration);
                 $results[] = [
                     'period' => $i,
                     'date' => $currentPaymentDate->format('d/m/Y'),
-                    'principal' => $applyRounding($currentPrincipal, $currency),
+                    'principal' => $currentPrincipal,
                     'interest' => $applyRounding($currentInterest, $currency),
                     'fee' => $feePay,
                     'payment' => $applyRounding($currentPrincipal + $currentInterest + $feePay, $currency),
@@ -565,14 +572,15 @@ class LoanCalculator
                     $currentPrincipal = $remainingBalance;
                     $remainingBalance = 0;
                 } else {
-                    $remainingBalance = $applyRounding($remainingBalance - $monthlyPrincipal, $currency);
+                    $currentPrincipal = min($currentPrincipal, $remainingBalance);
+                    $remainingBalance = max(0, $remainingBalance - $currentPrincipal);
                 }
 
                 $feePay = $calculatePeriodFee($i, $duration);
                 $results[] = [
                     'period' => $i,
                     'date' => $currentPaymentDate->format('d/m/Y'),
-                    'principal' => $applyRounding($currentPrincipal, $currency),
+                    'principal' => $currentPrincipal,
                     'interest' => $applyRounding($currentInterest, $currency),
                     'fee' => $feePay,
                     'payment' => $applyRounding($currentPrincipal + $currentInterest + $feePay, $currency),
@@ -588,3 +596,4 @@ class LoanCalculator
         return $results;
     }
 }
+

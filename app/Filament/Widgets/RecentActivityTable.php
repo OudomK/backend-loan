@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Models\RepaymentTransaction;
+use App\Support\CurrencyHelper;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
@@ -43,14 +44,10 @@ class RecentActivityTable extends BaseWidget
                     ->getStateUsing(fn($record) => ($record->loan->borrower->first_name ?? '') . ' ' . ($record->loan->borrower->last_name ?? '')),
                 Tables\Columns\TextColumn::make('amount_paid')
                     ->label('Amount')
-                    ->formatStateUsing(function ($state, $record): string {
-                        $amount = (float) $state;
-                        $isKhr = str_starts_with((string) ($record->loan->currency ?? ''), 'KHR');
-
-                        return $isKhr
-                            ? '៛ ' . number_format($amount, 0)
-                            : '$' . number_format($amount, 2);
-                    })
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan->currency ?? CurrencyHelper::USD,
+                    ))
                     ->color('success')
                     ->alignEnd()
                     ->weight('bold'),

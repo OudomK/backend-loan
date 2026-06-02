@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Loans\Tables;
 
+use App\Support\CurrencyHelper;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
@@ -42,13 +43,20 @@ class LoansTable
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('amount')
                     ->label('Principal')
-                    ->money(fn($record): string => self::resolveCurrencyCode($record))
+                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                        (float) $state,
+                        $record->currency ?? CurrencyHelper::USD,
+                    ))
+                    ->alignEnd()
                     ->sortable()
                     ->description(fn($record): ?string => collect([
                         filled($record->interest_rate) ? 'Rate ' . self::formatNumber((float) $record->interest_rate) . '%' : null,
                         filled($record->duration_months) ? $record->duration_months . ' ' . self::termUnitAbbreviation($record->payment_frequency) : null,
                         filled($record->monthly_payment)
-                        ? 'Pay ' . self::formatAmount((float) $record->monthly_payment, self::resolveCurrencyCode($record))
+                        ? 'Pay ' . CurrencyHelper::display(
+                            (float) $record->monthly_payment,
+                            $record->currency ?? CurrencyHelper::USD,
+                        )
                         : null,
                     ])->filter()->implode(' • ')),
                 TextColumn::make('interest_rate')
@@ -122,11 +130,6 @@ class LoansTable
             ]);
     }
 
-    private static function resolveCurrencyCode(object $record): string
-    {
-        return str_starts_with(strtoupper((string) $record->currency), 'KHR') ? 'KHR' : 'USD';
-    }
-
     private static function formatDate(?string $date): ?string
     {
         if (blank($date)) {
@@ -145,13 +148,6 @@ class LoansTable
         $formatted = number_format($value, 2, '.', '');
 
         return rtrim(rtrim($formatted, '0'), '.');
-    }
-
-    private static function formatAmount(float $amount, string $currency): string
-    {
-        return $currency === 'KHR'
-            ? 'KHR ' . number_format($amount, 0)
-            : '$' . number_format($amount, 2);
     }
 
     private static function termUnitAbbreviation(?string $paymentFrequency): string

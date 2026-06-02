@@ -35,14 +35,20 @@ class OverdueLoansTable
 
                 TextColumn::make('principal_amount')
                     ->label('Principal')
-                    ->formatStateUsing(fn($state, $record): string => CurrencyHelper::format($state, $record->loan?->currency, true, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan?->currency ?? CurrencyHelper::USD,
+                    ))
                     ->alignEnd()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 TextColumn::make('interest_amount')
                     ->label('Interest')
-                    ->formatStateUsing(fn($state, $record): string => CurrencyHelper::format($state, $record->loan?->currency, true, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan?->currency ?? CurrencyHelper::USD,
+                    ))
                     ->alignEnd()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
@@ -55,7 +61,10 @@ class OverdueLoansTable
                         $dpd = abs((int) \Carbon\Carbon::today()->diffInDays(\Carbon\Carbon::parse($record->payment_date)));
                         return $dpd * $penaltyRate;
                     })
-                    ->formatStateUsing(fn($state, $record): string => CurrencyHelper::format($state, $record->loan?->currency, true, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan?->currency ?? CurrencyHelper::USD,
+                    ))
                     ->alignEnd()
                     ->color('warning')
                     ->sortable()
@@ -71,7 +80,10 @@ class OverdueLoansTable
                         
                         return ($record->principal_amount + $record->interest_amount + ($record->fee_amount ?? 0) + $penalty) - $record->total_paid;
                     })
-                    ->formatStateUsing(fn($state, $record): string => CurrencyHelper::format($state, $record->loan?->currency, true, 2))
+                    ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan?->currency ?? CurrencyHelper::USD,
+                    ))
                     ->alignEnd()
                     ->weight('bold')
                     ->color('danger')

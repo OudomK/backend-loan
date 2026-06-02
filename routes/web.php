@@ -20,15 +20,32 @@ Route::get('/logout', function () {
 
 // SSO route from Flutter App
 Route::get('/admin/sso/{token}', function ($token) {
-    $userId = \Illuminate\Support\Facades\Cache::pull('sso_token_' . $token);
+    $userId = null;
+
+    try {
+        $paddedToken = str_pad(strtr($token, '-_', '+/'), strlen($token) % 4 === 0 ? strlen($token) : strlen($token) + 4 - strlen($token) % 4, '=', STR_PAD_RIGHT);
+        $encrypted = base64_decode($paddedToken, true);
+        if ($encrypted !== false) {
+            $payload = json_decode(\Illuminate\Support\Facades\Crypt::decryptString($encrypted), true, 512, JSON_THROW_ON_ERROR);
+            if (($payload['expires_at'] ?? 0) >= now()->timestamp) {
+                $userId = $payload['user_id'] ?? null;
+            }
+        }
+    } catch (\Throwable) {
+        $userId = null;
+    }
+
+    $userId ??= \Illuminate\Support\Facades\Cache::pull('sso_token_' . $token);
     if (!$userId) {
         abort(401, 'Invalid or expired SSO token.');
     }
     
     $user = \App\Models\User::find($userId);
     if ($user) {
-        // Authenticate into the web session used by Filament
+        // Replace any stale browser session before authenticating into Filament.
+        \Illuminate\Support\Facades\Auth::guard('web')->logout();
         \Illuminate\Support\Facades\Auth::guard('web')->login($user);
+        request()->session()->regenerate();
     }
     
     return redirect('/admin');

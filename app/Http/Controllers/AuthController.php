@@ -101,15 +101,22 @@ class AuthController extends Controller
     {
         $user = $request->user();
         $superAdminRole = Utils::getSuperAdminName();
+        $roleNames = method_exists($user, 'effectiveRoleNames')
+            ? $user->effectiveRoleNames()->map(fn (string $role): string => strtolower($role))
+            : collect($user?->roles?->pluck('name') ?? [])->map(fn (string $role): string => strtolower($role));
 
-        if (! $user || ! $user->hasRole($superAdminRole)) {
-            abort(403, 'Only super admin can access Admin Control.');
+        if (! $user || ! $roleNames->intersect([strtolower($superAdminRole), 'admin'])->isNotEmpty()) {
+            abort(403, 'Only admin users can access the Admin Panel.');
         }
 
-        $token = \Illuminate\Support\Str::random(64);
-        
-        // Store the user ID in cache for 5 minutes associated with this token
-        \Illuminate\Support\Facades\Cache::put('sso_token_' . $token, $user->id, now()->addMinutes(5));
+        $expiresAt = now()->addMinutes(5);
+        $payload = json_encode([
+            'user_id' => $user->id,
+            'expires_at' => $expiresAt->timestamp,
+            'nonce' => \Illuminate\Support\Str::random(16),
+        ], JSON_THROW_ON_ERROR);
+        $encrypted = \Illuminate\Support\Facades\Crypt::encryptString($payload);
+        $token = rtrim(strtr(base64_encode($encrypted), '+/', '-_'), '=');
 
         activity('auth')
             ->performedOn($user)
@@ -117,10 +124,13 @@ class AuthController extends Controller
             ->withProperties([
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
-                'expires_at' => now()->addMinutes(5)->toIso8601String(),
+                'expires_at' => $expiresAt->toIso8601String(),
             ])
             ->log('Generated admin SSO token');
 
-        return response()->json(['token' => $token]);
+        return response()->json([
+            'token' => $token,
+            'url' => route('admin.sso', ['token' => $token]),
+        ]);
     }
 }
