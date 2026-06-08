@@ -47,11 +47,11 @@ class ParAnalysis extends Page
             'par90' => ['usd' => 0.0, 'khr' => 0.0, 'count' => 0, 'days' => 90],
         ];
         $buckets = [
-            'current' => ['label' => 'Current', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
-            '1_29' => ['label' => '1-29 Days', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
-            '30_59' => ['label' => '30-59 Days', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
-            '60_89' => ['label' => '60-89 Days', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
-            '90_plus' => ['label' => '90+ Days', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
+            'standard' => ['label' => '0-30 Days (Standard)', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
+            'special_mention' => ['label' => '31-89 Days (Special Mention)', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
+            'substandard' => ['label' => '90-179 Days (Substandard)', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
+            'doubtful' => ['label' => '180-359 Days (Doubtful)', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
+            'loss' => ['label' => '360+ Days (Loss)', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
         ];
 
         /** @var \App\Models\Loan $loan */
@@ -77,11 +77,11 @@ class ParAnalysis extends Page
             }
 
             $bucketKey = match (true) {
-                $snapshot['aging'] <= 0 => 'current',
-                $snapshot['aging'] < 30 => '1_29',
-                $snapshot['aging'] < 60 => '30_59',
-                $snapshot['aging'] < 90 => '60_89',
-                default => '90_plus',
+                $snapshot['aging'] <= 30 => 'standard',
+                $snapshot['aging'] <= 89 => 'special_mention',
+                $snapshot['aging'] <= 179 => 'substandard',
+                $snapshot['aging'] <= 359 => 'doubtful',
+                default => 'loss',
             };
             $buckets[$bucketKey][$currencyKey] += $currentOS;
             $buckets[$bucketKey]['count']++;
@@ -136,7 +136,8 @@ class ParAnalysis extends Page
                 + (float) ($transaction->interest_paid ?? 0)
                 + (float) ($transaction->principal_paid ?? 0)
                 + (float) ($transaction->prepayment_paid ?? 0)
-                + (float) ($transaction->paid_off_amount ?? 0);
+                + (float) ($transaction->paid_off_amount ?? 0)
+                - (float) ($transaction->withdrawn_prepayment ?? 0);
         });
 
         $cumulativeDue = 0.0;

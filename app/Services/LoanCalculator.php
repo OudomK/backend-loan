@@ -36,7 +36,7 @@ class LoanCalculator
             if (strpos($currency, 'KHR') !== false) {
                 return $customRoundKHR($amount);
             }
-            return ceil($amount); // Round up to whole number for USD
+            return round($amount, 0); // Round to whole number for USD
         };
 
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
@@ -342,9 +342,11 @@ class LoanCalculator
             unset($pay);
             $results = $allPayments;
         } elseif ($option === 'fixed_daily') {
-            $results = $buildFixedIntervalSchedule(1);
+            $results = $buildFixedIntervalSchedule(1, $duration);
+        } elseif ($option === 'fixed_biweekly') {
+            $results = $buildFixedIntervalSchedule(14, $duration);
         } elseif ($option === 'fixed_weekly') {
-            $results = $buildFixedIntervalSchedule(7);
+            $results = $buildFixedIntervalSchedule(7, $duration);
         } elseif ($option === 'annuity_monthly') {
             if ($principal <= 0 || $duration <= 0) {
                 return [];

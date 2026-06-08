@@ -15,9 +15,16 @@ class CustomerHistoryController extends Controller
     {
         $arr = $loan->toArray();
 
+        $loan->loadMissing('payments.allocations');
+
         // Pre-load all repayment transactions for this loan in ONE query (fix N+1)
         $txIds = $loan->payments->pluck('repayment_transaction_id')->filter()->unique();
         $txMap = \App\Models\RepaymentTransaction::whereIn('id', $txIds)
+            ->pluck('repayment_type', 'id');
+            
+        // Pre-load all transaction types for allocations as well
+        $allocationTxIds = $loan->payments->flatMap->allocations->pluck('repayment_transaction_id')->filter()->unique();
+        $allocationTxMap = \App\Models\RepaymentTransaction::whereIn('id', $allocationTxIds)
             ->pluck('repayment_type', 'id');
 
         $arr['payments'] = $loan->payments->sortBy('payment_number')->values()->map(fn($p) => [
@@ -35,6 +42,17 @@ class CustomerHistoryController extends Controller
             'prepayment' => (float) ($p->prepayment ?? 0),
             'repayment_transaction_id' => $p->repayment_transaction_id,
             'repayment_type' => $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id] ?? null) : null,
+            'allocations' => $p->allocations->map(fn($a) => [
+                'id' => $a->id,
+                'repayment_transaction_id' => $a->repayment_transaction_id,
+                'amount_applied' => (float) $a->amount_applied,
+                'fee_applied' => (float) $a->fee_applied,
+                'interest_applied' => (float) $a->interest_applied,
+                'principal_applied' => (float) $a->principal_applied,
+                'created_at' => $a->created_at->toIso8601String(),
+                'updated_at' => $a->updated_at->toIso8601String(),
+                'repayment_type' => $allocationTxMap[$a->repayment_transaction_id] ?? null,
+            ])->all(),
         ])->all();
 
         // Add modifications to the history
@@ -75,7 +93,7 @@ class CustomerHistoryController extends Controller
         return response()->json($borrowers);
     }
 
-    private function formatSearchItem($item, $role)
+    private function formatSearchItem(mixed $item, string $role)
     {
         return [
             'id' => $item->id,

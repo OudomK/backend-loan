@@ -23,6 +23,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\HtmlString;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 
 class AdminPanelProvider extends PanelProvider
@@ -119,27 +120,31 @@ class AdminPanelProvider extends PanelProvider
     {
         $fontFaceCss = '';
         try {
-            if (Schema::hasTable('custom_fonts')) {
-                $activeCustomFonts = \App\Models\CustomFont::query()
-                    ->where('is_active', true)
-                    ->when(
-                        Schema::hasColumn('custom_fonts', 'is_system'),
-                        fn ($query) => $query->where('is_system', false),
-                    )
-                    ->get();
-                foreach ($activeCustomFonts as $font) {
-                    $url = asset('storage/' . $font->file_path);
-                    $format = str_ends_with(strtolower($font->file_path), '.otf') ? 'opentype' : 'truetype';
-                    $fontFaceCss .= "
-                    @font-face {
-                        font-family: '{$font->name}';
-                        src: url('{$url}') format('{$format}');
-                        font-weight: normal;
-                        font-style: normal;
-                        font-display: swap;
-                    }
-                    ";
+            $activeCustomFonts = Cache::remember('filament.admin.custom_fonts', 60 * 60, function () {
+                if (Schema::hasTable('custom_fonts')) {
+                    return \App\Models\CustomFont::query()
+                        ->where('is_active', true)
+                        ->when(
+                            Schema::hasColumn('custom_fonts', 'is_system'),
+                            fn ($query) => $query->where('is_system', false),
+                        )
+                        ->get();
                 }
+                return collect();
+            });
+
+            foreach ($activeCustomFonts as $font) {
+                $url = asset('storage/' . $font->file_path);
+                $format = str_ends_with(strtolower($font->file_path), '.otf') ? 'opentype' : 'truetype';
+                $fontFaceCss .= "
+                @font-face {
+                    font-family: '{$font->name}';
+                    src: url('{$url}') format('{$format}');
+                    font-weight: normal;
+                    font-style: normal;
+                    font-display: swap;
+                }
+                ";
             }
         } catch (\Throwable $e) {}
 
@@ -166,15 +171,17 @@ class AdminPanelProvider extends PanelProvider
     private function resolveAdminFontStack(): string
     {
         try {
-            if (!Schema::hasTable('settings')) {
-                return AdminFontRegistry::cssStack(null);
-            }
+            return Cache::remember('filament.admin.font_stack', 60 * 60, function () {
+                if (!Schema::hasTable('settings')) {
+                    return AdminFontRegistry::cssStack(null);
+                }
 
-            $selected = Setting::query()
-                ->where('key', 'admin_font_family')
-                ->value('value');
+                $selected = Setting::query()
+                    ->where('key', 'admin_font_family')
+                    ->value('value');
 
-            return AdminFontRegistry::cssStack(is_string($selected) ? $selected : null);
+                return AdminFontRegistry::cssStack(is_string($selected) ? $selected : null);
+            });
         } catch (\Throwable) {
             return AdminFontRegistry::cssStack(null);
         }

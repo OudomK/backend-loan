@@ -15,6 +15,7 @@ class LoansTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(fn (\Illuminate\Database\Eloquent\Builder $query) => $query->with(['borrower', 'officer', 'product']))
             ->heading('Loan Portfolio')
             ->description('Review disbursements, interest terms, and repayment status across all loan records.')
             ->defaultSort('start_date', 'desc')
@@ -155,8 +156,10 @@ class LoansTable
         $normalized = strtolower(trim((string) $paymentFrequency));
 
         return match ($normalized) {
+            'monthly' => 'mo',
+            'biweekly' => 'biwk',
             'weekly' => 'wk',
-            'daily' => 'day',
+            'daily' => 'd',
             'term' => 'inst',
             default => 'mo',
         };

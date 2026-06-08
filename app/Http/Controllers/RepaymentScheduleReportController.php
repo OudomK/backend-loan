@@ -95,6 +95,7 @@ class RepaymentScheduleReportController extends Controller
 
         return match ($normalized) {
             'monthly' => 'mo',
+            'biweekly' => 'biwk',
             'weekly' => 'wk',
             'daily' => 'day',
             'term' => 'inst',

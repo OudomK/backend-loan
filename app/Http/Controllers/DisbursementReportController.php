@@ -121,7 +121,8 @@ class DisbursementReportController extends Controller
                     return (float) ($transaction->fee_paid ?? 0)
                         + (float) ($transaction->interest_paid ?? 0)
                         + (float) ($transaction->principal_paid ?? 0)
-                        + (float) ($transaction->paid_off_amount ?? 0);
+                        + (float) ($transaction->paid_off_amount ?? 0)
+                        - (float) ($transaction->withdrawn_prepayment ?? 0);
                 });
 
                 $cumulativeDue = 0.0;
@@ -195,7 +196,7 @@ class DisbursementReportController extends Controller
                 ->whereBetween('written_off_at', [$fromDateStr, $toDateStr])
                 ->get();
 
-            $yearStart = \Carbon\Carbon::parse($toDateStr)->startOfYear()->toDateString();
+            $yearStart = Carbon::parse($toDateStr)->startOfYear()->toDateString();
             $woYtdLoans = Loan::query()->where('loan_officer_id', $officer->id)
                 ->whereNotNull('written_off_at')
                 ->whereBetween('written_off_at', [$yearStart, $toDateStr])

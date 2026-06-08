@@ -112,6 +112,7 @@ class InactiveLoanReportController extends Controller
 
         return match ($normalized) {
             'monthly' => 'Months',
+            'biweekly' => 'Biweeks',
             'weekly' => 'Weeks',
             'daily' => 'Days',
             'term' => 'Installments',

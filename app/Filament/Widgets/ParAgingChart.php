@@ -20,41 +20,16 @@ class ParAgingChart extends ChartWidget
 
     protected function getData(): array
     {
-        $today = now()->toDateString();
-
-        $loans = Loan::where('status', 'active')
-            ->select('id')
-            ->addSelect([
-                'real_aging' => \App\Models\Payment::selectRaw('DATEDIFF(?, MIN(payment_date))', [$today])
-                    ->whereColumn('loan_id', 'loans.id')
-                    ->where('payment_date', '<', $today)
-                    ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
-            ])
-            ->get();
-
-        $buckets = [
-            'Current'    => 0,
-            '1–30 days'  => 0,
-            '31–60 days' => 0,
-            '61–90 days' => 0,
-            '90+ days'   => 0,
-        ];
-
-        foreach ($loans as $loan) {
-            $aging = $loan->real_aging ?? 0;
-
-            if ($aging <= 0) {
-                $buckets['Current']++;
-            } elseif ($aging <= 30) {
-                $buckets['1–30 days']++;
-            } elseif ($aging <= 60) {
-                $buckets['31–60 days']++;
-            } elseif ($aging <= 90) {
-                $buckets['61–90 days']++;
-            } else {
-                $buckets['90+ days']++;
-            }
-        }
+        $buckets = Cache::remember('filament.stats.par_aging_buckets', 60 * 60, function() {
+            app(\App\Services\DashboardStatsService::class)->calculateAndCacheAll();
+            return Cache::get('filament.stats.par_aging_buckets', [
+                'Current'    => 0,
+                '1–30 days'  => 0,
+                '31–60 days' => 0,
+                '61–90 days' => 0,
+                '90+ days'   => 0,
+            ]);
+        });
 
         return [
             'datasets' => [

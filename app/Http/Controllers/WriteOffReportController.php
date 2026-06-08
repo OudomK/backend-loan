@@ -136,6 +136,7 @@ class WriteOffReportController extends Controller
 
         return match ($normalized) {
             'monthly' => 'Months',
+            'biweekly' => 'Biweeks',
             'weekly' => 'Weeks',
             'daily' => 'Days',
             'bi-monthly', 'bimonthly', 'semi-monthly' => 'Semi-Monthly',

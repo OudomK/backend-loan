@@ -53,6 +53,7 @@ class LoanOperationController extends Controller
             $today = Carbon::today('Asia/Phnom_Penh');
 
             foreach ($portfolioLoans as $loan) {
+                /** @var \App\Models\Loan $loan */
                 $snapshot = $this->portfolioSnapshot($loan, $today);
                 $currentOS = $snapshot['outstanding'];
                 if ($currentOS <= 0.01) {
@@ -164,7 +165,8 @@ class LoanOperationController extends Controller
                 + (float) ($transaction->interest_paid ?? 0)
                 + (float) ($transaction->principal_paid ?? 0)
                 + (float) ($transaction->prepayment_paid ?? 0)
-                + (float) ($transaction->paid_off_amount ?? 0);
+                + (float) ($transaction->paid_off_amount ?? 0)
+                - (float) ($transaction->withdrawn_prepayment ?? 0);
         });
 
         $cumulativeDue = 0.0;

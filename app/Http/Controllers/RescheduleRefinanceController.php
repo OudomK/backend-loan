@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 
 class RescheduleRefinanceController extends Controller
 {
-    protected $loanService;
+    protected LoanService $loanService;
 
     public function __construct(LoanService $loanService)
     {
@@ -38,6 +38,33 @@ class RescheduleRefinanceController extends Controller
                 return (float) $p->total_paid < $due - 0.01;
             })->count();
 
+            // Calculate one-month (next unpaid) interest
+            $nextUnpaidPayment = $loan->payments->filter(function ($p) {
+                $due = (float) $p->principal_amount + (float) $p->interest_amount + (float) $p->penalty_amount;
+                return (float) $p->total_paid < $due - 0.01;
+            })->first();
+            $accruedInterest = 0;
+            $penaltyDue = 0;
+            if ($nextUnpaidPayment) {
+                $feePaid = $nextUnpaidPayment->fee_paid ?? 0;
+                $alreadyPaidToPrinInt = max(0, (float) $nextUnpaidPayment->total_paid - (float) $feePaid);
+                $interestPaidSoFar = min((float) $nextUnpaidPayment->interest_amount, $alreadyPaidToPrinInt);
+                $accruedInterest = max(0, (float) $nextUnpaidPayment->interest_amount - $interestPaidSoFar);
+
+                $paymentDate = \Carbon\Carbon::parse($nextUnpaidPayment->payment_date)->startOfDay();
+                $today = \Carbon\Carbon::today();
+                $daysPastDue = $today->diffInDays($paymentDate, false);
+                if ($daysPastDue < 0) {
+                    $dpd = (int) abs($daysPastDue);
+                    $penaltyRate = \App\Models\Setting::where('key', $loan->currency === 'KHR' ? 'default_penalty_khr' : 'default_penalty_usd')->value('value') ?? 2.5;
+                    if ($loan->currency === 'USD' && $dpd <= 4) {
+                        $penaltyDue = 0;
+                    } else {
+                        $penaltyDue = round($dpd * (float) $penaltyRate, 2);
+                    }
+                }
+            }
+
             return [
                 'id' => $loan->id,
                 'code' => $loan->loan_code,
@@ -57,6 +84,8 @@ class RescheduleRefinanceController extends Controller
                 'rate' => $loan->interest_rate,
                 'term' => $loan->duration_months,
                 'remainingTerm' => $remainingTerm,
+                'accruedInterest' => $accruedInterest,
+                'penaltyDue' => $penaltyDue,
                 'paid_count' => $loan->payments->where('total_paid', '>', 0)->count(),
                 'start_date' => $loan->start_date,
                 'repayment_method' => $loan->repayment_method,
@@ -78,6 +107,8 @@ class RescheduleRefinanceController extends Controller
             'first_payment_date' => 'nullable|date',
             'repayment_method' => 'nullable|string',
             'reschedule_fee' => 'nullable|numeric|min:0',
+            'pay_off_principal' => 'nullable|numeric|min:0',
+            'accrued_interest' => 'nullable|numeric|min:0',
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);
@@ -98,6 +129,7 @@ class RescheduleRefinanceController extends Controller
             'new_term' => 'required|integer',
             'start_date' => 'required|date',
             'refinance_fee' => 'nullable|numeric',
+            'penalty_amount' => 'nullable|numeric|min:0',
             'repayment_method' => 'nullable|string',
         ]);
 
@@ -118,6 +150,7 @@ class RescheduleRefinanceController extends Controller
             'new_rate' => 'required|numeric',
             'term' => 'required|integer', // remaining_term for reschedule, new_term for refinance
             'additional_amount' => 'nullable|numeric',
+            'paydown_amount' => 'nullable|numeric|min:0',
             'start_date' => 'required|date',
             'repayment_method' => 'nullable|string',
         ]);

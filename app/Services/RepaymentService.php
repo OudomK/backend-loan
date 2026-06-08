@@ -77,6 +77,7 @@ class RepaymentService
                 ? 'total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0) + COALESCE(fee_amount, 0))'
                 : 'total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0))';
 
+            /** @var \Illuminate\Database\Eloquent\Collection<int, \App\Models\Payment> $installments */
             $installments = Payment::where('loan_id', $loan->id)
                 ->whereRaw($installmentDueExpression)
                 ->orderBy('payment_date', 'asc')
@@ -161,7 +162,19 @@ class RepaymentService
             $secondInst = $installments->get(1);
 
             /** @var \App\Models\Payment $inst */
+            // Save first installment's due amount before the loop modifies it
+            $firstInstOriginalDue = 0.0;
+            if ($firstInst) {
+                $firstInstOriginalDue = round(
+                    (float) $firstInst->principal_amount
+                    + (float) $firstInst->interest_amount
+                    + ($usesInstallmentFee ? (float) $firstInst->fee_amount : 0)
+                    - (float) $firstInst->total_paid,
+                    2
+                );
+            }
             foreach ($installments as $inst) {
+                /** @var \App\Models\Payment $inst */
                 if ($totalToDistribute <= 0.001) {
                     break;
                 }
@@ -177,6 +190,17 @@ class RepaymentService
                     $inst->total_paid = round($existingTotalPaid + $feeApplied, 2);
                     $inst->save();
                     $lastUpdatedInst = $inst;
+
+                    if ($feeApplied > 0) {
+                        \App\Models\PaymentAllocation::create([
+                            'payment_id' => $inst->id,
+                            'repayment_transaction_id' => $transaction->id,
+                            'amount_applied' => $feeApplied,
+                            'fee_applied' => $feeApplied,
+                            'interest_applied' => 0,
+                            'principal_applied' => 0,
+                        ]);
+                    }
 
                     continue;
                 }
@@ -215,16 +239,59 @@ class RepaymentService
                 $inst->save();
                 $lastUpdatedInst = $inst;
 
-                if ($totalToDistribute > 0.001 && $validated['repayment_type'] === 'Prepayment') {
-                    $extraPrincipal = round($totalToDistribute, 2);
-                    $totalPrepaymentGenerated += $extraPrincipal;
-                    $lastUpdatedInst->total_paid = round((float) $lastUpdatedInst->total_paid + $totalToDistribute, 2);
-                    $lastUpdatedInst->prepayment = $extraPrincipal;
-                    $lastUpdatedInst->save();
-                    $totalToDistribute = 0.0;
-
-                    break;
+                if ($appliedToThisRow > 0) {
+                    \App\Models\PaymentAllocation::create([
+                        'payment_id' => $inst->id,
+                        'repayment_transaction_id' => $transaction->id,
+                        'amount_applied' => $appliedToThisRow,
+                        'fee_applied' => $feeApplied,
+                        'interest_applied' => $interestToPay,
+                        'principal_applied' => $principalToPay,
+                    ]);
                 }
+
+                // Forward Apply: let the loop continue to pay next installments.
+                // Any remaining balance after all installments will be stored as prepayment below.
+            }
+
+            // If there's still money left after all installments, store as prepayment
+            if ($totalToDistribute > 0.001 && $lastUpdatedInst && $validated['repayment_type'] === 'Prepayment') {
+                $extraPrincipal = round($totalToDistribute, 2);
+                $totalPrepaymentGenerated += $extraPrincipal;
+                $lastUpdatedInst->total_paid = round((float) $lastUpdatedInst->total_paid + $totalToDistribute, 2);
+                $lastUpdatedInst->prepayment = round((float) ($lastUpdatedInst->prepayment ?? 0) + $extraPrincipal, 2);
+                $lastUpdatedInst->save();
+
+                \App\Models\PaymentAllocation::create([
+                    'payment_id' => $lastUpdatedInst->id,
+                    'repayment_transaction_id' => $transaction->id,
+                    'amount_applied' => $extraPrincipal,
+                    'fee_applied' => 0,
+                    'interest_applied' => 0,
+                    'principal_applied' => $extraPrincipal,
+                ]);
+            }
+
+            // Track how much was paid beyond the CURRENT due installment (= advance payment)
+            if ($validated['repayment_type'] === 'Prepayment') {
+                $currentDueRow = $installments->first(function ($i) use ($usesInstallmentFee) {
+                    $due = (float) $i->principal_amount + (float) $i->interest_amount + ($usesInstallmentFee ? (float) $i->fee_amount : 0);
+                    return round((float) $i->total_paid, 2) < round($due, 2);
+                });
+
+                $currentDueAmount = 0.0;
+                if ($currentDueRow) {
+                    $currentDueAmount = round(
+                        (float) $currentDueRow->principal_amount
+                        + (float) $currentDueRow->interest_amount
+                        + ($usesInstallmentFee ? (float) $currentDueRow->fee_amount : 0)
+                        - (float) $currentDueRow->total_paid,
+                        2
+                    );
+                }
+
+                $advancePaid = max(0, round($principalInterestAmount + $feePaid - $currentDueAmount, 2));
+                $totalPrepaymentGenerated = max($totalPrepaymentGenerated, $advancePaid);
             }
 
             $transaction->update([
@@ -340,64 +407,89 @@ class RepaymentService
             if ($transaction->repayment_type === 'Withdraw') {
                 $transaction->delete();
             } else {
-                $installments = Payment::where('loan_id', $loan->id)
-                    ->where('repayment_transaction_id', $transaction->id)
-                    ->get();
-
-                if ($installments->isEmpty()) {
+                $allocations = \App\Models\PaymentAllocation::where('repayment_transaction_id', $transaction->id)->get();
+                if ($allocations->isNotEmpty()) {
+                    foreach ($allocations as $allocation) {
+                        $inst = Payment::find($allocation->payment_id);
+                        if ($inst) {
+                            $inst->total_paid = round(max(0, (float)$inst->total_paid - (float)$allocation->amount_applied), 2);
+                            $inst->fee_paid = round(max(0, (float)$inst->fee_paid - (float)$allocation->fee_applied), 2);
+                            if ($inst->total_paid <= 0.001) {
+                                $inst->repayment_transaction_id = null;
+                                $inst->fee_paid = 0;
+                                $inst->total_paid = 0;
+                            } else {
+                                // If this row's repayment_transaction_id was this transaction, but it still has total_paid > 0, 
+                                // we should ideally set it to the PREVIOUS transaction ID. But without a full history of transaction IDs, 
+                                // we can just set it to null or leave it. Leaving it is what the greedy fallback does too.
+                                if ($inst->repayment_transaction_id === $transaction->id) {
+                                    $inst->repayment_transaction_id = null;
+                                }
+                            }
+                            $inst->save();
+                        }
+                        $allocation->delete(); // Fix: Delete the allocation record when voided
+                    }
+                } else {
                     $installments = Payment::where('loan_id', $loan->id)
-                        ->where('total_paid', '>', 0)
-                        ->orderBy('id', 'desc')
+                        ->where('repayment_transaction_id', $transaction->id)
                         ->get();
-                }
 
-                $feeToReverse = (float) $transaction->fee_paid;
-                $interestToReverse = (float) $transaction->interest_paid;
-                $principalToReverse = (float) ($transaction->principal_paid + $transaction->paid_off_amount);
-
-                /** @var \App\Models\Payment $inst */
-                foreach ($installments as $inst) {
-                    if ($feeToReverse > 0.001 && $inst->fee_paid > 0) {
-                        $reduceFee = min($feeToReverse, (float) $inst->fee_paid);
-                        $inst->fee_paid = round((float) $inst->fee_paid - $reduceFee, 2);
-                        $inst->total_paid = round((float) $inst->total_paid - $reduceFee, 2);
-                        $feeToReverse -= $reduceFee;
+                    if ($installments->isEmpty()) {
+                        $installments = Payment::where('loan_id', $loan->id)
+                            ->where('total_paid', '>', 0)
+                            ->orderBy('id', 'desc')
+                            ->get();
                     }
 
-                    $paidExcludingFee = max(0, (float) $inst->total_paid - (float) $inst->fee_paid);
-                    $interestPaidOnRow = min((float) $inst->interest_amount, $paidExcludingFee);
-                    $principalPaidOnRow = max(0, $paidExcludingFee - $interestPaidOnRow);
+                    $feeToReverse = (float) $transaction->fee_paid;
+                    $interestToReverse = (float) $transaction->interest_paid;
+                    $principalToReverse = (float) ($transaction->principal_paid + $transaction->paid_off_amount);
 
-                    if ($principalToReverse > 0.001 && $principalPaidOnRow > 0) {
-                        $reducePrin = min($principalToReverse, $principalPaidOnRow);
-                        $inst->total_paid = round((float) $inst->total_paid - $reducePrin, 2);
-                        $principalToReverse -= $reducePrin;
-                        $paidExcludingFee -= $reducePrin;
-                    }
+                    /** @var \App\Models\Payment $inst */
+                    foreach ($installments as $inst) {
+                        if ($feeToReverse > 0.001 && $inst->fee_paid > 0) {
+                            $reduceFee = min($feeToReverse, (float) $inst->fee_paid);
+                            $inst->fee_paid = round((float) $inst->fee_paid - $reduceFee, 2);
+                            $inst->total_paid = round((float) $inst->total_paid - $reduceFee, 2);
+                            $feeToReverse -= $reduceFee;
+                        }
 
-                    if ($interestToReverse > 0.001 && $interestPaidOnRow > 0) {
-                        $reduceInt = min($interestToReverse, $interestPaidOnRow);
-                        $inst->total_paid = round((float) $inst->total_paid - $reduceInt, 2);
-                        $interestToReverse -= $reduceInt;
-                    }
+                        $paidExcludingFee = max(0, (float) $inst->total_paid - (float) $inst->fee_paid);
+                        $interestPaidOnRow = min((float) $inst->interest_amount, $paidExcludingFee);
+                        $principalPaidOnRow = max(0, $paidExcludingFee - $interestPaidOnRow);
 
-                    if ($inst->total_paid <= 0.001) {
-                        $inst->repayment_transaction_id = null;
-                        $inst->fee_paid = 0;
-                        $inst->total_paid = 0;
-                    }
+                        if ($principalToReverse > 0.001 && $principalPaidOnRow > 0) {
+                            $reducePrin = min($principalToReverse, $principalPaidOnRow);
+                            $inst->total_paid = round((float) $inst->total_paid - $reducePrin, 2);
+                            $principalToReverse -= $reducePrin;
+                            $paidExcludingFee -= $reducePrin;
+                        }
 
-                    $inst->save();
+                        if ($interestToReverse > 0.001 && $interestPaidOnRow > 0) {
+                            $reduceInt = min($interestToReverse, $interestPaidOnRow);
+                            $inst->total_paid = round((float) $inst->total_paid - $reduceInt, 2);
+                            $interestToReverse -= $reduceInt;
+                        }
 
-                    if ($feeToReverse <= 0.001 && $principalToReverse <= 0.001 && $interestToReverse <= 0.001) {
-                        Payment::where('repayment_transaction_id', $transaction->id)
-                            ->get()
-                            ->each(function (Payment $payment): void {
-                                $payment->repayment_transaction_id = null;
-                                $payment->save();
-                            });
+                        if ($inst->total_paid <= 0.001) {
+                            $inst->repayment_transaction_id = null;
+                            $inst->fee_paid = 0;
+                            $inst->total_paid = 0;
+                        }
 
-                        break;
+                        $inst->save();
+
+                        if ($feeToReverse <= 0.001 && $principalToReverse <= 0.001 && $interestToReverse <= 0.001) {
+                            Payment::where('repayment_transaction_id', $transaction->id)
+                                ->get()
+                                ->each(function (Payment $payment): void {
+                                    $payment->repayment_transaction_id = null;
+                                    $payment->save();
+                                });
+
+                            break;
+                        }
                     }
                 }
 

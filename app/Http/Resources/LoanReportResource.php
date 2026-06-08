@@ -134,6 +134,7 @@ class LoanReportResource extends JsonResource
 
         return match ($normalized) {
             'monthly' => 'Months',
+            'biweekly' => 'Biweeks',
             'weekly' => 'Weeks',
             'daily' => 'Days',
             'term' => 'Installments',

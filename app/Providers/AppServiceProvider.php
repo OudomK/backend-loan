@@ -25,6 +25,22 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         \App\Models\Loan::observe(\App\Observers\LoanObserver::class);
+
+        $dashboardModels = [
+            \App\Models\Loan::class,
+            \App\Models\Borrower::class,
+            \App\Models\Investor::class,
+            \App\Models\RepaymentTransaction::class,
+            \App\Models\Payment::class,
+            \App\Models\Borrowing::class,
+            \App\Models\CapitalShare::class,
+            \App\Models\Setting::class,
+        ];
+
+        foreach ($dashboardModels as $model) {
+            $model::observe(\App\Observers\DashboardStatsObserver::class);
+        }
+
         // Disable Vite preload tags to avoid browser warnings for deferred CSS usage in SPA navigation.
         Vite::usePreloadTagAttributes(false);
 

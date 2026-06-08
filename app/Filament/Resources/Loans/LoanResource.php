@@ -55,6 +55,7 @@ class LoanResource extends Resource
     {
         return [
             \App\Filament\Resources\Loans\RelationManagers\CollateralsRelationManager::class,
+            \App\Filament\Resources\Loans\RelationManagers\ModificationsRelationManager::class,
         ];
     }
 

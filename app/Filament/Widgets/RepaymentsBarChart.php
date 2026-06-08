@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Models\RepaymentTransaction;
 use Filament\Widgets\ChartWidget;
+use Illuminate\Support\Facades\Cache;
 
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 
@@ -26,32 +27,15 @@ class RepaymentsBarChart extends ChartWidget
             $labels[] = now()->startOfMonth()->subMonths($i)->format('M');
         }
 
-        $exchangeRate = (float) cache()->remember('setting.exchange_rate_khr_to_usd', 3600, function () {
-            $rate = \App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
-                ?? \App\Models\Setting::where('key', 'exchange_rate')->value('value')
-                ?? 4000;
-
-            return max(1, (float) $rate);
+        $cachedData = Cache::remember('filament.stats.monthly_performance', 60 * 60, function() {
+            app(\App\Services\DashboardStatsService::class)->calculateAndCacheAll();
+            return Cache::get('filament.stats.monthly_performance', [
+                'disbursements' => [],
+                'collections' => []
+            ]);
         });
 
-        // Aggregate in DB instead of loading all rows (much faster)
-        $collectionsRaw = RepaymentTransaction::query()
-            ->where('transaction_date', '>=', now()->startOfMonth()->subMonths(11))
-            ->whereNull('repayment_transactions.deleted_at')
-            ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
-            ->selectRaw('DATE_FORMAT(repayment_transactions.transaction_date, "%Y-%m") as month, loans.currency, SUM(repayment_transactions.amount_paid) as total')
-            ->groupBy('month', 'loans.currency')
-            ->get();
-
-        $collections = array_fill_keys($months, 0);
-
-        foreach ($collectionsRaw as $d) {
-            $amount = (float) $d->total;
-            if (str_starts_with($d->currency ?? '', 'KHR')) {
-                $amount = $amount / $exchangeRate;
-            }
-            $collections[$d->month] = ($collections[$d->month] ?? 0) + $amount;
-        }
+        $collections = $cachedData['collections'] ?? [];
 
         $finalData = collect($months)->map(fn ($m) => round($collections[$m] ?? 0, 2))->toArray();
 

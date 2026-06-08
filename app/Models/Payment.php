@@ -57,4 +57,9 @@ class Payment extends Model
     {
         return $this->belongsTo(Loan::class);
     }
+
+    public function allocations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(PaymentAllocation::class);
+    }
 }

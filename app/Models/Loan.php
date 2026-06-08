@@ -33,7 +33,7 @@ use Spatie\Activitylog\LogOptions;
  * @property int $loan_cycle
  * @property-read \App\Models\Borrower $borrower
  * @property-read \Illuminate\Database\Eloquent\Collection|\App\Models\Payment[] $payments
-  */
+ */
 class Loan extends Model
 {
     use SoftDeletes, LogsActivity;
@@ -150,7 +150,7 @@ class Loan extends Model
         $arrearExpression = $usesInstallmentFee
             ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'
             : 'total_paid < (principal_amount + interest_amount - 0.01)';
-        
+
         // Find the earliest installment that is past due and not fully paid
         $earliestArrear = \App\Models\Payment::where('loan_id', $this->id)
             ->where('payment_date', '<', $today->toDateString())
@@ -186,10 +186,10 @@ class Loan extends Model
 
         // 1. Calculate current outstanding principal (scheduled principal + prepayment surplus + payoff principal - withdrawn prepayments)
         $totalPrincipalPaid = (float) $this->transactions()->sum('principal_paid')
-                            + (float) $this->transactions()->sum('prepayment_paid')
-                            + (float) $this->transactions()->sum('paid_off_amount')
-                            - (float) $this->transactions()->sum('withdrawn_prepayment');
-        $outstandingPrincipal = round($this->amount - $totalPrincipalPaid, 2);
+            + (float) $this->transactions()->sum('prepayment_paid')
+            + (float) $this->transactions()->sum('paid_off_amount')
+            - (float) $this->transactions()->sum('withdrawn_prepayment');
+        $outstandingPrincipal = round($this->amount - $totalPrincipalPaid, 0);
 
         if ($outstandingPrincipal <= 0) {
             $deletedPayments = Payment::where('loan_id', $this->id)
@@ -258,25 +258,26 @@ class Loan extends Model
         $newMonthlyPayment = 0;
 
         foreach ($futurePayments as $index => $payment) {
+            /** @var \App\Models\Payment $payment */
             $isLast = ($index === $futurePayments->count() - 1);
-            
-            $newInterest = round($payment->interest_amount * $ratio, 2);
-            
+
+            $newInterest = round($payment->interest_amount * $ratio, 0);
+
             if ($isLast) {
                 // Absorb any rounding differences in the final payment
                 $newPrincipal = $currentBalance;
             } else {
-                $newPrincipal = round($payment->principal_amount * $ratio, 2);
+                $newPrincipal = round($payment->principal_amount * $ratio, 0);
             }
-            
+
             if ($index === 0) {
                 // Approximate new monthly payment based on the first upcoming adjusted installment
-                $newMonthlyPayment = round($newPrincipal + $newInterest + $payment->fee_amount, 2);
+                $newMonthlyPayment = round($newPrincipal + $newInterest + $payment->fee_amount, 0);
             }
 
             $payment->principal_amount = $newPrincipal;
             $payment->interest_amount = $newInterest;
-            $payment->total_due = round($newPrincipal + $newInterest + ($payment->fee_amount ?? 0), 2);
+            $payment->total_due = round($newPrincipal + $newInterest + ($payment->fee_amount ?? 0), 0);
             $payment->save();
 
             $currentBalance -= $newPrincipal;

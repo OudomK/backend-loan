@@ -175,7 +175,8 @@ class QualityPortfolioController extends Controller
                             + (float) ($transaction->interest_paid ?? 0)
                             + (float) ($transaction->principal_paid ?? 0)
                             + (float) ($transaction->prepayment_paid ?? 0)
-                            + (float) ($transaction->paid_off_amount ?? 0);
+                            + (float) ($transaction->paid_off_amount ?? 0)
+                            - (float) ($transaction->withdrawn_prepayment ?? 0);
                     });
 
                     $cumulativeDue = 0.0;

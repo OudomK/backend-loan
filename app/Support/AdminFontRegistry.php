@@ -23,14 +23,9 @@ class AdminFontRegistry
         return [
             'kantumruy_pro' => 'Kantumruy Pro',
             'krasar' => 'Krasar',
-            'battambang' => 'Battambang',
-            'moul' => 'Moul',
-            'noto_sans_khmer' => 'Noto Sans Khmer',
-            'khmer_os_siemreap' => 'Khmer OS Siemreap',
             'khmer_os_battambang' => 'Khmer OS Battambang',
+            'khmer_os_siemreap' => 'Khmer OS Siemreap',
             'khmer_os_system' => 'Khmer OS System',
-            'khmer_ui' => 'Khmer UI',
-            'segoe_ui' => 'Segoe UI',
         ];
     }
 
@@ -129,14 +124,9 @@ class AdminFontRegistry
         return match ($resolvedKey) {
             'kantumruy_pro' => self::fontStack('Kantumruy Pro'),
             'krasar' => self::fontStack('Krasar'),
-            'battambang' => self::fontStack('Battambang'),
-            'moul' => self::fontStack('Moul'),
-            'noto_sans_khmer' => self::fontStack('Noto Sans Khmer'),
-            'khmer_os_siemreap' => self::fontStack('Khmer OS Siemreap'),
             'khmer_os_battambang' => self::fontStack('Khmer OS Battambang'),
+            'khmer_os_siemreap' => self::fontStack('Khmer OS Siemreap'),
             'khmer_os_system' => self::fontStack('Khmer OS System'),
-            'khmer_ui' => self::fontStack('Khmer UI'),
-            'segoe_ui' => "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
             default => self::fontStack('Kantumruy Pro'),
         };
     }
@@ -144,11 +134,11 @@ class AdminFontRegistry
     private static function fontStack(string $fontFamily): string
     {
         if ($fontFamily === '') {
-            return "'Kantumruy Pro', 'Khmer OS System', 'Khmer UI', 'Segoe UI', sans-serif";
+            return "'Kantumruy Pro', 'Khmer OS System', sans-serif";
         }
 
         $escapedFontFamily = str_replace("'", "\\'", $fontFamily);
 
-        return "'{$escapedFontFamily}', 'Kantumruy Pro', 'Khmer OS System', 'Khmer UI', 'Segoe UI', sans-serif";
+        return "'{$escapedFontFamily}', 'Kantumruy Pro', 'Khmer OS System', sans-serif";
     }
 }

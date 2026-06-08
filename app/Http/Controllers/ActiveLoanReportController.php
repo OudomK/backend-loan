@@ -83,9 +83,12 @@ class ActiveLoanReportController extends Controller
             });
 
             $scheduledPaidAtDate = $transactionsAtDate->sum(function ($transaction) {
-                return (float) ($transaction->principal_paid ?? 0)
+                return (float) ($transaction->fee_paid ?? 0)
                     + (float) ($transaction->interest_paid ?? 0)
-                    + (float) ($transaction->paid_off_amount ?? 0);
+                    + (float) ($transaction->principal_paid ?? 0)
+                    + (float) ($transaction->prepayment_paid ?? 0)
+                    + (float) ($transaction->paid_off_amount ?? 0)
+                    - (float) ($transaction->withdrawn_prepayment ?? 0);
             });
 
             $paymentsBeforeRefDate = $loan->payments->filter(function ($payment) use ($refDate) {
@@ -174,7 +177,7 @@ class ActiveLoanReportController extends Controller
         return response()->json($data);
     }
 
-    private function getAccountRating($days)
+    private function getAccountRating(int $days)
     {
         if ($days <= 30) {
             return 'Standard';
@@ -191,7 +194,7 @@ class ActiveLoanReportController extends Controller
         return 'Loss';
     }
 
-    private function getProvisionRate($days)
+    private function getProvisionRate(int $days)
     {
         if ($days <= 30) {
             return 0.01;
@@ -214,6 +217,7 @@ class ActiveLoanReportController extends Controller
 
         return match ($normalized) {
             'monthly' => 'Months',
+            'biweekly' => 'Biweeks',
             'weekly' => 'Weeks',
             'daily' => 'Days',
             'term' => 'Installments',
@@ -227,20 +231,21 @@ class ActiveLoanReportController extends Controller
         $date = Carbon::parse($startDate);
         $normalized = strtolower(trim((string) $paymentFrequency));
 
-        return match ($normalized) {
-            'daily' => $date->addDays($term)->toDateString(),
+        return match (strtolower($paymentFrequency)) {
+            'monthly' => $date->addMonthsNoOverflow($term)->toDateString(),
+            'biweekly' => $date->addWeeks($term * 2)->toDateString(),
             'weekly' => $date->addWeeks($term)->toDateString(),
-            default => $date->addMonths($term)->toDateString(),
+            'daily' => $date->addDays($term)->toDateString(),
         };
     }
 
     private function shortLongTermLabel(int $term, ?string $paymentFrequency): string
     {
-        $normalized = strtolower(trim((string) $paymentFrequency));
-
-        return match ($normalized) {
-            'daily' => $term > 365 ? 'Long Term' : 'Short Term',
+        return match (strtolower($paymentFrequency ?? 'monthly')) {
+            'monthly' => $term > 12 ? 'Long Term' : 'Short Term',
+            'biweekly' => $term > 26 ? 'Long Term' : 'Short Term',
             'weekly' => $term > 52 ? 'Long Term' : 'Short Term',
+            'daily' => $term > 365 ? 'Long Term' : 'Short Term',
             default => $term > 12 ? 'Long Term' : 'Short Term',
         };
     }

@@ -47,6 +47,7 @@ class DashboardController extends Controller
         $parAmount = 0.0;
 
         foreach ($portfolioLoans as $loan) {
+            /** @var \App\Models\Loan $loan */
             $snapshot = $this->portfolioSnapshot($loan, $referenceDate);
             $currentOS = $snapshot['outstanding'];
             if ($currentOS <= 0.01) {
@@ -56,13 +57,13 @@ class DashboardController extends Controller
             if (str_starts_with((string) $loan->currency, 'KHR')) {
                 $outstandingKHR += $currentOS;
                 $overdueKHR += $snapshot['overdue_amount'];
-                if ($snapshot['aging'] >= 1) {
+                if ($snapshot['aging'] >= 30) {
                     $parAmount += $currentOS / $exchangeRate;
                 }
             } else {
                 $outstandingUSD += $currentOS;
                 $overdueUSD += $snapshot['overdue_amount'];
-                if ($snapshot['aging'] >= 1) {
+                if ($snapshot['aging'] >= 30) {
                     $parAmount += $currentOS;
                 }
             }
@@ -109,7 +110,8 @@ class DashboardController extends Controller
                 + (float) ($transaction->interest_paid ?? 0)
                 + (float) ($transaction->principal_paid ?? 0)
                 + (float) ($transaction->prepayment_paid ?? 0)
-                + (float) ($transaction->paid_off_amount ?? 0);
+                + (float) ($transaction->paid_off_amount ?? 0)
+                - (float) ($transaction->withdrawn_prepayment ?? 0);
         });
 
         $cumulativeDue = 0.0;
@@ -170,6 +172,7 @@ class DashboardController extends Controller
         ];
 
         foreach ($loans as $loan) {
+            /** @var \App\Models\Loan $loan */
             // Find earliest overdue payment
             $earliestOverdue = $loan->payments()
                 ->where('payment_date', '<', $referenceDate->toDateString())
@@ -192,10 +195,12 @@ class DashboardController extends Controller
                 $daysOverdue = $referenceDate->diffInDays(Carbon::parse($earliestOverdue->payment_date));
 
                 if ($daysOverdue <= 30) {
+                    $classification['standard'] += $loanOutstanding;
+                } elseif ($daysOverdue <= 89) {
                     $classification['special_mention'] += $loanOutstanding;
-                } elseif ($daysOverdue <= 60) {
+                } elseif ($daysOverdue <= 179) {
                     $classification['substandard'] += $loanOutstanding;
-                } elseif ($daysOverdue <= 90) {
+                } elseif ($daysOverdue <= 359) {
                     $classification['doubtful'] += $loanOutstanding;
                 } else {
                     $classification['loss'] += $loanOutstanding;

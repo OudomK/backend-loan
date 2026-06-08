@@ -14,7 +14,7 @@ class LoanCalculatorScheduleModesTest extends TestCase
         $schedule = $calculator->calculateLoanWithDates(
             300,
             3,
-            1,
+            30,
             'fixed_daily',
             '2026-05-01',
             'USD'
@@ -33,7 +33,7 @@ class LoanCalculatorScheduleModesTest extends TestCase
         $schedule = $calculator->calculateLoanWithDates(
             600,
             4,
-            1,
+            5,
             'fixed_weekly',
             '2026-05-01',
             'USD'

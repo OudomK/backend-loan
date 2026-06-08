@@ -6,6 +6,7 @@ use App\Models\Loan;
 use App\Models\RepaymentTransaction;
 use Filament\Widgets\ChartWidget;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 use BezhanSalleh\FilamentShield\Traits\HasWidgetShield;
 
@@ -29,49 +30,16 @@ class MonthlyPerformanceChart extends ChartWidget
             $labels[] = now()->startOfMonth()->subMonths($i)->format('M');
         }
 
-        $exchangeRate = (float) (\App\Models\Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
-            ?? \App\Models\Setting::where('key', 'exchange_rate')->value('value')
-            ?? 4000);
-        $exchangeRate = max(1, $exchangeRate);
+        $cachedData = Cache::remember('filament.stats.monthly_performance', 60 * 60, function() {
+            app(\App\Services\DashboardStatsService::class)->calculateAndCacheAll();
+            return Cache::get('filament.stats.monthly_performance', [
+                'disbursements' => [],
+                'collections' => []
+            ]);
+        });
 
-        // Fetch disbursements grouped by month and currency
-        $disbursementsRaw = Loan::where('status', 'active')
-            ->where('start_date', '>=', now()->startOfMonth()->subMonths(11))
-            ->selectRaw('DATE_FORMAT(start_date, "%Y-%m") as month, currency, SUM(amount) as total_amount')
-            ->groupBy('month', 'currency')
-            ->get();
-
-        $disbursements = array_fill_keys($months, 0);
-
-        foreach ($disbursementsRaw as $d) {
-            $amount = $d->total_amount;
-            if (str_starts_with($d->currency, 'KHR')) {
-                $amount = $amount / $exchangeRate;
-            }
-            $disbursements[$d->month] = ($disbursements[$d->month] ?? 0) + $amount;
-        }
-
-        // Fetch collections grouped by month and currency
-        $collectionsRaw = RepaymentTransaction::where('transaction_date', '>=', now()->startOfMonth()->subMonths(11))
-            ->with('loan') // Need loan to check currency
-            ->get()
-            ->groupBy(function ($item) {
-                return Carbon::parse($item->transaction_date)->format('Y-m');
-            });
-
-        $collections = array_fill_keys($months, 0);
-
-        foreach ($collectionsRaw as $month => $transactions) {
-            $totalForMonth = 0;
-            foreach ($transactions as $t) {
-                $amount = $t->amount_paid;
-                if ($t->loan && str_starts_with($t->loan->currency, 'KHR')) {
-                    $amount = $amount / $exchangeRate;
-                }
-                $totalForMonth += $amount;
-            }
-            $collections[$month] = $totalForMonth;
-        }
+        $disbursements = $cachedData['disbursements'] ?? [];
+        $collections = $cachedData['collections'] ?? [];
 
         $disbursementData = collect($months)->map(fn($m) => round($disbursements[$m] ?? 0, 2))->toArray();
         $collectionData = collect($months)->map(fn($m) => round($collections[$m] ?? 0, 2))->toArray();
