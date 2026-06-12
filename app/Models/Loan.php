@@ -61,6 +61,7 @@ class Loan extends Model
         'guarantor_id',
         'guarantor_relationship',
         'currency',
+        'penalty_rate',
         'repayment_method',
         'purpose',
         'sector',
@@ -82,6 +83,7 @@ class Loan extends Model
         'maturity_date',
         'product_id',
         'aging',
+        'late_since_date',
         'monthly_interest',
         'reschedule_fee',
         'rescheduled_at',
@@ -151,20 +153,47 @@ class Loan extends Model
             ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'
             : 'total_paid < (principal_amount + interest_amount - 0.01)';
 
-        // Find the earliest installment that is past due and not fully paid
-        $earliestArrear = \App\Models\Payment::where('loan_id', $this->id)
+        // Check if there's any unpaid past due installment
+        $hasUnpaidRows = \App\Models\Payment::where('loan_id', $this->id)
             ->where('payment_date', '<', $today->toDateString())
             ->whereRaw($arrearExpression)
-            ->orderBy('payment_date', 'asc')
-            ->first();
+            ->exists();
 
-        if ($earliestArrear) {
-            $lastDue = \Carbon\Carbon::parse($earliestArrear->payment_date);
-            $aging = (int) $today->diffInDays($lastDue);
-            $this->update(['aging' => $aging]);
+        // Calculate Penalty Gross using current aging (before we potentially reset it)
+        $penaltyRate = $this->penalty_rate ?? (str_contains(strtoupper($this->currency ?? ''), 'KHR') ? 10000.0 : 2.5);
+        $penaltyGross = round($this->aging * $penaltyRate, 2);
+        
+        // Calculate total penalty paid so far
+        $penaltyPaidTotal = (float) \App\Models\RepaymentTransaction::where('loan_id', $this->id)
+            ->sum(\Illuminate\Support\Facades\DB::raw('penalty_paid + waived_amount'));
+
+        $isPenaltyFullyPaid = $penaltyPaidTotal >= ($penaltyGross - 0.01);
+
+        if (!$hasUnpaidRows && $isPenaltyFullyPaid) {
+            // Fully caught up!
+            $this->update([
+                'late_since_date' => null,
+                'aging' => 0
+            ]);
         } else {
-            // No arrears, reset aging to 0
-            $this->update(['aging' => 0]);
+            // Still late (either owes installments OR owes penalty)
+            if (!$this->late_since_date && $hasUnpaidRows) {
+                // Determine when it first became late
+                $earliestArrear = \App\Models\Payment::where('loan_id', $this->id)
+                    ->where('payment_date', '<', $today->toDateString())
+                    ->whereRaw($arrearExpression)
+                    ->orderBy('payment_date', 'asc')
+                    ->first();
+                if ($earliestArrear) {
+                    $this->update(['late_since_date' => $earliestArrear->payment_date]);
+                }
+            }
+
+            if ($this->late_since_date) {
+                $earliestDate = \Carbon\Carbon::parse($this->late_since_date)->startOfDay();
+                $aging = (int) abs($today->diffInDays($earliestDate, false));
+                $this->update(['aging' => $aging]);
+            }
         }
     }
 

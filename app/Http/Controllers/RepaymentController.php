@@ -251,12 +251,15 @@ class RepaymentController extends Controller
         $feePaidSoFar = $usesInstallmentFee
             ? (float) RepaymentTransaction::where('loan_id', $loan_id)->sum('fee_paid')
             : 0;
+        $penaltyPaidSoFar = (float) RepaymentTransaction::where('loan_id', $loan_id)->sum('penalty_paid')
+            + (float) RepaymentTransaction::where('loan_id', $loan_id)->sum('waived_amount');
 
         return response()->json([
             'installments' => $installments,
             'fee_type' => $feeType,
             'total_fee' => round($totalFee, 2),
             'fee_paid_so_far' => round($feePaidSoFar, 2),
+            'penalty_paid_so_far' => round($penaltyPaidSoFar, 2),
         ]);
     }
 

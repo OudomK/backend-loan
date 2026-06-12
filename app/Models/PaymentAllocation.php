@@ -25,6 +25,7 @@ class PaymentAllocation extends Model
         'fee_applied',
         'interest_applied',
         'principal_applied',
+        'penalty_applied',
     ];
 
     public function payment(): BelongsTo

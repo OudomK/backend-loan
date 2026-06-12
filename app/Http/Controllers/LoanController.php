@@ -132,6 +132,12 @@ class LoanController extends Controller
             $validated['monthly_interest'] = round(($validated['amount'] * $validated['interest_rate']) / 100, 2);
         }
 
+        // Lock penalty rate based on current settings
+        $currency = $validated['currency'] ?? 'USD';
+        $settingKey = $currency === 'KHR' ? 'default_penalty_khr' : 'default_penalty_usd';
+        $defaultRate = $currency === 'KHR' ? 10000 : 2.5;
+        $validated['penalty_rate'] = \App\Models\Setting::where('key', $settingKey)->value('value') ?? $defaultRate;
+
         DB::beginTransaction();
         try {
             $loan = Loan::create($validated);

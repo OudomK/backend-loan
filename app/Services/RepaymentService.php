@@ -98,6 +98,18 @@ class RepaymentService
                 }
             }
 
+            $currentInstIndex = $installments->count() - 1;
+            $chargeUpToIndex = $currentInstIndex;
+            $today = Carbon::today();
+
+            foreach ($installments as $idx => $instObj) {
+                if (Carbon::parse($instObj->payment_date)->startOfDay()->gte($today)) {
+                    $currentInstIndex = $idx;
+                    $chargeUpToIndex = $idx + 1;
+                    break;
+                }
+            }
+
             if ($validated['repayment_type'] === 'Pay Off') {
                 $totalPrincipalRemaining = 0.0;
                 $dueInterest = 0.0;
@@ -113,10 +125,8 @@ class RepaymentService
                         $dueFee += ((float) ($inst->fee_amount ?? 0) - (float) ($inst->fee_paid ?? 0));
                     }
 
-                    if ($idx === 0) {
+                    if ($idx <= $chargeUpToIndex) {
                         $dueInterest += ((float) $inst->interest_amount - $interestPaidSoFar);
-                    } elseif ($idx === 1) {
-                        $dueInterest += (float) $inst->interest_amount;
                     }
                 }
 
@@ -173,9 +183,12 @@ class RepaymentService
                     2
                 );
             }
-            foreach ($installments as $inst) {
-                /** @var \App\Models\Payment $inst */
+            foreach ($installments as $idx => $inst) {
                 if ($totalToDistribute <= 0.001) {
+                    break;
+                }
+
+                if ($validated['repayment_type'] === 'Prepayment' && $idx > $currentInstIndex) {
                     break;
                 }
 
@@ -210,9 +223,12 @@ class RepaymentService
                 $dueInterest = (float) $inst->interest_amount - $interestPaidSoFar;
 
                 $interestToPay = 0.0;
-                $isFirstOrSecond = $inst->is($firstInst) || $inst->is($secondInst);
+                $isWithinPayOffInterest = false;
+                if ($validated['repayment_type'] === 'Pay Off') {
+                    $isWithinPayOffInterest = $idx <= $chargeUpToIndex;
+                }
 
-                if ($validated['repayment_type'] !== 'Pay Off' || $isFirstOrSecond) {
+                if ($validated['repayment_type'] !== 'Pay Off' || $isWithinPayOffInterest) {
                     $interestToPay = round(min($totalToDistribute, $dueInterest), 2);
                     $totalInterestPaid += $interestToPay;
                     $totalToDistribute -= $interestToPay;
@@ -273,25 +289,29 @@ class RepaymentService
             }
 
             // Track how much was paid beyond the CURRENT due installment (= advance payment)
-            if ($validated['repayment_type'] === 'Prepayment') {
-                $currentDueRow = $installments->first(function ($i) use ($usesInstallmentFee) {
-                    $due = (float) $i->principal_amount + (float) $i->interest_amount + ($usesInstallmentFee ? (float) $i->fee_amount : 0);
-                    return round((float) $i->total_paid, 2) < round($due, 2);
-                });
+            // (Removed flawed $advancePaid tracking logic that caused double counting of prepayment)
 
-                $currentDueAmount = 0.0;
-                if ($currentDueRow) {
-                    $currentDueAmount = round(
-                        (float) $currentDueRow->principal_amount
-                        + (float) $currentDueRow->interest_amount
-                        + ($usesInstallmentFee ? (float) $currentDueRow->fee_amount : 0)
-                        - (float) $currentDueRow->total_paid,
-                        2
-                    );
+            // Allocate Penalty
+            if ($cashPenaltyPaid > 0) {
+                // Find the oldest unpaid installment
+                $inst = Payment::where('loan_id', $loan->id)
+                               ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)')
+                               ->orderBy('payment_date', 'asc')
+                               ->first();
+                if ($inst) {
+                    $inst->penalty_amount += $cashPenaltyPaid;
+                    $inst->save();
+
+                    \App\Models\PaymentAllocation::create([
+                        'payment_id' => $inst->id,
+                        'repayment_transaction_id' => $transaction->id,
+                        'amount_applied' => $cashPenaltyPaid,
+                        'fee_applied' => 0,
+                        'interest_applied' => 0,
+                        'principal_applied' => 0,
+                        'penalty_applied' => $cashPenaltyPaid,
+                    ]);
                 }
-
-                $advancePaid = max(0, round($principalInterestAmount + $feePaid - $currentDueAmount, 2));
-                $totalPrepaymentGenerated = max($totalPrepaymentGenerated, $advancePaid);
             }
 
             $transaction->update([
@@ -390,7 +410,7 @@ class RepaymentService
      * @param  \App\Models\RepaymentTransaction|int  $transaction
      * @return array{loan: \App\Models\Loan, transaction: \App\Models\RepaymentTransaction}
      */
-    public function void(RepaymentTransaction | int $transaction): array
+    public function void(RepaymentTransaction|int $transaction): array
     {
         return DB::transaction(function () use ($transaction): array {
             $transaction = $transaction instanceof RepaymentTransaction
@@ -412,12 +432,15 @@ class RepaymentService
                     foreach ($allocations as $allocation) {
                         $inst = Payment::find($allocation->payment_id);
                         if ($inst) {
-                            $inst->total_paid = round(max(0, (float)$inst->total_paid - (float)$allocation->amount_applied), 2);
-                            $inst->fee_paid = round(max(0, (float)$inst->fee_paid - (float)$allocation->fee_applied), 2);
-                            if ($inst->total_paid <= 0.001) {
+                            $actualAmountToSubtractFromTotalPaid = (float) $allocation->amount_applied - (float) ($allocation->penalty_applied ?? 0);
+                            $inst->total_paid = round(max(0, (float) $inst->total_paid - $actualAmountToSubtractFromTotalPaid), 2);
+                            $inst->fee_paid = round(max(0, (float) $inst->fee_paid - (float) $allocation->fee_applied), 2);
+                            $inst->penalty_amount = round(max(0, (float) $inst->penalty_amount - (float) ($allocation->penalty_applied ?? 0)), 2);
+                            if ($inst->total_paid <= 0.001 && $inst->penalty_amount <= 0.001) {
                                 $inst->repayment_transaction_id = null;
                                 $inst->fee_paid = 0;
                                 $inst->total_paid = 0;
+                                $inst->penalty_amount = 0;
                             } else {
                                 // If this row's repayment_transaction_id was this transaction, but it still has total_paid > 0, 
                                 // we should ideally set it to the PREVIOUS transaction ID. But without a full history of transaction IDs, 
@@ -428,8 +451,8 @@ class RepaymentService
                             }
                             $inst->save();
                         }
-                        $allocation->delete(); // Fix: Delete the allocation record when voided
                     }
+                    \App\Models\PaymentAllocation::where('repayment_transaction_id', $transaction->id)->delete();
                 } else {
                     $installments = Payment::where('loan_id', $loan->id)
                         ->where('repayment_transaction_id', $transaction->id)

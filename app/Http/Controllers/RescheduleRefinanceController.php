@@ -56,11 +56,19 @@ class RescheduleRefinanceController extends Controller
                 $daysPastDue = $today->diffInDays($paymentDate, false);
                 if ($daysPastDue < 0) {
                     $dpd = (int) abs($daysPastDue);
-                    $penaltyRate = \App\Models\Setting::where('key', $loan->currency === 'KHR' ? 'default_penalty_khr' : 'default_penalty_usd')->value('value') ?? 2.5;
-                    if ($loan->currency === 'USD' && $dpd <= 4) {
-                        $penaltyDue = 0;
-                    } else {
-                        $penaltyDue = round($dpd * (float) $penaltyRate, 2);
+                    if ($dpd > 0) {
+                        $penaltyRate = $loan->penalty_rate;
+                        if ($penaltyRate === null) {
+                            $penaltyRate = \App\Models\Setting::where('key', $loan->currency === 'KHR' ? 'default_penalty_khr' : 'default_penalty_usd')->value('value') ?? 2.5;
+                        }
+                        if ($loan->currency === 'USD' && $dpd <= 4) {
+                            $penaltyDue = 0;
+                        } else {
+                            $penaltyGross = round($dpd * (float) $penaltyRate, 2);
+                            $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('penalty_paid')
+                                + (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('waived_amount');
+                            $penaltyDue = max(0, $penaltyGross - $penaltyPaidSoFar);
+                        }
                     }
                 }
             }

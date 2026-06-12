@@ -57,14 +57,6 @@ class ArrearReportController extends Controller
 
         // Add subqueries for aggregate data
         $query->addSelect([
-            // Earliest Arrear Date
-            'earliest_arrear_date' => \App\Models\Payment::select('payment_date')
-                ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr)
-                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
-                ->orderBy('payment_date', 'asc')
-                ->limit(1),
-
             // Total Outstanding Principal
             'calculated_outstanding' => \App\Models\Payment::selectRaw('SUM(principal_amount - GREATEST(0, total_paid - interest_amount))')
                 ->whereColumn('loan_id', 'loans.id'),
@@ -91,8 +83,8 @@ class ArrearReportController extends Controller
                 ->orderBy('transaction_date', 'desc')
                 ->limit(1),
 
-            // Total penalty collected for this loan
-            'penalty_paid_total' => \App\Models\RepaymentTransaction::selectRaw('COALESCE(SUM(penalty_paid), 0)')
+            // Total penalty collected and waived for this loan
+            'penalty_paid_total' => \App\Models\RepaymentTransaction::selectRaw('COALESCE(SUM(penalty_paid + waived_amount), 0)')
                 ->whereColumn('loan_id', 'loans.id'),
         ]);
 
@@ -100,11 +92,11 @@ class ArrearReportController extends Controller
 
         // 2. Filter by Aging in PHP (if necessary)
         $filtered = $loans->filter(function ($loan) use ($referenceDate, $reportType, $fromDate) {
-            if (!$loan->earliest_arrear_date) {
+            if (!$loan->late_since_date) {
                 return false;
             }
 
-            $arrearDate = Carbon::parse($loan->earliest_arrear_date);
+            $arrearDate = Carbon::parse($loan->late_since_date);
 
             if ($reportType === 'all')
                 return true;

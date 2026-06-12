@@ -28,6 +28,8 @@ class RepaymentScheduleReportController extends Controller
                 'payments.penalty_amount',
                 'payments.total_paid',
                 'loans.loan_code',
+                'loans.loan_cycle',
+                DB::raw('(SELECT GROUP_CONCAT(type SEPARATOR ", ") FROM collaterals WHERE loan_id = loans.id) as collaterals'),
                 'loans.currency',
                 'loans.amount as loan_amount',
                 'loans.duration_months',
@@ -40,15 +42,15 @@ class RepaymentScheduleReportController extends Controller
                 'borrowers.district',
                 'borrowers.province',
                 'loan_officers.name as officer_name',
-                DB::raw('(payments.total_due - payments.total_paid) as remaining'),
+                DB::raw('((payments.principal_amount + payments.interest_amount + COALESCE(payments.fee_amount, 0)) - payments.total_paid) as remaining'),
                 DB::raw('(SELECT COALESCE(SUM(p2.principal_amount), 0) FROM payments p2 WHERE p2.loan_id = payments.loan_id AND p2.payment_number <= payments.payment_number AND p2.deleted_at IS NULL) as cumulative_principal'),
-                DB::raw('CASE WHEN payments.payment_date < CURDATE() AND payments.total_paid < payments.total_due THEN DATEDIFF(CURDATE(), payments.payment_date) ELSE 0 END as days_overdue')
+                DB::raw('CASE WHEN payments.payment_date < CURDATE() AND payments.total_paid < (payments.principal_amount + payments.interest_amount + COALESCE(payments.fee_amount, 0)) THEN DATEDIFF(CURDATE(), payments.payment_date) ELSE 0 END as days_overdue')
             )
             ->join('loans', 'loans.id', '=', 'payments.loan_id')
             ->join('borrowers', 'borrowers.id', '=', 'loans.borrower_id')
             ->leftJoin('loan_officers', 'loan_officers.id', '=', 'loans.loan_officer_id')
             // Only upcoming or unpaid parts
-            ->whereRaw('payments.total_paid < payments.total_due')
+            ->whereRaw('payments.total_paid < (payments.principal_amount + payments.interest_amount + COALESCE(payments.fee_amount, 0)) - 0.01')
             ->whereNull('payments.deleted_at')
             ->whereNull('loans.deleted_at');
 
@@ -79,6 +81,11 @@ class RepaymentScheduleReportController extends Controller
             }
             // Format installment as "X/Y"
             $item->installment_display = $item->payment_number . '/' . $item->duration_months . ' ' . $this->installmentUnitLabel($item->payment_frequency);
+            
+            // Strip cycle from loan_code
+            if ($item->loan_code) {
+                $item->loan_code = preg_replace('/-C\d+$/i', '', $item->loan_code);
+            }
             
             return $item;
         });

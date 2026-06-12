@@ -52,6 +52,7 @@ use App\Http\Controllers\WriteOffReportController;
 
 // ——— Public routes (no auth) ———
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/translations', [\App\Http\Controllers\Api\TranslationController::class, 'index']);
 
 Route::get('/app/footer-user', function () {
     return response()->json([

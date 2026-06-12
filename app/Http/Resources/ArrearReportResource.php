@@ -26,13 +26,17 @@ class ArrearReportResource extends JsonResource
         $referenceDateStr = $request->query('to_date') ?? $request->query('report_date');
         $referenceDate = $referenceDateStr ? Carbon::parse($referenceDateStr) : Carbon::today();
 
-        $arrearDate = $this->earliest_arrear_date;
+        $arrearDate = $this->late_since_date;
         $aging = $arrearDate ? abs($referenceDate->diffInDays(Carbon::parse($arrearDate))) : 0;
         $arrearPrincipal = (float) ($this->arrear_principal ?? 0);
         $arrearInterest = (float) ($this->arrear_interest ?? 0);
         $totalArrearDue = round($arrearPrincipal + $arrearInterest, 2);
-        $penaltyDue = round($aging * $this->resolvePenaltyRate(), 2);
         $penaltyPaid = (float) ($this->penalty_paid_total ?? 0);
+        $penaltyGross = 0;
+        if ($aging > 0) {
+            $penaltyGross = round($aging * $this->resolvePenaltyRate($this->resource), 2);
+        }
+        $penaltyDue = max(0, $penaltyGross - $penaltyPaid);
 
         $status = 'Active';
         if ($totalArrearDue <= 0.01) {
@@ -73,12 +77,19 @@ class ArrearReportResource extends JsonResource
         ];
     }
 
-    private function resolvePenaltyRate(): float
+    /**
+     * Resolve the penalty rate from the loan or settings.
+     */
+    private function resolvePenaltyRate(\App\Models\Loan $loan): float
     {
+        if ($loan->penalty_rate !== null) {
+            return (float) $loan->penalty_rate;
+        }
+
         if (self::$penaltyRates === null) {
-            $settings = Setting::query()
-                ->whereIn('key', ['default_penalty_usd', 'default_penalty_khr'])
-                ->pluck('value', 'key');
+            $settings = Setting::whereIn('key', ['default_penalty_usd', 'default_penalty_khr'])
+                ->pluck('value', 'key')
+                ->toArray();
 
             self::$penaltyRates = [
                 'USD' => (float) ($settings['default_penalty_usd'] ?? 2.5),
@@ -86,9 +97,7 @@ class ArrearReportResource extends JsonResource
             ];
         }
 
-        $currency = strtoupper((string) $this->currency);
-
-        return str_contains($currency, 'KHR')
+        return $loan->currency === 'KHR'
             ? self::$penaltyRates['KHR']
             : self::$penaltyRates['USD'];
     }

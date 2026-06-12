@@ -64,6 +64,23 @@ class RepaymentTransactionsTable
                     ))
                     ->alignEnd()
                     ->sortable(),
+                TextColumn::make('penalty_paid')
+                    ->label('Penalty')
+                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan?->currency ?? CurrencyHelper::USD,
+                    ))
+                    ->alignEnd()
+                    ->sortable(),
+                TextColumn::make('waived_amount')
+                    ->label('Waived')
+                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                        (float) $state,
+                        $record->loan?->currency ?? CurrencyHelper::USD,
+                    ))
+                    ->alignEnd()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
                 TextColumn::make('repayment_type')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {

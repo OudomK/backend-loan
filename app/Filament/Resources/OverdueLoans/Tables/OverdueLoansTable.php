@@ -57,7 +57,10 @@ class OverdueLoansTable
                     ->label('Penalty')
                     ->getStateUsing(function ($record) {
                         $isKHR = str_contains($record->loan?->currency ?? '', 'KHR');
-                        $penaltyRate = $isKHR ? 10000 : 2.5;
+                        $penaltyRate = $record->loan?->penalty_rate;
+                        if ($penaltyRate === null) {
+                            $penaltyRate = \App\Models\Setting::where('key', $isKHR ? 'default_penalty_khr' : 'default_penalty_usd')->value('value') ?? ($isKHR ? 10000 : 2.5);
+                        }
                         $dpd = abs((int) \Carbon\Carbon::today()->diffInDays(\Carbon\Carbon::parse($record->payment_date)));
                         return $dpd * $penaltyRate;
                     })
@@ -74,7 +77,10 @@ class OverdueLoansTable
                     ->label('Amount Due')
                     ->getStateUsing(function ($record) {
                         $isKHR = str_contains($record->loan?->currency ?? '', 'KHR');
-                        $penaltyRate = $isKHR ? 10000 : 2.5;
+                        $penaltyRate = $record->loan?->penalty_rate;
+                        if ($penaltyRate === null) {
+                            $penaltyRate = \App\Models\Setting::where('key', $isKHR ? 'default_penalty_khr' : 'default_penalty_usd')->value('value') ?? ($isKHR ? 10000 : 2.5);
+                        }
                         $dpd = abs((int) \Carbon\Carbon::today()->diffInDays(\Carbon\Carbon::parse($record->payment_date)));
                         $penalty = $dpd * $penaltyRate;
                         

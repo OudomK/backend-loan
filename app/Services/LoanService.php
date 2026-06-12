@@ -278,6 +278,12 @@ class LoanService
             $baseCode = preg_replace('/-C\d+$/', '', $oldLoan->loan_code);
             $newLoan->loan_code = $baseCode . '-C' . $newCycle;
             $newLoan->disbursed_by_officer_id = $newLoan->loan_officer_id;
+            
+            // Lock penalty rate based on current settings
+            $settingKey = $newLoan->currency === 'KHR' ? 'default_penalty_khr' : 'default_penalty_usd';
+            $defaultRate = $newLoan->currency === 'KHR' ? 10000 : 2.5;
+            $newLoan->penalty_rate = \App\Models\Setting::where('key', $settingKey)->value('value') ?? $defaultRate;
+
             $newLoan->save();
 
             LoanModification::create([

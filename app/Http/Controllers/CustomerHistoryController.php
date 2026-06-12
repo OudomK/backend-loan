@@ -21,11 +21,11 @@ class CustomerHistoryController extends Controller
         $txIds = $loan->payments->pluck('repayment_transaction_id')->filter()->unique();
         $txMap = \App\Models\RepaymentTransaction::whereIn('id', $txIds)
             ->pluck('repayment_type', 'id');
-            
+
         // Pre-load all transaction types for allocations as well
         $allocationTxIds = $loan->payments->flatMap->allocations->pluck('repayment_transaction_id')->filter()->unique();
         $allocationTxMap = \App\Models\RepaymentTransaction::whereIn('id', $allocationTxIds)
-            ->pluck('repayment_type', 'id');
+            ->get()->keyBy('id');
 
         $arr['payments'] = $loan->payments->sortBy('payment_number')->values()->map(fn($p) => [
             'id' => $p->id,
@@ -49,11 +49,18 @@ class CustomerHistoryController extends Controller
                 'fee_applied' => (float) $a->fee_applied,
                 'interest_applied' => (float) $a->interest_applied,
                 'principal_applied' => (float) $a->principal_applied,
+                'penalty_applied' => (float) $a->penalty_applied,
                 'created_at' => $a->created_at->toIso8601String(),
                 'updated_at' => $a->updated_at->toIso8601String(),
-                'repayment_type' => $allocationTxMap[$a->repayment_transaction_id] ?? null,
+                'repayment_type' => isset($allocationTxMap[$a->repayment_transaction_id]) ? $allocationTxMap[$a->repayment_transaction_id]->repayment_type : null,
+                'transaction_date' => isset($allocationTxMap[$a->repayment_transaction_id]) ? $allocationTxMap[$a->repayment_transaction_id]->transaction_date : null,
             ])->all(),
         ])->all();
+
+        // Add penalty paid so far including waivers
+        $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('penalty_paid')
+            + (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('waived_amount');
+        $arr['penalty_paid_so_far'] = $penaltyPaidSoFar;
 
         // Add modifications to the history
         $arr['modifications'] = \App\Models\LoanModification::where('loan_id', $loan->id)
@@ -87,8 +94,8 @@ class CustomerHistoryController extends Controller
                 ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(last_name, ' ', first_name)"), 'like', "%$query%")
                 ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%$query%");
         })
-        ->get()
-        ->map(fn($item) => $this->formatSearchItem($item, 'Borrower'));
+            ->get()
+            ->map(fn($item) => $this->formatSearchItem($item, 'Borrower'));
 
         return response()->json($borrowers);
     }
