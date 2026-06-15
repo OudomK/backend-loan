@@ -46,12 +46,35 @@ class DashboardController extends Controller
         $overdueKHR = 0.0;
         $parAmount = 0.0;
 
+        $portfolioQuality = [
+            'standard' => 0,
+            'special_mention' => 0,
+            'substandard' => 0,
+            'doubtful' => 0,
+            'loss' => 0,
+        ];
+
         foreach ($portfolioLoans as $loan) {
             /** @var \App\Models\Loan $loan */
             $snapshot = $this->portfolioSnapshot($loan, $referenceDate);
             $currentOS = $snapshot['outstanding'];
             if ($currentOS <= 0.01) {
                 continue;
+            }
+
+            $convertedOS = str_starts_with((string) $loan->currency, 'KHR') ? $currentOS / $exchangeRate : $currentOS;
+            $aging = $snapshot['aging'];
+
+            if ($aging < 30) {
+                $portfolioQuality['standard'] += $convertedOS;
+            } elseif ($aging <= 89) {
+                $portfolioQuality['special_mention'] += $convertedOS;
+            } elseif ($aging <= 179) {
+                $portfolioQuality['substandard'] += $convertedOS;
+            } elseif ($aging <= 359) {
+                $portfolioQuality['doubtful'] += $convertedOS;
+            } else {
+                $portfolioQuality['loss'] += $convertedOS;
             }
 
             if (str_starts_with((string) $loan->currency, 'KHR')) {
@@ -73,8 +96,10 @@ class DashboardController extends Controller
         $overdueAmount = $overdueUSD + ($overdueKHR / $exchangeRate);
         $parRatio = $outstandingAmount > 0 ? round(($parAmount / $outstandingAmount) * 100, 2) : 0;
 
-        // Portfolio Quality Classification
-        $portfolioQuality = $this->calculatePortfolioQuality($referenceDate, $exchangeRate);
+        // Round portfolio quality values
+        foreach ($portfolioQuality as $key => $value) {
+            $portfolioQuality[$key] = round($value, 2);
+        }
 
         return response()->json([
             'total_customers' => $totalCustomers,
@@ -157,62 +182,5 @@ class DashboardController extends Controller
             'overdue_amount' => $overdueAmount,
             'aging' => $aging,
         ];
-    }
-
-    private function calculatePortfolioQuality(Carbon $referenceDate, int $exchangeRate)
-    {
-        $loans = Loan::where('status', 'active')->get();
-
-        $classification = [
-            'standard' => 0,
-            'special_mention' => 0,
-            'substandard' => 0,
-            'doubtful' => 0,
-            'loss' => 0,
-        ];
-
-        foreach ($loans as $loan) {
-            /** @var \App\Models\Loan $loan */
-            // Find earliest overdue payment
-            $earliestOverdue = $loan->payments()
-                ->where('payment_date', '<', $referenceDate->toDateString())
-                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
-                ->orderBy('payment_date', 'asc')
-                ->first();
-
-            $loanPrincipalPaid = $loan->payments()->sum(DB::raw('GREATEST(0, total_paid - interest_amount)'));
-            $loanOutstanding = $loan->amount - $loanPrincipalPaid;
-
-            // Convert to USD if KHR
-            if (str_starts_with($loan->currency, 'KHR')) {
-                $loanOutstanding = $loanOutstanding / $exchangeRate;
-            }
-
-            if (!$earliestOverdue) {
-                // No overdue = Standard
-                $classification['standard'] += $loanOutstanding;
-            } else {
-                $daysOverdue = $referenceDate->diffInDays(Carbon::parse($earliestOverdue->payment_date));
-
-                if ($daysOverdue <= 30) {
-                    $classification['standard'] += $loanOutstanding;
-                } elseif ($daysOverdue <= 89) {
-                    $classification['special_mention'] += $loanOutstanding;
-                } elseif ($daysOverdue <= 179) {
-                    $classification['substandard'] += $loanOutstanding;
-                } elseif ($daysOverdue <= 359) {
-                    $classification['doubtful'] += $loanOutstanding;
-                } else {
-                    $classification['loss'] += $loanOutstanding;
-                }
-            }
-        }
-
-        // Round all values
-        foreach ($classification as $key => $value) {
-            $classification[$key] = round($value, 2);
-        }
-
-        return $classification;
     }
 }

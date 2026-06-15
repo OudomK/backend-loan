@@ -117,6 +117,7 @@ class LoanCalculator
             $days = [$firstDay, $secondDay];
             sort($days);
 
+            $startDay = (int) $loanStartDate->format('d');
             $cursor = new DateTime($loanStartDate->format('Y-m-01'));
             $dates = [];
 
@@ -132,8 +133,23 @@ class LoanCalculator
                     $interval = $loanStartDate->diff($paymentDate);
                     $daysDiff = (int) $interval->format('%r%a');
 
-                    if ($daysDiff < 5) {
+                    if ($daysDiff <= 0) {
                         continue;
+                    }
+
+                    // For the first payment, apply the 1-15/16-30 rule:
+                    // Day 1-15: first payment on the second pay day (e.g. 26th)
+                    // Day 16-30/31: first payment on the first pay day (e.g. 11th) of next month
+                    if (count($dates) === 0) {
+                        if ($startDay >= 1 && $startDay <= 15) {
+                            if ($index === 0) {
+                                continue;
+                            }
+                        } else {
+                            if ($paymentDate->format('Y-m') === $loanStartDate->format('Y-m')) {
+                                continue;
+                            }
+                        }
                     }
 
                     $dates[] = [
@@ -213,10 +229,10 @@ class LoanCalculator
                 $isFirst = (bool) $paymentMeta['is_first_half'];
 
                 if ($i == 1) {
-                    $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days;
-                    // Pro-rate interest on first payment based on actual days
+                    $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days + 1; // +1 for inclusive days
+                    // Pro-rate both interest and principal on first payment based on actual days
                     $firstPaymentInterest = $applyRounding($monthlyInterest * ($daysFromStart / 30), $currency);
-                    $principalPay = $applyRounding($isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal, $currency);
+                    $principalPay = $applyRounding($monthlyPrincipal * ($daysFromStart / 30), $currency);
                     $principalPay = min($principalPay, $remainingBalance);
 
                     $feePay = $calculatePeriodFee($i, $totalPayments);
@@ -310,6 +326,7 @@ class LoanCalculator
             $allPayments = [];
             $loanStartDate = clone $startDateObj;
             $paymentDates = $buildSemiMonthlyDates($loanStartDate, $totalPayments, $payDay1, $payDay2);
+            $daysFromStart = 0;
 
             for ($i = 1; $i <= $totalPayments; $i++) {
                 $paymentMeta = $paymentDates[$i - 1] ?? null;
@@ -322,8 +339,8 @@ class LoanCalculator
                 $isFirst = (bool) $paymentMeta['is_first_half'];
 
                 if ($i == 1) {
-                    $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days;
-                    // Pro-rate interest on first payment based on actual days
+                    $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days + 1;
+                    // Pro-rate both interest and principal on first payment based on actual days
                     $interestPay = $applyRounding($monthlyInterest * ($daysFromStart / 30), $currency);
                 } else {
                     $interestPay = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
@@ -344,8 +361,13 @@ class LoanCalculator
                     ];
                     break;
                 } else {
-                    $rawPrincipalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
-                    $principalPay = $applyRounding($rawPrincipalPay, $currency);
+                    if ($i == 1) {
+                        // Pro-rate principal on first payment based on actual days
+                        $principalPay = $applyRounding($monthlyPrincipal * ($daysFromStart / 30), $currency);
+                    } else {
+                        $rawPrincipalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
+                        $principalPay = $applyRounding($rawPrincipalPay, $currency);
+                    }
                     $principalPay = min($principalPay, $remainingBalance);
                     $feePay = $calculatePeriodFee($i, $totalPayments);
                     $allPayments[] = [

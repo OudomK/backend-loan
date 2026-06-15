@@ -35,7 +35,7 @@ class AdminFontRegistry
     public static function activeCustomOptions(): array
     {
         try {
-            if (! Schema::hasTable('custom_fonts')) {
+            if (!Schema::hasTable('custom_fonts')) {
                 return [];
             }
 
@@ -57,8 +57,8 @@ class AdminFontRegistry
     {
         try {
             if (
-                ! Schema::hasTable('custom_fonts') ||
-                ! Schema::hasColumn('custom_fonts', 'is_system')
+                !Schema::hasTable('custom_fonts') ||
+                !Schema::hasColumn('custom_fonts', 'is_system')
             ) {
                 return;
             }

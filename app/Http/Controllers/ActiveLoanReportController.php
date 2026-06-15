@@ -179,7 +179,7 @@ class ActiveLoanReportController extends Controller
 
     private function getAccountRating(int $days)
     {
-        if ($days <= 30) {
+        if ($days < 30) {
             return 'Standard';
         }
         if ($days <= 89) {
@@ -196,7 +196,7 @@ class ActiveLoanReportController extends Controller
 
     private function getProvisionRate(int $days)
     {
-        if ($days <= 30) {
+        if ($days < 30) {
             return 0.01;
         }
         if ($days <= 89) {

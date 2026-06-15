@@ -38,7 +38,10 @@ class ArrearReportController extends Controller
                 'amount',
                 'start_date',
                 'status',
-                'currency'
+                'currency',
+                'late_since_date',
+                'aging',
+                'penalty_rate'
             ])
             ->where('status', 'active')
             // Only get loans with overdue payments
