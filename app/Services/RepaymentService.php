@@ -100,7 +100,7 @@ class RepaymentService
 
             $currentInstIndex = $installments->count() - 1;
             $chargeUpToIndex = $currentInstIndex;
-            $today = Carbon::today();
+            $today = Carbon::parse($validated['transaction_date'])->startOfDay();
 
             foreach ($installments as $idx => $instObj) {
                 if (Carbon::parse($instObj->payment_date)->startOfDay()->gte($today)) {
