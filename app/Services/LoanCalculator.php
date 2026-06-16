@@ -36,7 +36,7 @@ class LoanCalculator
             if (strpos($currency, 'KHR') !== false) {
                 return $customRoundKHR($amount);
             }
-            return round($amount, 0); // Round to whole number for USD
+            return ceil($amount); // Round up to next whole number for USD
         };
 
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
@@ -69,7 +69,7 @@ class LoanCalculator
 
                 if ($i === $totalPayments) {
                     $principalPay = $remainingBalanceLocal;
-                    
+
                     // Smart Check: Only adjust if final principal is higher than normal
                     $standardPrincipalPay = $applyRounding($periodPrincipalRaw, $currency);
                     if ($principalPay > $standardPrincipalPay) {
@@ -79,7 +79,7 @@ class LoanCalculator
                     } else {
                         $interestPay = $applyRounding($periodInterestRaw, $currency);
                     }
-                    
+
                     $remainingBalanceLocal = 0;
                 } else {
                     $principalPay = $applyRounding($periodPrincipalRaw, $currency);
@@ -281,20 +281,30 @@ class LoanCalculator
                 }
             }
 
-            // Smart Check for 50_50 / 70_30 to prevent final payment spike due to rounding
+            // Smart Check for 50_50 / 70_30 to prevent final payment spike or dip due to rounding
             if (count($allPayments) > 1) {
-                $lastIndex = count($allPayments) - 1;
-                $paymentMeta = $paymentDates[$lastIndex] ?? null;
-                $isLastFirstHalf = $paymentMeta ? (bool) $paymentMeta['is_first_half'] : false;
-                $normalLastPrincipal = $applyRounding($isLastFirstHalf ? $firstPaymentPrincipal : $secondPaymentPrincipal, $currency);
+                // Check the last 2 payments (both halves of the final month)
+                for ($checkIndex = max(0, count($allPayments) - 2); $checkIndex < count($allPayments); $checkIndex++) {
+                    $paymentMeta = $paymentDates[$checkIndex] ?? null;
+                    $isFirstHalf = $paymentMeta ? (bool) $paymentMeta['is_first_half'] : false;
+                    $normalPrincipal = $applyRounding($isFirstHalf ? $firstPaymentPrincipal : $secondPaymentPrincipal, $currency);
+                    $normalInterest = $applyRounding($monthlyInterest * ($isFirstHalf ? $firstPayPercent : $secondPayPercent) / 100, $currency);
+                    $normalFee = $calculatePeriodFee($checkIndex + 1, $totalPayments);
+                    $normalPayment = $applyRounding($normalPrincipal + $normalInterest + $normalFee, $currency);
 
-                if ($allPayments[$lastIndex]['principal'] > $normalLastPrincipal) {
-                    $difference = $allPayments[$lastIndex]['principal'] - $normalLastPrincipal;
-                    $allPayments[$lastIndex]['principal'] -= $difference;
-                    $allPayments[$lastIndex]['payment'] -= $difference;
-                    
-                    $allPayments[0]['principal'] += $difference;
-                    $allPayments[0]['payment'] += $difference;
+                    if ($allPayments[$checkIndex]['payment'] != $normalPayment) {
+                        $difference = $allPayments[$checkIndex]['payment'] - $normalPayment;
+                        if ($difference > 0) {
+                            // Payment is too high: waive interest
+                            $allPayments[$checkIndex]['interest'] = max(0, $allPayments[$checkIndex]['interest'] - $difference);
+                            $allPayments[$checkIndex]['payment'] = $applyRounding($allPayments[$checkIndex]['principal'] + $allPayments[$checkIndex]['interest'] + $allPayments[$checkIndex]['fee'], $currency);
+                        } else {
+                            // Payment is too low: pad interest
+                            $diffAbs = abs($difference);
+                            $allPayments[$checkIndex]['interest'] += $diffAbs;
+                            $allPayments[$checkIndex]['payment'] += $diffAbs;
+                        }
+                    }
                 }
             }
 
@@ -395,9 +405,19 @@ class LoanCalculator
                     $difference = $allPayments[$lastIndex]['principal'] - $normalLastPrincipal;
                     $allPayments[$lastIndex]['principal'] -= $difference;
                     $allPayments[$lastIndex]['payment'] -= $difference;
-                    
+
                     $allPayments[0]['principal'] += $difference;
                     $allPayments[0]['payment'] += $difference;
+                } else {
+                    $normalLastInterest = $applyRounding($monthlyInterest * ($isLastFirstHalf ? $firstPayPercent : $secondPayPercent) / 100, $currency);
+                    $normalLastFee = $calculatePeriodFee($lastIndex + 1, $totalPayments);
+                    $normalLastPayment = $applyRounding($normalLastPrincipal + $normalLastInterest + $normalLastFee, $currency);
+
+                    if ($allPayments[$lastIndex]['payment'] < $normalLastPayment) {
+                        $difference = $normalLastPayment - $allPayments[$lastIndex]['payment'];
+                        $allPayments[$lastIndex]['interest'] += $difference;
+                        $allPayments[$lastIndex]['payment'] += $difference;
+                    }
                 }
             }
 
@@ -421,6 +441,18 @@ class LoanCalculator
         } elseif ($option === 'fixed_weekly') {
             $results = $buildFixedIntervalSchedule(7, $duration);
         } elseif ($option === 'annuity_monthly') {
+            // Separate unbiased rounding exclusively for Annuity to prevent massive ballooning
+            $applyAnnuityRounding = function ($amount, $currency) {
+                if (strpos($currency, 'KHR') !== false) {
+                    $remainder = $amount % 1000;
+                    if ($remainder == 0) return $amount;
+                    elseif ($remainder < 250) return floor($amount / 1000) * 1000;
+                    elseif ($remainder < 750) return floor($amount / 1000) * 1000 + 500;
+                    else return ceil($amount / 1000) * 1000;
+                }
+                return round($amount, 0);
+            };
+
             if ($principal <= 0 || $duration <= 0) {
                 return [];
             }
@@ -438,7 +470,7 @@ class LoanCalculator
                 $monthlyPayment = $principal / $duration;
             }
 
-            $monthlyPayment = $applyRounding($monthlyPayment, $currency);
+            $monthlyPayment = $applyAnnuityRounding($monthlyPayment, $currency);
 
             $remainingBalance = $principal;
 
@@ -460,7 +492,7 @@ class LoanCalculator
                     $monthlyInterest = $remainingBalance * $monthlyInterestRate;
                 }
 
-                $monthlyInterest = $applyRounding($monthlyInterest, $currency);
+                $monthlyInterest = $applyAnnuityRounding($monthlyInterest, $currency);
 
                 if ($i == 1 && isset($daysFromStart) && $daysFromStart > 30) {
                     $monthlyPrincipal = $monthlyPayment - ($remainingBalance * $monthlyInterestRate);
@@ -470,20 +502,11 @@ class LoanCalculator
                     $totalPayment = $monthlyPayment;
                 }
 
-                $monthlyPrincipal = $applyRounding($monthlyPrincipal, $currency);
+                $monthlyPrincipal = $applyAnnuityRounding($monthlyPrincipal, $currency);
                 $monthlyPrincipal = min($monthlyPrincipal, $remainingBalance);
 
                 if ($i == $duration) {
                     $monthlyPrincipal = $remainingBalance;
-                    // Smart Check: Only adjust if final principal is higher than normal
-                    if ($monthlyPrincipal > ($monthlyPayment - $monthlyInterest)) {
-                        $expectedPrincipal = $monthlyPayment - $monthlyInterest;
-                        $diff = $monthlyPrincipal - $expectedPrincipal;
-                        $adjustedInterest = $monthlyInterest - $diff;
-                        if ($adjustedInterest >= 0) {
-                            $monthlyInterest = $adjustedInterest;
-                        }
-                    }
                     $totalPayment = $monthlyPrincipal + $monthlyInterest;
                     $remainingBalance = 0;
                 } else {
@@ -497,12 +520,45 @@ class LoanCalculator
                     'principal' => $monthlyPrincipal,
                     'interest' => $monthlyInterest,
                     'fee' => $feePay,
-                    'payment' => $applyRounding($totalPayment + $feePay, $currency),
+                    'payment' => $applyAnnuityRounding($totalPayment + $feePay, $currency),
                     'balance' => $remainingBalance,
                 ];
 
                 if ($i < $duration) {
                     $advanceMonthlyPaymentDate($currentPaymentDate);
+                }
+            }
+
+            // Smart Check for annuity_monthly to prevent final payment spike or dip
+            if (count($results) > 1) {
+                $lastIndex = count($results) - 1;
+                $expectedPayment = $applyAnnuityRounding($monthlyPayment + $calculatePeriodFee($duration, $duration), $currency);
+
+                if ($results[$lastIndex]['payment'] != $expectedPayment) {
+                    $difference = $results[$lastIndex]['payment'] - $expectedPayment;
+
+                    if ($difference > 0) {
+                        // Final payment is too high: waive interest to keep it flat
+                        $results[$lastIndex]['interest'] = max(0, $results[$lastIndex]['interest'] - $difference);
+                        $results[$lastIndex]['payment'] = $applyAnnuityRounding($results[$lastIndex]['principal'] + $results[$lastIndex]['interest'] + $results[$lastIndex]['fee'], $currency);
+                    } else {
+                        // Final payment is too low: pad the interest
+                        $diffAbs = abs($difference);
+                        $results[$lastIndex]['interest'] += $diffAbs;
+                        $results[$lastIndex]['payment'] += $diffAbs;
+                    }
+
+                    // Recompute balances since principal might have shifted
+                    $runningBalance = $principal;
+                    foreach ($results as $idx => &$pay) {
+                        if ($idx === count($results) - 1) {
+                            $pay['balance'] = 0;
+                        } else {
+                            $runningBalance -= $pay['principal'];
+                            $pay['balance'] = max(0, $runningBalance);
+                        }
+                    }
+                    unset($pay);
                 }
             }
         } elseif ($option === 'linear_monthly') {
@@ -534,11 +590,17 @@ class LoanCalculator
 
                 if ($i == $duration) {
                     $currentPrincipal = $remainingBalance;
-                    // Smart Check: Only adjust if final principal is higher than normal
-                    if ($currentPrincipal > $monthlyPrincipal) {
+                    // Smart Check: Adjust interest to keep final payment flat
+                    if ($currentPrincipal != $monthlyPrincipal) {
                         $diff = $currentPrincipal - $monthlyPrincipal;
-                        $adjustedInterest = $monthlyInterest - $diff;
-                        $currentInterest = max(0, $adjustedInterest);
+                        if ($diff > 0) {
+                            // Principal is higher: waive interest
+                            $adjustedInterest = $monthlyInterest - $diff;
+                            $currentInterest = max(0, $adjustedInterest);
+                        } else {
+                            // Principal is lower: pad interest
+                            $currentInterest = $monthlyInterest + abs($diff);
+                        }
                     } else {
                         $currentInterest = $monthlyInterest;
                     }
@@ -585,11 +647,17 @@ class LoanCalculator
 
                 if ($i == $duration) {
                     $currentPrincipal = $remainingBalance;
-                    // Smart Check: Only adjust if final principal is higher than normal
-                    if ($currentPrincipal > $monthlyPrincipal) {
+                    // Smart Check: Adjust interest to keep final payment flat
+                    if ($currentPrincipal != $monthlyPrincipal) {
                         $diff = $currentPrincipal - $monthlyPrincipal;
-                        $adjustedInterest = $monthlyInterest - $diff;
-                        $currentInterest = max(0, $adjustedInterest);
+                        if ($diff > 0) {
+                            // Principal is higher: waive interest
+                            $adjustedInterest = $monthlyInterest - $diff;
+                            $currentInterest = max(0, $adjustedInterest);
+                        } else {
+                            // Principal is lower: pad interest
+                            $currentInterest = $monthlyInterest + abs($diff);
+                        }
                     } else {
                         $currentInterest = $monthlyInterest;
                     }

@@ -26,7 +26,7 @@ class ArrearReportResource extends JsonResource
         $referenceDateStr = $request->query('to_date') ?? $request->query('report_date');
         $referenceDate = $referenceDateStr ? Carbon::parse($referenceDateStr) : Carbon::today();
 
-        $arrearDate = $this->late_since_date;
+        $arrearDate = $this->calculated_late_since_date ?? $this->late_since_date;
         $aging = $arrearDate ? abs($referenceDate->diffInDays(Carbon::parse($arrearDate))) : 0;
         $arrearPrincipal = (float) ($this->arrear_principal ?? 0);
         $arrearInterest = (float) ($this->arrear_interest ?? 0);

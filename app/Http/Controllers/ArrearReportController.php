@@ -22,9 +22,12 @@ class ArrearReportController extends Controller
 
         // 1. Build Query with SQL Subqueries for Performance
         $query = Loan::with([
-            'borrower' => function($q) { $q->withTrashed()->select('id', 'customer_code', 'first_name', 'last_name', 'gender', 'phone', 'village', 'commune'); },
-            'coBorrower' => function($q) { $q->withTrashed()->select('id', 'first_name', 'last_name', 'phone'); },
-            'guarantor' => function($q) { $q->withTrashed()->select('id', 'first_name', 'last_name', 'phone'); },
+            'borrower' => function ($q) {
+                $q->withTrashed()->select('id', 'customer_code', 'first_name', 'last_name', 'gender', 'phone', 'village', 'commune'); },
+            'coBorrower' => function ($q) {
+                $q->withTrashed()->select('id', 'first_name', 'last_name', 'phone'); },
+            'guarantor' => function ($q) {
+                $q->withTrashed()->select('id', 'first_name', 'last_name', 'phone'); },
             'officer:id,name',
             'collaterals:id,loan_id,type,description'
         ])
@@ -60,6 +63,14 @@ class ArrearReportController extends Controller
 
         // Add subqueries for aggregate data
         $query->addSelect([
+            // Earliest Arrear Date (Dynamic late_since_date)
+            'calculated_late_since_date' => \App\Models\Payment::select('payment_date')
+                ->whereColumn('loan_id', 'loans.id')
+                ->where('payment_date', '<', $refDateStr)
+                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
+                ->orderBy('payment_date', 'asc')
+                ->limit(1),
+
             // Total Outstanding Principal
             'calculated_outstanding' => \App\Models\Payment::selectRaw('SUM(principal_amount - GREATEST(0, total_paid - interest_amount))')
                 ->whereColumn('loan_id', 'loans.id'),
@@ -95,17 +106,20 @@ class ArrearReportController extends Controller
 
         // 2. Filter by Aging in PHP (if necessary)
         $filtered = $loans->filter(function ($loan) use ($referenceDate, $reportType, $fromDate) {
-            if (!$loan->late_since_date) {
+            $arrearDateStr = $loan->calculated_late_since_date ?? $loan->late_since_date;
+            
+            if (!$arrearDateStr) {
                 return false;
             }
 
-            $arrearDate = Carbon::parse($loan->late_since_date);
-
-            if ($reportType === 'all')
-                return true;
+            $arrearDate = Carbon::parse($arrearDateStr);
 
             if ($fromDate && $arrearDate->lt($fromDate)) {
                 return false;
+            }
+
+            if ($reportType === 'all') {
+                return true;
             }
 
             $aging = abs($referenceDate->diffInDays($arrearDate));

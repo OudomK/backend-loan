@@ -113,7 +113,7 @@ class ActiveLoanReportController extends Controller
 
             $overdueAmount = max(0, $totalDueBeforeRefDate - $scheduledPaidAtDate);
             $agingDays = $earliestArrearDate
-                ? $refDate->diffInDays(Carbon::parse($earliestArrearDate))
+                ? (int) abs($refDate->diffInDays(Carbon::parse($earliestArrearDate)))
                 : 0;
 
             $collateralType = $loan->collaterals->isNotEmpty() ? $loan->collaterals->first()->type : '';
@@ -140,7 +140,7 @@ class ActiveLoanReportController extends Controller
                 'currency_code' => $loan->currency,
                 'interest_rate' => $loan->interest_rate,
                 'processing_fee' => 0,
-                'monthly_interest_rate' => $loan->monthly_interest ?? ($loan->interest_rate / 12),
+                'monthly_interest_rate' => ($loan->interest_rate ?? 0) / 12,
                 'term' => $loan->duration_months,
                 'tenor' => $this->tenorLabel($loan->payment_frequency),
                 'payment_method' => $loan->repayment_method,
@@ -166,7 +166,7 @@ class ActiveLoanReportController extends Controller
                 'sector_name' => $loan->sector ?? 'General',
                 'first_repayment_date' => $firstRepaymentDate,
                 'last_payment_date' => $lastPaymentDate,
-                'account_status' => 'active',
+                'account_status' => 'Active',
                 'account_rating' => $this->getAccountRating($agingDays),
                 'short_long_term' => $this->shortLongTermLabel((int) $loan->duration_months, $loan->payment_frequency),
                 'secure_loan_type' => $loan->collaterals->isNotEmpty() ? 'Secured' : 'Unsecured',
