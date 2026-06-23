@@ -170,6 +170,12 @@ class LoanOutstandingParReportController extends Controller
             return strcmp($a['co_name'], $b['co_name']);
         });
 
+        if ($request->query('export') === 'excel') {
+            return (new \App\Exports\Excel\LoanOutstandingParExcelExport())->download($result, $request, $reportDateStr);
+        } elseif ($request->query('export') === 'pdf') {
+            return (new \App\Exports\Pdf\LoanOutstandingParPdfExport())->download($result, $request, $reportDateStr);
+        }
+
         return response()->json($result);
     }
 }

@@ -53,12 +53,18 @@ class RepaymentReportController extends Controller
             $query->where('loans.status', $status);
         }
 
+
         $reports = $query->orderBy('repayment_transactions.transaction_date', 'desc')
             ->orderBy('repayment_transactions.id', 'desc')
             ->select('repayment_transactions.*')
             ->get();
 
-        // Using resolve() to return a flat array for frontend compatibility (Export)
-        return LoanReportResource::collection($reports)->resolve();
+        $data = LoanReportResource::collection($reports)->resolve();
+
+        if ($request->query('export') === 'excel') {
+            return (new \App\Exports\Excel\RepaymentReportExcelExport())->download($data, $request);
+        }
+
+        return $data;
     }
 }

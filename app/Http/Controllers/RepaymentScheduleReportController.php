@@ -11,6 +11,30 @@ class RepaymentScheduleReportController extends Controller
 {
     public function index(Request $request)
     {
+        $schedules = $this->getScheduleData($request);
+
+        return response()->json([
+            'success' => true,
+            'data' => $schedules
+        ]);
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $schedules = $this->getScheduleData($request);
+        $export = new \App\Exports\Excel\RepaymentScheduleExcelExport();
+        return $export->download($schedules->toArray(), $request);
+    }
+
+    public function exportPdf(Request $request)
+    {
+        $schedules = $this->getScheduleData($request);
+        $export = new \App\Exports\Pdf\RepaymentSchedulePdfExport();
+        return $export->download($schedules->toArray(), $request);
+    }
+
+    private function getScheduleData(Request $request)
+    {
         $startDate = $request->input('start_date');
         $endDate = $request->input('end_date');
         $officerId = $request->input('officer_id');
@@ -63,7 +87,7 @@ class RepaymentScheduleReportController extends Controller
         if ($officerId && strtolower($officerId) !== 'all') {
             $query->where('loans.loan_officer_id', $officerId);
         }
-        if ($currency && $currency !== 'All') {
+        if ($currency && $currency !== 'All' && strtolower($currency) !== 'all') {
             if (str_contains(strtoupper($currency), 'USD')) {
                 $query->where('loans.currency', 'USD');
             } elseif (str_contains(strtoupper($currency), 'KHR')) {
@@ -82,18 +106,19 @@ class RepaymentScheduleReportController extends Controller
             // Format installment as "X/Y"
             $item->installment_display = $item->payment_number . '/' . $item->duration_months . ' ' . $this->installmentUnitLabel($item->payment_frequency);
             
-            // Strip cycle from loan_code
+            // Format loan_code using central FormatHelper
             if ($item->loan_code) {
-                $item->loan_code = preg_replace('/-C\d+$/i', '', $item->loan_code);
+                $item->loan_code = \App\Support\FormatHelper::formatLoanCode((string) $item->loan_code);
             }
             
+            // Also need to determine the status to match what flutter had "active", "refinanced", etc.
+            // But Flutter frontend did this? No, Flutter had a _buildStatusCell which evaluated it. Let's provide "payment_status" as "Active" for schedule since it's unpaid upcoming.
+            $item->payment_status = 'Active';
+
             return $item;
         });
 
-        return response()->json([
-            'success' => true,
-            'data' => $schedules
-        ]);
+        return $schedules;
     }
 
     private function installmentUnitLabel(?string $paymentFrequency): string
@@ -101,12 +126,12 @@ class RepaymentScheduleReportController extends Controller
         $normalized = strtolower(trim((string) $paymentFrequency));
 
         return match ($normalized) {
-            'monthly' => 'mo',
-            'biweekly' => 'biwk',
-            'weekly' => 'wk',
-            'daily' => 'day',
-            'term' => 'inst',
-            default => 'term',
+            'monthly' => 'Months',
+            'biweekly' => 'Bi-Weekly',
+            'weekly' => 'Weeks',
+            'daily' => 'Days',
+            'term' => 'Installments',
+            default => 'Terms',
         };
     }
 }

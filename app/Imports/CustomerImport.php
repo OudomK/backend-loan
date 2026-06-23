@@ -20,16 +20,19 @@ class CustomerImport
      * 0: First Name*
      * 1: Last Name*
      * 2: Gender
-     * 3: Phone
-     * 4: ID Type (e.g., NID)
-     * 5: ID Number
-     * 6: DOB (YYYY-MM-DD or via Excel format)
-     * 7: Village
-     * 8: Commune
-     * 9: District
-     * 10: Province
+     * 3: DOB (DD/MM/YYYY)
+     * 4: Phone
+     * 5: ID Type (e.g., National ID)
+     * 6: ID Number
+     * 7: ID Expiry (DD/MM/YYYY)
+     * 8: Occupation
+     * 9: Marital Status
+     * 10: Village
+     * 11: Commune
+     * 12: District
+     * 13: Province
      */
-    public function import($filePath, $type)
+    public function import(string $filePath, string $type)
     {
         try {
             $spreadsheet = IOFactory::load($filePath);
@@ -64,21 +67,25 @@ class CustomerImport
                 }
 
                 $currentSequence++;
-                $customerCode = $prefix . '-' . str_pad($currentSequence, 3, '0', STR_PAD_LEFT);
+                $separator = ($prefix === 'INV') ? '' : '-';
+                $customerCode = $prefix . $separator . str_pad($currentSequence, 3, '0', STR_PAD_LEFT);
 
                 $data = [
                     'customer_code' => $customerCode,
                     'first_name' => $firstName,
                     'last_name' => $lastName,
                     'gender' => trim($row[2] ?? 'Male'),
-                    'phone' => trim($row[3] ?? ''),
-                    'id_type' => trim($row[4] ?? 'NID'),
-                    'id_number' => trim($row[5] ?? ''),
-                    'dob' => $this->parseDate($row[6] ?? null),
-                    'village' => trim($row[7] ?? ''),
-                    'commune' => trim($row[8] ?? ''),
-                    'district' => trim($row[9] ?? ''),
-                    'province' => trim($row[10] ?? ''),
+                    'dob' => $this->parseDate($row[3] ?? null),
+                    'phone' => trim($row[4] ?? ''),
+                    'id_type' => trim($row[5] ?? 'National ID'),
+                    'id_number' => trim($row[6] ?? ''),
+                    'id_expiry' => $this->parseDate($row[7] ?? null),
+                    'occupation' => trim($row[8] ?? ''),
+                    'marital_status' => trim($row[9] ?? ''),
+                    'village' => trim($row[10] ?? ''),
+                    'commune' => trim($row[11] ?? ''),
+                    'district' => trim($row[12] ?? ''),
+                    'province' => trim($row[13] ?? ''),
                     'status' => 'Active',
                 ];
 
@@ -109,7 +116,7 @@ class CustomerImport
         }
     }
 
-    private function getModel($type)
+    private function getModel(string $type)
     {
         return match ($type) {
             'borrowers' => Borrower::class,
@@ -121,41 +128,35 @@ class CustomerImport
         };
     }
 
-    private function getPrefix($type)
+    private function getPrefix(string $type)
     {
         return match ($type) {
-            'borrowers' => 'BOR',
-            'co-borrowers' => 'COB',
-            'guarantors' => 'GUA',
+            'borrowers' => 'QF',
+            'co-borrowers' => 'CB',
+            'guarantors' => 'GU',
             'investors' => 'INV',
             'savers' => 'SAV',
             default => 'CUS'
         };
     }
 
-    private function getLastSequence($type, $prefix)
+    private function getLastSequence(string $type, string $prefix)
     {
         $modelClass = $this->getModel($type);
         if (!$modelClass)
             return 0;
 
-        $lastRecord = $modelClass::orderBy('id', 'desc')->first();
-        if (!$lastRecord || empty($lastRecord->customer_code)) {
-            return 0; // Starts at 0, first will be 1
+        $lastRecord = $modelClass::withTrashed()->orderBy('id', 'desc')->first();
+        if (!$lastRecord) {
+            return 0;
         }
 
-        $lastCode = $lastRecord->customer_code;
-        $parts = explode('-', $lastCode);
-
-        if (count($parts) > 1 && is_numeric($parts[1])) {
-            return intval($parts[1]);
-        }
-
-        return 0;
+        // Just use the latest ID as the sequence basis to match BorrowerController logic
+        return $lastRecord->id;
     }
 
 
-    private function parseDate($value)
+    private function parseDate(?string $value)
     {
         if (empty($value))
             return null;
@@ -175,10 +176,15 @@ class CustomerImport
         }
 
         // Try standard conversion
+        // Try Carbon parse which usually handles many formats including DD/MM/YYYY
         try {
-            return \Carbon\Carbon::parse($val)->format('Y-m-d');
+            return \Carbon\Carbon::createFromFormat('d/m/Y', $val)->format('Y-m-d');
         } catch (\Exception $e) {
-            return null;
+            try {
+                return \Carbon\Carbon::parse($val)->format('Y-m-d');
+            } catch (\Exception $e2) {
+                return null;
+            }
         }
     }
 }

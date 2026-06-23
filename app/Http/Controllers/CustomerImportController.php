@@ -54,10 +54,13 @@ class CustomerImportController extends Controller
                 'First Name',
                 'Last Name',
                 'Gender',
+                'DOB (DD/MM/YYYY)',
                 'Phone',
                 'ID Type',
                 'ID Number',
-                'DOB (YYYY-MM-DD)',
+                'ID Expiry (DD/MM/YYYY)',
+                'Occupation',
+                'Marital Status',
                 'Village',
                 'Commune',
                 'District',
@@ -77,14 +80,17 @@ class CustomerImportController extends Controller
             $sheet->setCellValue('A2', 'Sok');
             $sheet->setCellValue('B2', 'Chea');
             $sheet->setCellValue('C2', 'Male');
-            $sheet->setCellValue('D2', '012345678');
-            $sheet->setCellValue('E2', 'NID');
-            $sheet->setCellValue('F2', '');
-            $sheet->setCellValue('G2', '1990-12-30');
-            $sheet->setCellValue('H2', '');
-            $sheet->setCellValue('I2', '');
-            $sheet->setCellValue('J2', '');
-            $sheet->setCellValue('K2', '');
+            $sheet->setCellValue('D2', '30/12/1990');
+            $sheet->setCellValue('E2', '012345678');
+            $sheet->setCellValue('F2', 'National ID');
+            $sheet->setCellValue('G2', '0123456789');
+            $sheet->setCellValue('H2', '31/12/2030');
+            $sheet->setCellValue('I2', 'Farmer');
+            $sheet->setCellValue('J2', 'Married');
+            $sheet->setCellValue('K2', 'Village A');
+            $sheet->setCellValue('L2', 'Commune B');
+            $sheet->setCellValue('M2', 'District C');
+            $sheet->setCellValue('N2', 'Province D');
 
             $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xlsx');
 

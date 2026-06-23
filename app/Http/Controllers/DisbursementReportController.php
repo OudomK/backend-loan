@@ -271,4 +271,26 @@ class DisbursementReportController extends Controller
 
         return response()->json($reportData);
     }
+
+    public function exportExcel(Request $request)
+    {
+        $fromDateStr = $request->query('from_date');
+        $toDateStr = $request->query('to_date');
+        $officerId = $request->query('officer_id');
+
+        // Reuse the index logic to get the same exact array
+        $response = $this->index($request);
+        $data = $response->getData(true); // Convert JSON response back to array
+
+        $officerName = 'ALL';
+        if ($officerId && $officerId !== 'all') {
+            $officer = \App\Models\LoanOfficer::find($officerId);
+            if ($officer) {
+                $officerName = $officer->name;
+            }
+        }
+
+        $export = new \App\Exports\Excel\DisbursementExcelExport();
+        return $export->download($data, $request, $fromDateStr, $toDateStr, $officerName);
+    }
 }

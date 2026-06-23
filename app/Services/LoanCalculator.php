@@ -230,9 +230,17 @@ class LoanCalculator
 
                 if ($i == 1) {
                     $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days + 1; // +1 for inclusive days
-                    // Pro-rate both interest and principal on first payment based on actual days
-                    $firstPaymentInterest = $applyRounding($monthlyInterest * ($daysFromStart / 30), $currency);
-                    $principalPay = $applyRounding($monthlyPrincipal * ($daysFromStart / 30), $currency);
+                    
+                    if ($daysFromStart < 15) {
+                        // Shortage day: DO NOT pro-rate. Charge normal flat amount.
+                        $firstPaymentInterest = $applyRounding($monthlyInterest * ($firstPayPercent / 100), $currency);
+                        $principalPay = $applyRounding($firstPaymentPrincipal, $currency);
+                    } else {
+                        // Excess/Normal day: Pro-rate both interest and principal on first payment based on actual days
+                        $firstPaymentInterest = $applyRounding($monthlyInterest * ($daysFromStart / 30), $currency);
+                        $principalPay = $applyRounding($monthlyPrincipal * ($daysFromStart / 30), $currency);
+                    }
+                    
                     $principalPay = min($principalPay, $remainingBalance);
 
                     $feePay = $calculatePeriodFee($i, $totalPayments);
@@ -350,8 +358,13 @@ class LoanCalculator
 
                 if ($i == 1) {
                     $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days + 1;
-                    // Pro-rate both interest and principal on first payment based on actual days
-                    $interestPay = $applyRounding($monthlyInterest * ($daysFromStart / 30), $currency);
+                    if ($daysFromStart < 15) {
+                        // Shortage day: DO NOT pro-rate. Charge normal flat 50%.
+                        $interestPay = $applyRounding($monthlyInterest * ($firstPayPercent / 100), $currency);
+                    } else {
+                        // Excess/Normal day: Pro-rate interest based on actual days
+                        $interestPay = $applyRounding($monthlyInterest * ($daysFromStart / 30), $currency);
+                    }
                 } else {
                     $interestPay = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
                 }
@@ -372,8 +385,13 @@ class LoanCalculator
                     break;
                 } else {
                     if ($i == 1) {
-                        // Pro-rate principal on first payment based on actual days
-                        $principalPay = $applyRounding($monthlyPrincipal * ($daysFromStart / 30), $currency);
+                        if ($daysFromStart < 15) {
+                            // Shortage day: DO NOT pro-rate. Charge normal flat 50% principal.
+                            $principalPay = $applyRounding($firstPaymentPrincipal, $currency);
+                        } else {
+                            // Excess/Normal day: Pro-rate principal based on actual days
+                            $principalPay = $applyRounding($monthlyPrincipal * ($daysFromStart / 30), $currency);
+                        }
                     } else {
                         $rawPrincipalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
                         $principalPay = $applyRounding($rawPrincipalPay, $currency);

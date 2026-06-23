@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Loan;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use App\Exports\Excel\WriteOffCollectionExcelExport;
 
 class WriteOffCollectionReportController extends Controller
 {
@@ -154,8 +155,8 @@ class WriteOffCollectionReportController extends Controller
                 $collateralType = $loan->collaterals->first()?->type ?? '';
 
                 return [
-                    'disb_date' => $loan->start_date,
-                    'loan_code' => $loan->loan_code,
+                    'disbursement_date' => $loan->start_date ?? '',
+                    'loan_code' => \App\Support\FormatHelper::formatLoanCode((string) ($loan->loan_code ?? '')),
                     'customer_code' => $borrower->customer_code ?? '',
                     'borrower_name' => $borrowerName,
                     'phone_number' => $borrower->phone ?? '',
@@ -223,5 +224,21 @@ class WriteOffCollectionReportController extends Controller
         }
 
         return 'Standard Loan';
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $response = $this->index($request);
+        $data = json_decode($response->getContent(), true);
+
+        $fromDateInput = $request->query('from_date');
+        $toDateInput = $request->query('to_date');
+        $currency = $request->query('currency', 'all');
+
+        $fromDateStr = $fromDateInput ?? Carbon::today()->startOfMonth()->toDateString();
+        $toDateStr = $toDateInput ?? Carbon::today()->toDateString();
+
+        $export = new WriteOffCollectionExcelExport();
+        return $export->download($data['data'] ?? [], $request, $fromDateStr, $toDateStr, $currency);
     }
 }

@@ -129,4 +129,45 @@ class ArrearReportController extends Controller
 
         return ArrearReportResource::collection($filtered)->resolve();
     }
+
+    public function exportExcel(Request $request)
+    {
+        $data = $this->index($request); // Reuse existing logic to get filtered & formatted data array
+
+        $officerId = $request->query('officer_id', 'all');
+        $currency = $request->query('currency', 'all');
+        $toDateStr = $request->query('to_date') ?? Carbon::today()->toDateString();
+        
+        $officerName = 'ALL';
+        if ($officerId !== 'all') {
+            $officer = \App\Models\LoanOfficer::find($officerId);
+            if ($officer) {
+                $officerName = $officer->name;
+            }
+        }
+
+        $export = new \App\Exports\Excel\ArrearAllExcelExport();
+        return $export->download($data, $request, $toDateStr, $currency, $officerName);
+    }
+
+    public function exportUnder30Excel(Request $request)
+    {
+        $request->merge(['report_type' => 'under30']);
+        $data = $this->index($request);
+
+        $officerId = $request->query('officer_id', 'all');
+        $currency = $request->query('currency', 'all');
+        $toDateStr = $request->query('to_date') ?? Carbon::today()->toDateString();
+        
+        $officerName = 'ALL';
+        if ($officerId !== 'all') {
+            $officer = \App\Models\LoanOfficer::find($officerId);
+            if ($officer) {
+                $officerName = $officer->name;
+            }
+        }
+
+        $export = new \App\Exports\Excel\ArrearUnder30ExcelExport();
+        return $export->download($data, $request, $toDateStr, $currency, $officerName);
+    }
 }

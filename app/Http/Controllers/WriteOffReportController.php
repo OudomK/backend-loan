@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Loan;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use App\Exports\Excel\WriteOffExcelExport;
 use Illuminate\Support\Facades\Log;
 
 class WriteOffReportController extends Controller
@@ -81,8 +82,8 @@ class WriteOffReportController extends Controller
 
                 $reportData[] = [
                     'written_off_date' => $loan->written_off_at,
-                    'disbursement_date' => $loan->start_date,
-                    'loan_code' => $loan->loan_code,
+                    'disbursement_date' => $loan->start_date ?? '',
+                    'loan_code' => \App\Support\FormatHelper::formatLoanCode((string) ($loan->loan_code ?? '')),
                     'product_name' => $loan->product->name ?? 'General Loan',
                     'customer_code' => $loan->borrower->customer_code ?? '',
                     'customer_name' => $borrowerName,
@@ -96,7 +97,7 @@ class WriteOffReportController extends Controller
                     'monthly_interest_rate' => (float) ($loan->monthly_interest ?? ((float) ($loan->interest_rate ?? 0) / 12)),
                     'term' => (int) ($loan->duration_months ?? 0),
                     'tenor' => $this->tenorLabel($loan->payment_frequency),
-                    'payment_method' => $loan->repayment_method ?? '',
+                    'payment_method' => \App\Support\FormatHelper::formatPaymentMethod((string) ($loan->repayment_method ?? '')),
                     'loan_cycle' => (int) ($loan->loan_cycle ?? 1),
                     'refinance_fee' => (float) ($loan->refinance_fee ?? 0),
                     'admin_fee' => (float) ($loan->admin_fee ?? 0),
@@ -122,7 +123,7 @@ class WriteOffReportController extends Controller
         return response()->json($reportData);
     }
 
-    private function principalComponent($transaction): float
+    private function principalComponent(mixed $transaction): float
     {
         return (float) ($transaction->principal_paid ?? 0)
             + (float) ($transaction->prepayment_paid ?? 0)
@@ -142,5 +143,21 @@ class WriteOffReportController extends Controller
             'bi-monthly', 'bimonthly', 'semi-monthly' => 'Semi-Monthly',
             default => $normalized !== '' ? ucwords(str_replace(['_', '-'], ' ', $normalized)) : '',
         };
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $response = $this->index($request);
+        $data = json_decode($response->getContent(), true);
+
+        $fromDateInput = $request->query('from_date');
+        $toDateInput = $request->query('to_date');
+        $currency = $request->query('currency', 'all');
+
+        $fromDate = $fromDateInput ? Carbon::parse($fromDateInput) : Carbon::today()->startOfMonth();
+        $toDate = $toDateInput ? Carbon::parse($toDateInput) : Carbon::today();
+
+        $export = new WriteOffExcelExport();
+        return $export->download($data, $request, $fromDate->format('d-M-y'), $toDate->format('d-M-y'), $currency);
     }
 }

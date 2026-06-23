@@ -33,16 +33,31 @@ class BorrowingController extends Controller
         return in_array($normalized, $allowed, true) ? $normalized : null;
     }
 
-    public function getBorrowings()
+    private function getBorrowingsData(?Request $request = null)
     {
-        $borrowings = Borrowing::with('lender', 'repayments')
+        $borrowings = Borrowing::with(['lender', 'repayments', 'schedules'])
             ->orderBy('borrowing_date', 'desc')
             ->get();
 
-        return response()->json($borrowings->map(function ($b) {
+        $today = \Carbon\Carbon::today();
+
+        $data = $borrowings->map(function ($b) use ($today) {
             $totalPrincipalPaid = (float) $b->repayments->sum('principal_paid');
             $totalInterestPaid = (float) $b->repayments->sum('interest_paid');
             $balance = round((float) $b->amount - $totalPrincipalPaid, 2);
+
+            $dynamicLatePrincipal = 0.0;
+            $dynamicLateInterest = 0.0;
+
+            foreach ($b->schedules as $sch) {
+                if ($sch->status !== 'paid') {
+                    $dueDate = \Carbon\Carbon::parse($sch->due_date)->startOfDay();
+                    if ($today->gt($dueDate)) {
+                        $dynamicLatePrincipal += max(0, (float)$sch->principal_due - (float)$sch->principal_paid);
+                        $dynamicLateInterest += max(0, (float)$sch->interest_due - (float)$sch->interest_paid);
+                    }
+                }
+            }
 
             return [
                 'id' => $b->id,
@@ -70,10 +85,50 @@ class BorrowingController extends Controller
                 'balance' => $balance,
                 'total_paid' => $totalPrincipalPaid + $totalInterestPaid,
                 'status' => $b->status,
-                'late_principal' => $b->late_principal ?? 0,
-                'loan_interest' => $b->loan_interest ?? 0,
+                'late_principal' => round($dynamicLatePrincipal, 2),
+                'loan_interest' => round($dynamicLateInterest, 2),
             ];
-        }));
+        });
+
+        if ($request && $request->has('search')) {
+            $search = mb_strtolower($request->query('search'), 'UTF-8');
+            $data = $data->filter(function ($item) use ($search) {
+                return str_contains(mb_strtolower((string)($item['account_no'] ?? ''), 'UTF-8'), $search)
+                    || str_contains(mb_strtolower((string)($item['lender_name'] ?? ''), 'UTF-8'), $search)
+                    || str_contains(mb_strtolower((string)($item['lender_code'] ?? ''), 'UTF-8'), $search);
+            })->values();
+        }
+
+        return $data;
+    }
+
+    public function getBorrowings()
+    {
+        return response()->json($this->getBorrowingsData());
+    }
+
+    public function exportExcel(Request $request)
+    {
+        try {
+            $data = $this->getBorrowingsData($request)->toArray();
+            $export = new \App\Exports\Excel\BorrowingExcelExport();
+            return $export->download($data, $request);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Borrowing Export Excel Error: " . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function exportPdf(Request $request)
+    {
+        try {
+            $data = $this->getBorrowingsData($request)->toArray();
+            $export = new \App\Exports\Pdf\BorrowingPdfExport();
+            return $export->download($data, $request);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Borrowing Export PDF Error: " . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
     }
 
     public function getLenders()
@@ -307,7 +362,7 @@ class BorrowingController extends Controller
 
             // Standard Fields
             $validated['balance_after_payment'] = round($remainingBalance - (float) $validated['principal_paid'], 2);
-            $validated['received_by'] = auth()->id();
+            $validated['received_by'] = request()->user()?->id;
 
             // Generate receipt in a collision-safe format.
             $validated['receipt_no'] = $this->generateUniqueBorrowingReceiptNo();

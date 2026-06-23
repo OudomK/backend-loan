@@ -217,6 +217,7 @@ class RepaymentController extends Controller
             ->get();
 
         return response()->json($loans->map(function ($loan) {
+            $symbol = str_contains(strtoupper((string) $loan->currency), 'KHR') ? '៛' : '$';
             return [
                 'id' => (string) $loan->id,
                 'name' => $loan->borrower
@@ -225,6 +226,8 @@ class RepaymentController extends Controller
                 'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
                 'principal' => (string) $loan->amount,
                 'interest' => (string) $loan->interest_rate,
+                'currency' => (string) $loan->currency,
+                'symbol' => $symbol,
             ];
         }));
     }

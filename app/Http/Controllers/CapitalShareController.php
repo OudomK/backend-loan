@@ -123,10 +123,53 @@ class CapitalShareController extends Controller
         ];
     }
 
-    public function index()
+    private function getSharesData(?Request $request = null)
     {
-        $shares = CapitalShare::with(['lender', 'investor'])->get();
-        return $shares->map(fn(CapitalShare $s) => $this->transformShare($s));
+        $shares = CapitalShare::with(['lender', 'investor'])
+            ->orderBy('id', 'desc')
+            ->get();
+            
+        $data = $shares->map(fn(CapitalShare $s) => $this->transformShare($s));
+
+        if ($request && $request->has('search')) {
+            $search = mb_strtolower($request->query('search'), 'UTF-8');
+            $data = $data->filter(function ($item) use ($search) {
+                return str_contains(mb_strtolower((string)($item['account_no'] ?? ''), 'UTF-8'), $search)
+                    || str_contains(mb_strtolower((string)($item['lender_name'] ?? ''), 'UTF-8'), $search)
+                    || str_contains(mb_strtolower((string)($item['lender_code'] ?? ''), 'UTF-8'), $search);
+            })->values();
+        }
+
+        return $data;
+    }
+
+    public function index(Request $request)
+    {
+        return response()->json($this->getSharesData($request));
+    }
+
+    public function exportExcel(Request $request)
+    {
+        try {
+            $data = $this->getSharesData($request)->toArray();
+            $export = new \App\Exports\Excel\CapitalShareExcelExport();
+            return $export->download($data, $request);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Capital Share Export Excel Error: " . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function exportPdf(Request $request)
+    {
+        try {
+            $data = $this->getSharesData($request)->toArray();
+            $export = new \App\Exports\Pdf\CapitalSharePdfExport();
+            return $export->download($data, $request);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Capital Share Export PDF Error: " . $e->getMessage());
+            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+        }
     }
 
     public function show(string|int $id)

@@ -278,4 +278,23 @@ class QualityPortfolioController extends Controller
 
         return response()->json($reportData);
     }
+
+    public function exportExcel(Request $request)
+    {
+        $fromDateStr = $request->query('from_date');
+        $toDateStr = $request->query('to_date');
+        $currency = $request->query('currency', 'all');
+
+        $originalRequest = new Request([
+            'from_date' => $fromDateStr,
+            'to_date' => $toDateStr,
+            'currency' => $currency,
+        ]);
+
+        $response = $this->index($originalRequest);
+        $data = json_decode($response->getContent(), true);
+
+        $exporter = new \App\Exports\Excel\QualityPortfolioExcelExport();
+        return $exporter->download($data, $request, $fromDateStr, $toDateStr, $currency);
+    }
 }

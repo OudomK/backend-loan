@@ -130,7 +130,7 @@ class ActiveLoanReportController extends Controller
 
             return [
                 'disbursement_date' => $loan->start_date,
-                'loan_code' => $loan->loan_code,
+                'loan_code' => \App\Support\FormatHelper::formatLoanCode((string) $loan->loan_code),
                 'client_name' => $borrower ? ($borrower->first_name . ' ' . $borrower->last_name) : '',
                 'village_name' => $borrower->village ?? '',
                 'commune_name' => $borrower->commune ?? '',
@@ -143,7 +143,7 @@ class ActiveLoanReportController extends Controller
                 'monthly_interest_rate' => ($loan->interest_rate ?? 0) / 12,
                 'term' => $loan->duration_months,
                 'tenor' => $this->tenorLabel($loan->payment_frequency),
-                'payment_method' => $loan->repayment_method,
+                'payment_method' => \App\Support\FormatHelper::formatPaymentMethod((string) $loan->repayment_method),
                 'payment_frequency' => $loan->payment_frequency,
                 'loan_cycle' => $loan->loan_cycle,
                 'refinance_amount' => $loan->refinanced_amount ?? 0,
@@ -175,6 +175,36 @@ class ActiveLoanReportController extends Controller
         })->filter()->values();
 
         return response()->json($data);
+    }
+
+    public function exportExcel(Request $request)
+    {
+        $officerId = $request->query('officer_id');
+        $currency = $request->query('currency');
+        $fromDateStr = $request->query('from_date');
+        $toDateStr = $request->query('to_date') ?? $request->query('report_date');
+
+        // Reuse index logic to fetch data
+        $originalRequest = new Request([
+            'officer_id' => $officerId,
+            'currency' => $currency,
+            'from_date' => $fromDateStr,
+            'to_date' => $toDateStr,
+        ]);
+        
+        $response = $this->index($originalRequest);
+        $data = json_decode($response->getContent(), true);
+
+        $officerName = 'ALL';
+        if ($officerId && $officerId !== 'all') {
+            $officer = \App\Models\User::find($officerId);
+            if ($officer) {
+                $officerName = $officer->name;
+            }
+        }
+
+        $exporter = new \App\Exports\Excel\ActiveLoanExcelExport();
+        return $exporter->download($data, $request, $fromDateStr, $toDateStr, $officerName);
     }
 
     private function getAccountRating(int $days)

@@ -192,6 +192,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('saving-accounts/post-interest', [SavingAccountController::class, 'postInterest']);
     Route::get('saving-accounts/{account}/transactions', [SavingAccountController::class, 'getTransactions']);
     Route::post('saving-accounts/{account}/close', [SavingAccountController::class, 'closeAccount']);
+    
+    // Export Capital Share Routes
+    Route::get('capital-shares/export-excel', [CapitalShareController::class, 'exportExcel']);
+    Route::get('capital-shares/export-pdf', [CapitalShareController::class, 'exportPdf']);
+
     Route::post('capital-shares/preview-schedule', [CapitalShareController::class, 'previewSchedule']);
     Route::apiResource('capital-shares', CapitalShareController::class);
     Route::post('capital-shares/{share}/repay', [CapitalShareController::class, 'repay'])->middleware('permission:Update:CapitalShareTransaction');
@@ -219,6 +224,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('investors', InvestorController::class);
 
     Route::get('borrowings', [BorrowingController::class, 'getBorrowings']);
+    Route::get('borrowings/export-excel', [BorrowingController::class, 'exportExcel']);
+    Route::get('borrowings/export-pdf', [BorrowingController::class, 'exportPdf']);
     Route::get('lenders', [BorrowingController::class, 'getLenders']);
     Route::post('lenders', [BorrowingController::class, 'storeLender']);
     Route::put('lenders/{id}', [BorrowingController::class, 'updateLender']);
@@ -226,6 +233,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('borrowings/{id}', [BorrowingController::class, 'updateBorrowing']);
     Route::post('borrowings/repay', [BorrowingController::class, 'repayBorrowing']);
     Route::get('borrowings/{id}/repayments', [BorrowingController::class, 'getRepayments']);
+
     Route::get('borrowings/{id}/schedule', [BorrowingController::class, 'getSchedule']);
 
     Route::middleware('json.unescaped_unicode')->group(function () {
@@ -234,18 +242,32 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('reports/repayment', [RepaymentReportController::class, 'index']);
         Route::get('reports/repayment-schedule', [RepaymentScheduleReportController::class, 'index']);
+        Route::get('reports/repayment-schedule/export-excel', [RepaymentScheduleReportController::class, 'exportExcel']);
+        Route::get('reports/repayment-schedule/export-pdf', [RepaymentScheduleReportController::class, 'exportPdf']);
         Route::get('reports/arrear-all', [ArrearReportController::class, 'index']);
+        Route::get('reports/arrear-all/export-excel', [ArrearReportController::class, 'exportExcel']);
         Route::get('reports/arrear-under-30', [ArrearReportController::class, 'index']);
+        Route::get('reports/arrear-under-30/export-excel', [ArrearReportController::class, 'exportUnder30Excel']);
         Route::get('reports/disbursement', [DisbursementReportController::class, 'index']);
+        Route::get('reports/disbursement/export-excel', [DisbursementReportController::class, 'exportExcel']);
         Route::get('reports/active-loan', [ActiveLoanReportController::class, 'index']);
+        Route::get('reports/active-loan/export-excel', [ActiveLoanReportController::class, 'exportExcel']);
         Route::get('reports/inactive-loan', [InactiveLoanReportController::class, 'index']);
+        Route::get('reports/inactive-loan/export-excel', [InactiveLoanReportController::class, 'exportExcel']);
         Route::get('reports/quality-portfolio', [QualityPortfolioController::class, 'index']);
+        Route::get('reports/quality-portfolio/export-excel', [QualityPortfolioController::class, 'exportExcel']);
         Route::get('/reports/write-off', [WriteOffReportController::class, 'index']);
+        Route::get('/reports/write-off/export-excel', [WriteOffReportController::class, 'exportExcel']);
         Route::get('/reports/write-off-collection', [WriteOffCollectionReportController::class, 'index']);
+        Route::get('/reports/write-off-collection/export-excel', [WriteOffCollectionReportController::class, 'exportExcel']);
         Route::get('/reports/loan-collection', [LoanCollectionReportController::class, 'index']);
+        Route::get('/reports/loan-collection/export-excel', [LoanCollectionReportController::class, 'exportExcel']);
         Route::get('/reports/interest-income', [InterestIncomeReportController::class, 'index']);
+        Route::get('/reports/interest-income/export-excel', [InterestIncomeReportController::class, 'exportExcel']);
         Route::get('/reports/loan-outstanding-par', [LoanOutstandingParReportController::class, 'index']);
         Route::get('/reports/income-statement', [IncomeStatementController::class, 'index']);
+        Route::get('/reports/income-statement/export-excel', [IncomeStatementController::class, 'exportExcel']);
+        Route::get('/reports/income-statement/export-pdf', [IncomeStatementController::class, 'exportPdf']);
     });
 
 

@@ -27,40 +27,225 @@ class CustomerHistoryController extends Controller
         $allocationTxMap = \App\Models\RepaymentTransaction::whereIn('id', $allocationTxIds)
             ->get()->keyBy('id');
 
-        $arr['payments'] = $loan->payments->sortBy('payment_number')->values()->map(fn($p) => [
-            'id' => $p->id,
-            'payment_number' => $p->payment_number,
-            'principal_amount' => (float) $p->principal_amount,
-            'interest_amount' => (float) $p->interest_amount,
-            'fee_amount' => (float) ($p->fee_amount ?? 0),
-            'penalty_amount' => (float) $p->penalty_amount,
-            'total_paid' => (float) $p->total_paid,
-            'total_due' => (float) ($p->total_due ?? 0),
-            'payment_date' => $p->payment_date,
-            'payment_method' => $p->payment_method,
-            'updated_at' => ($p->total_paid > 0 && $p->updated_at) ? $p->updated_at->toIso8601String() : '',
-            'prepayment' => (float) ($p->prepayment ?? 0),
-            'repayment_transaction_id' => $p->repayment_transaction_id,
-            'repayment_type' => $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id] ?? null) : null,
-            'allocations' => $p->allocations->map(fn($a) => [
-                'id' => $a->id,
-                'repayment_transaction_id' => $a->repayment_transaction_id,
-                'amount_applied' => (float) $a->amount_applied,
-                'fee_applied' => (float) $a->fee_applied,
-                'interest_applied' => (float) $a->interest_applied,
-                'principal_applied' => (float) $a->principal_applied,
-                'penalty_applied' => (float) $a->penalty_applied,
-                'created_at' => $a->created_at->toIso8601String(),
-                'updated_at' => $a->updated_at->toIso8601String(),
-                'repayment_type' => isset($allocationTxMap[$a->repayment_transaction_id]) ? $allocationTxMap[$a->repayment_transaction_id]->repayment_type : null,
-                'transaction_date' => isset($allocationTxMap[$a->repayment_transaction_id]) ? $allocationTxMap[$a->repayment_transaction_id]->transaction_date : null,
-            ])->all(),
-        ])->all();
+        $currentOS = $loan->amount > 0 ? (float)$loan->amount : (float)$loan->payments->sum('principal_amount');
+
+        $paymentsList = $loan->payments->sortBy('payment_number')->values();
+        $lastPaymentId = $paymentsList->last() ? $paymentsList->last()->id : null;
+        
+        $groups = [];
+        foreach ($paymentsList as $p) {
+            if ((float)$p->total_paid > 0) {
+                $key = $p->repayment_transaction_id ? (string)$p->repayment_transaction_id : ($p->updated_at ? (string)$p->updated_at : '');
+                if ($key !== '') {
+                    $groups[$key][] = $p->id;
+                }
+            }
+        }
+
+        $arr['payments'] = $paymentsList->map(function($p) use ($txMap, $allocationTxMap, &$currentOS, $groups, $lastPaymentId) {
+            $currentOS -= (float) $p->principal_amount;
+            if ($currentOS < 0.001) $currentOS = 0.0;
+            // Calculate balances
+            $totalFeePaid = 0.0;
+            $totalInterestPaid = 0.0;
+            $totalPrincipalPaid = 0.0;
+            
+            if ($p->allocations->isNotEmpty()) {
+                foreach ($p->allocations as $a) {
+                    $totalFeePaid += (float)$a->fee_applied;
+                    $totalInterestPaid += (float)$a->interest_applied;
+                    $totalPrincipalPaid += (float)$a->principal_applied;
+                }
+            } else {
+                $totalFeePaid = $p->total_paid > ((float)($p->fee_amount ?? 0)) ? ((float)($p->fee_amount ?? 0)) : $p->total_paid;
+                $paidExcludingFee = $p->total_paid - $totalFeePaid;
+                if ($paidExcludingFee < 0) $paidExcludingFee = 0;
+                $totalInterestPaid = $paidExcludingFee > $p->interest_amount ? $p->interest_amount : $paidExcludingFee;
+                $totalPrincipalPaid = $paidExcludingFee - $totalInterestPaid;
+                if ($totalPrincipalPaid < 0) $totalPrincipalPaid = 0;
+            }
+            
+            $displayInterest = max(0, (float)$p->interest_amount - $totalInterestPaid);
+            $displayPrincipal = max(0, (float)$p->principal_amount - $totalPrincipalPaid);
+            
+            // Early payment logic
+            $prepaymentValue = (float)($p->prepayment ?? 0);
+            $isEarly = false;
+            if ($p->total_paid > 0 && $p->updated_at && $p->payment_date) {
+                $uDate = \Carbon\Carbon::parse($p->updated_at)->startOfDay();
+                $dDate = \Carbon\Carbon::parse($p->payment_date)->startOfDay();
+                if ($uDate->lt($dDate)) {
+                    $isEarly = true;
+                }
+            }
+            
+            if ($isEarly) {
+                $prepaymentValue += (float)$p->total_paid;
+            }
+
+            $repaymentType = $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id] ?? null) : null;
+            $isPayoffTrigger = $repaymentType === 'Pay Off';
+            $groupKey = $p->repayment_transaction_id ? (string)$p->repayment_transaction_id : ($p->updated_at ? (string)$p->updated_at : '');
+            if ($groupKey !== '' && isset($groups[$groupKey])) {
+                if (in_array($lastPaymentId, $groups[$groupKey])) {
+                    $isPayoffTrigger = true;
+                }
+            }
+
+            $requiredTotal = (float)($p->principal_amount + $p->interest_amount + ($p->fee_amount ?? 0));
+            $isFullyPaid = (float)$p->total_paid >= ($requiredTotal - 0.01);
+
+            $dDate = $p->payment_date ? \Carbon\Carbon::parse($p->payment_date)->startOfDay() : null;
+            $uDate = $p->updated_at ? \Carbon\Carbon::parse($p->updated_at)->startOfDay() : null;
+            $nDate = \Carbon\Carbon::now()->startOfDay();
+
+            $isOverdue = !$isFullyPaid && $dDate && $nDate->gt($dDate);
+
+            $scheduleOnTimeLabel = "0";
+            $paymentOnTimeLabel = "0";
+
+            if ($isPayoffTrigger) {
+                $scheduleOnTimeLabel = "Payoff";
+                $paymentOnTimeLabel = "Payoff";
+            } else {
+                if (!$isFullyPaid && $isOverdue && $dDate) {
+                    $diff = (int) $dDate->diffInDays($nDate, false);
+                    $scheduleOnTimeLabel = "-$diff";
+                } elseif ($isFullyPaid && $uDate && $dDate) {
+                    $diff = (int) $dDate->diffInDays($uDate, false);
+                    $scheduleOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
+                }
+
+                if ($p->total_paid > 0 && $uDate && $dDate) {
+                    $diff = (int) $dDate->diffInDays($uDate, false);
+                    $paymentOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
+                }
+            }
+
+            return [
+                'id' => $p->id,
+                'payment_number' => $p->payment_number,
+                'principal_amount' => (float) $p->principal_amount,
+                'interest_amount' => (float) $p->interest_amount,
+                'balance_principal' => $displayPrincipal,
+                'balance_interest' => $displayInterest,
+                'fee_amount' => (float) ($p->fee_amount ?? 0),
+                'penalty_amount' => (float) $p->penalty_amount,
+                'total_paid' => (float) $p->total_paid,
+                'total_due' => (float) ($p->total_due ?? 0),
+                'payment_date' => $p->payment_date,
+                'payment_method' => $p->payment_method,
+                'updated_at' => ($p->total_paid > 0 && $p->updated_at) ? $p->updated_at->toIso8601String() : '',
+                'prepayment' => $prepaymentValue,
+                'original_prepayment' => (float) ($p->prepayment ?? 0),
+                'repayment_transaction_id' => $p->repayment_transaction_id,
+                'repayment_type' => $repaymentType,
+                'schedule_on_time_label' => $scheduleOnTimeLabel,
+                'payment_on_time_label' => $paymentOnTimeLabel,
+                'outstanding_balance' => $currentOS,
+                'is_payoff_trigger' => $isPayoffTrigger,
+                'required_total' => $requiredTotal,
+                'is_fully_paid' => $isFullyPaid,
+                'is_overdue' => $isOverdue,
+                'total_installment_value' => (float)$p->total_paid > 0 ? min($requiredTotal, (float)$p->total_paid) : 0.0,
+                'total_amount_due' => $isPayoffTrigger ? 0.0 : (abs($requiredTotal - (float)$p->total_paid) < 0.001 ? 0.0 : max(0.0, $requiredTotal - (float)$p->total_paid)),
+                'allocations' => $p->allocations->map(function($a) use ($allocationTxMap, $dDate, $isPayoffTrigger) {
+                    $allocRepaymentType = isset($allocationTxMap[$a->repayment_transaction_id]) ? $allocationTxMap[$a->repayment_transaction_id]->repayment_type : null;
+                    
+                    $allocOnTimeLabel = "0";
+                    if ($isPayoffTrigger || $allocRepaymentType === 'Pay Off') {
+                        $allocOnTimeLabel = "Payoff";
+                    } elseif ($dDate) {
+                        $allocDateStr = $a->transaction_date ?: $a->created_at;
+                        $aDate = $allocDateStr ? \Carbon\Carbon::parse($allocDateStr)->startOfDay() : null;
+                        if ($aDate) {
+                            $diff = (int) $dDate->diffInDays($aDate, false);
+                            $allocOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
+                        }
+                    }
+
+                    return [
+                        'id' => $a->id,
+                        'repayment_transaction_id' => $a->repayment_transaction_id,
+                        'amount_applied' => (float) $a->amount_applied,
+                        'fee_applied' => (float) $a->fee_applied,
+                        'interest_applied' => (float) $a->interest_applied,
+                        'principal_applied' => (float) $a->principal_applied,
+                        'penalty_applied' => (float) $a->penalty_applied,
+                        'created_at' => $a->created_at->toIso8601String(),
+                        'updated_at' => $a->updated_at->toIso8601String(),
+                        'repayment_type' => $allocRepaymentType,
+                        'transaction_date' => isset($allocationTxMap[$a->repayment_transaction_id]) ? $allocationTxMap[$a->repayment_transaction_id]->transaction_date : null,
+                        'alloc_on_time_label' => $allocOnTimeLabel,
+                        'alloc_total_installment' => (float)$a->principal_applied + (float)$a->interest_applied + (float)$a->fee_applied,
+                    ];
+                })->all(),
+            ];
+        })->all();
+
+        // Calculate Summary Stats
+        $now = \Carbon\Carbon::now()->startOfDay();
+        
+        $totalPaidForLoan = 0.0;
+        $totalPrincipalPaid = 0.0;
+        $totalOverdueAmount = 0.0;
+        
+        foreach ($loan->payments as $p) {
+            $totalPaidForLoan += (float)$p->total_paid + (float)$p->penalty_amount;
+            
+            if ($p->allocations->isNotEmpty()) {
+                foreach ($p->allocations as $a) {
+                    $totalPrincipalPaid += (float)$a->principal_applied;
+                }
+            } else if ($p->total_paid > 0) {
+                $interestPaid = $p->total_paid >= $p->interest_amount ? $p->interest_amount : $p->total_paid;
+                $principalPaid = $p->total_paid - $interestPaid;
+                if ($principalPaid > 0) $totalPrincipalPaid += $principalPaid;
+            }
+
+            $due = $p->payment_date ? \Carbon\Carbon::parse($p->payment_date)->startOfDay() : null;
+            if ($due) {
+                $totalDue = (float)$p->principal_amount + (float)$p->interest_amount + (float)($p->fee_amount ?? 0);
+                if ($due->lt($now) && $p->total_paid < $totalDue) {
+                    $totalOverdueAmount += ($totalDue - (float)$p->total_paid);
+                }
+            }
+        }
+
+        $osBalance = (float)$loan->amount - $totalPrincipalPaid;
+        if ($osBalance < 0.001) $osBalance = 0.0;
+
+        $earliestOverdue = $loan->late_since_date ? \Carbon\Carbon::parse($loan->late_since_date)->startOfDay() : null;
+        $daysOverdue = $earliestOverdue ? (int) $earliestOverdue->diffInDays($now, false) : 0;
+        if ($daysOverdue < 0) $daysOverdue = 0;
+
+        $dateOverdueStr = $earliestOverdue ? $earliestOverdue->format('Y-m-d') : '';
+
+        // penalty rate
+        if ($loan->penalty_rate !== null) {
+            $penaltyPerDay = (float)$loan->penalty_rate;
+        } else {
+            $isKHR = str_contains(strtoupper($loan->currency ?? ''), 'KHR');
+            $penaltyPerDay = $isKHR ? 10000.0 : 2.5;
+        }
+        $penaltyGross = $daysOverdue * $penaltyPerDay;
 
         // Add penalty paid so far including waivers
         $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('penalty_paid')
             + (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('waived_amount');
         $arr['penalty_paid_so_far'] = $penaltyPaidSoFar;
+
+        $penaltyDue = $penaltyGross - $penaltyPaidSoFar;
+        if ($penaltyDue < 0) $penaltyDue = 0.0;
+
+        $arr['summary'] = [
+            'total_paid' => $totalPaidForLoan,
+            'os_balance' => $osBalance,
+            'date_overdue' => $dateOverdueStr,
+            'days_overdue' => $daysOverdue,
+            'penalty_due' => $penaltyDue,
+            'overdue_amount' => $totalOverdueAmount,
+        ];
 
         // Add modifications to the history
         $arr['modifications'] = \App\Models\LoanModification::where('loan_id', $loan->id)

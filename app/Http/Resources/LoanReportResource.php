@@ -22,7 +22,7 @@ class LoanReportResource extends JsonResource
             'payment_date' => $this->transaction_date,
             'receipt_no' => $this->id,
             'disb_date' => $loan->start_date,
-            'loan_no' => $loan->loan_code,
+            'loan_no' => $this->formatLoanCode($loan->loan_code),
             'cid' => $borrower->customer_code,
             'name' => $borrower->first_name . ' ' . $borrower->last_name,
             'village' => $borrower->village,
@@ -44,8 +44,8 @@ class LoanReportResource extends JsonResource
             'monthly_interest_rate' => (float) $loan->monthly_interest,
             'term' => $loan->duration_months,
             'tenor' => $this->tenorLabel($loan->payment_frequency),
-            'payment_frequency' => $loan->payment_frequency,
-            'payment_method' => $loan->repayment_method,
+            'payment_frequency' => ucfirst((string) $loan->payment_frequency),
+            'payment_method' => $this->formatPaymentMethod($loan->repayment_method),
             'loan_cycle' => $loan->loan_cycle,
             're_finance' => $loan->refinanced_amount,
             'admin_fee' => $loan->admin_fee,
@@ -80,7 +80,7 @@ class LoanReportResource extends JsonResource
         ];
     }
 
-    private function calculateUsdValue($loan, $amount): float
+    private function calculateUsdValue(\App\Models\Loan $loan, mixed $amount): float
     {
         if (str_contains(strtoupper($loan->currency), 'USD')) {
             return (float) $amount;
@@ -112,7 +112,7 @@ class LoanReportResource extends JsonResource
     /**
      * Show collateral type (text). If type looks like a number (e.g. value stored in type by mistake), use description or null.
      */
-    private function getCollateralTypeLabel($loan): ?string
+    private function getCollateralTypeLabel(\App\Models\Loan $loan): ?string
     {
         $first = $loan->collaterals->first();
         if (!$first) {
@@ -128,18 +128,22 @@ class LoanReportResource extends JsonResource
         return $type;
     }
 
+    private function formatPaymentMethod(?string $method): string
+    {
+        return \App\Support\FormatHelper::formatPaymentMethod($method);
+    }
+
     private function tenorLabel(?string $paymentFrequency): string
     {
         $normalized = strtolower(trim((string) $paymentFrequency));
+        if ($normalized === 'monthly' || $normalized === 'month') {
+            return 'ខែ';
+        }
+        return 'ដង';
+    }
 
-        return match ($normalized) {
-            'monthly' => 'Months',
-            'biweekly' => 'Biweeks',
-            'weekly' => 'Weeks',
-            'daily' => 'Days',
-            'term' => 'Installments',
-            'bi-monthly', 'bimonthly', 'semi-monthly' => 'Semi-Monthly',
-            default => $normalized !== '' ? ucwords(str_replace(['_', '-'], ' ', $normalized)) : '',
-        };
+    private function formatLoanCode(?string $loanCode): ?string
+    {
+        return \App\Support\FormatHelper::formatLoanCode($loanCode);
     }
 }
