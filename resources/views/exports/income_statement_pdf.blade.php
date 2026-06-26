@@ -3,27 +3,201 @@
 <head>
     <meta charset="utf-8">
     <style>
-        body { font-family: 'khmeros', sans-serif; font-size: 10px; color: #000; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-        th, td { border: 1px solid #CFD8DC; padding: 6px; text-align: left; vertical-align: middle; word-wrap: break-word; }
-        th { background-color: #E1F5FE; color: #1A237E; font-weight: bold; text-align: center; }
+        body {
+            font-family: 'khmeros', sans-serif;
+            font-size: 9px;
+            color: #000;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Main table */
+        .main-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .main-table th {
+            background-color: #D3D3D3;
+            color: #000;
+            font-weight: bold;
+            font-size: 9px;
+            padding: 5px 8px;
+            border: 1px solid #000;
+            text-align: center;
+        }
+
+        .main-table td {
+            padding: 4px 8px;
+            border-left: 1px solid #000;
+            border-right: 1px solid #000;
+            border-bottom: 0.5px solid #CCC;
+            font-size: 9px;
+        }
+
+        /* Section headers */
+        .section-hdr td {
+            background-color: #DCEEFF;
+            font-weight: bold;
+            font-size: 9px;
+            padding: 5px 8px;
+            border-bottom: 1px solid #999;
+            border-left: 1px solid #000;
+            border-right: 1px solid #000;
+        }
+
+        /* Data rows */
+        .data-row td {
+            background-color: #FFF;
+        }
+
+        .data-row td.lbl {
+            padding-left: 20px;
+        }
+
+        .data-row td.amt {
+            text-align: right;
+        }
+
+        .data-row td.total-col {
+            text-align: right;
+            font-weight: bold;
+        }
+
+        /* Subtotal rows */
+        .sub-total td {
+            font-weight: bold;
+            background-color: #F0F0F0;
+            border-top: 1px solid #000;
+            border-bottom: 2px double #000;
+            padding: 5px 8px;
+            border-left: 1px solid #000;
+            border-right: 1px solid #000;
+        }
+
+        .sub-total td.amt,
+        .sub-total td.total-col {
+            text-align: right;
+        }
+
+        /* Net income */
+        .net-row td {
+            font-weight: bold;
+            font-size: 10px;
+            background-color: #E0E0E0;
+            border-top: 2px solid #000;
+            border-bottom: 3px double #000;
+            padding: 6px 8px;
+            border-left: 1px solid #000;
+            border-right: 1px solid #000;
+        }
+
+        .net-row td.amt,
+        .net-row td.total-col {
+            text-align: right;
+        }
+
+        /* Spacer */
+        .spacer td {
+            border: none;
+            border-left: 1px solid #000;
+            border-right: 1px solid #000;
+            padding: 3px;
+            background: #FFF;
+        }
+
         .text-right { text-align: right; }
         .text-center { text-align: center; }
-        .text-left { text-align: left; }
-        .section-row td { background-color: #E8EAF6; color: #1A237E; font-weight: bold; font-size: 11px; padding: 8px 6px; border-bottom: 2px solid #1A237E; }
-        .total-row td { font-weight: bold; border-top: 1px solid #9E9E9E; border-bottom: 3px double #9E9E9E; font-size: 11px; }
-        .net-income-row td { font-weight: bold; background-color: #F5F5F5; border-top: 2px solid #1A237E; border-bottom: 3px double #1A237E; font-size: 12px; }
-        .kpi-header td { background-color: #E1F5FE; color: #1A237E; font-weight: bold; font-size: 11px; }
-        .kpi-sub-header td { background-color: #F5F5F5; color: #1A237E; font-weight: bold; font-size: 10px; }
-        .kpi-row td { border-bottom: 1px solid #EEEEEE; font-size: 10px; }
-        .kpi-last-row td { background-color: #E8EAF6; font-weight: bold; border-bottom: 1px solid #E0E0E0; }
-        .approval-section { margin-top: 20px; border: 1px solid #E0E0E0; padding: 10px; }
-        .approval-title { font-weight: bold; color: #1A237E; font-size: 11px; margin-bottom: 15px; }
-        .approval-table { width: 100%; border: none; }
-        .approval-table td { border: none; text-align: center; width: 33%; padding: 5px; }
-        .signature-line { border-bottom: 1px solid #9E9E9E; margin: 30px 20px 5px 20px; }
-        .positive { color: #1B5E20; }
-        .negative { color: #C62828; }
+        .positive { color: #006600; }
+        .negative { color: #CC0000; }
+
+        /* KPI section */
+        .kpi-table {
+            width: 55%;
+            border-collapse: collapse;
+            margin: 15px auto 0 auto;
+        }
+
+        .kpi-table .kpi-title td {
+            background-color: #D3D3D3;
+            font-weight: bold;
+            font-size: 9px;
+            text-align: center;
+            padding: 5px;
+            border: 1px solid #000;
+        }
+
+        .kpi-table .kpi-hdr td {
+            background-color: #F5F5F5;
+            font-weight: bold;
+            font-size: 8px;
+            padding: 4px 8px;
+            border: 1px solid #000;
+        }
+
+        .kpi-table .kpi-data td {
+            padding: 4px 8px;
+            border: 0.5px solid #999;
+            font-size: 9px;
+        }
+
+        .kpi-table .kpi-bottom td {
+            background-color: #E0E0E0;
+            font-weight: bold;
+            padding: 5px 8px;
+            border: 1px solid #000;
+            font-size: 9px;
+        }
+
+        /* Signature */
+        .sig-section {
+            margin-top: 30px;
+        }
+
+        .sig-section .sig-title {
+            font-weight: bold;
+            font-size: 9px;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #000;
+            padding-bottom: 3px;
+        }
+
+        .sig-tbl {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 5px;
+        }
+
+        .sig-tbl td {
+            border: none;
+            text-align: center;
+            width: 33%;
+            padding: 0 10px;
+            vertical-align: top;
+            font-size: 8px;
+        }
+
+        .sig-tbl .s-role {
+            font-weight: bold;
+            font-size: 8px;
+            color: #333;
+            text-transform: uppercase;
+        }
+
+        .sig-tbl .s-line {
+            border-bottom: 1px solid #000;
+            margin: 35px 10px 5px 10px;
+        }
+
+        .sig-tbl .s-name {
+            font-size: 8px;
+            font-weight: bold;
+        }
+
+        .sig-tbl .s-date {
+            font-size: 7px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -34,140 +208,134 @@
         $totalRevenue = $data['total_revenue'] ?? [];
         $totalExpenses = $data['total_expenses'] ?? [];
         $netIncome = $data['net_income'] ?? [];
-        
+
         $gRev = $data['grand_total_revenue_usd'] ?? 0;
         $gExp = $data['grand_total_expenses_usd'] ?? 0;
         $gNet = $data['grand_net_income_usd'] ?? 0;
-        
-        $colSpanLabel = 2; // Arbitrary span for label column to give it more space
-        $totalCols = count($currencies) + 2; // Label + currencies + Total USD
+
+        $colCount = count($currencies) + 2;
     @endphp
 
-    <table>
+    <table class="main-table">
         <thead>
             <tr>
-                <th class="text-left" style="width: 40%"></th>
+                <th style="text-align: left; width: 40%;">Description</th>
                 @foreach($currencies as $curr)
-                <th class="text-right" style="width: {{ 60 / (count($currencies) + 1) }}%">{{ $curr }}</th>
+                <th style="width: {{ 60 / (count($currencies) + 1) }}%;">{{ $curr }}</th>
                 @endforeach
-                <th class="text-right" style="width: {{ 60 / (count($currencies) + 1) }}%">Total USD</th>
+                <th style="width: {{ 60 / (count($currencies) + 1) }}%;">Total USD</th>
             </tr>
         </thead>
         <tbody>
-            <!-- REVENUE SECTION -->
-            <tr class="section-row">
-                <td colspan="{{ count($currencies) + 2 }}">REVENUE</td>
+
+            {{-- REVENUE --}}
+            <tr class="section-hdr">
+                <td colspan="{{ $colCount }}">REVENUE</td>
             </tr>
+
             @foreach($revenue as $item)
-            <tr>
-                <td class="text-left" style="padding-left: 20px;">{{ $item['label'] ?? '' }}</td>
+            <tr class="data-row">
+                <td class="lbl">{{ $item['label'] ?? '' }}</td>
                 @foreach($currencies as $curr)
-                <td class="text-right">{{ number_format($item['amounts'][$curr] ?? 0, 2) }}</td>
+                <td class="amt">{{ number_format($item['amounts'][$curr] ?? 0, 2) }}</td>
                 @endforeach
-                <td class="text-right" style="font-weight: bold; color: #1A237E;">{{ number_format($item['total_usd'] ?? 0, 2) }}</td>
+                <td class="total-col">{{ number_format($item['total_usd'] ?? 0, 2) }}</td>
             </tr>
             @endforeach
-            <tr class="total-row">
-                <td class="text-left">Total Revenue</td>
+
+            <tr class="sub-total">
+                <td>Total Revenue</td>
                 @foreach($currencies as $curr)
-                <td class="text-right">{{ number_format($totalRevenue[$curr] ?? 0, 2) }}</td>
+                <td class="amt">{{ number_format($totalRevenue[$curr] ?? 0, 2) }}</td>
                 @endforeach
-                <td class="text-right" style="color: #1A237E;">{{ number_format($gRev, 2) }}</td>
+                <td class="total-col">{{ number_format($gRev, 2) }}</td>
             </tr>
 
-            <tr><td colspan="{{ count($currencies) + 2 }}" style="border: none; padding: 5px;"></td></tr>
+            <tr class="spacer"><td colspan="{{ $colCount }}"></td></tr>
 
-            <!-- EXPENSES SECTION -->
-            <tr class="section-row">
-                <td colspan="{{ count($currencies) + 2 }}">EXPENSES</td>
+            {{-- EXPENSES --}}
+            <tr class="section-hdr">
+                <td colspan="{{ $colCount }}">OPERATING EXPENSES</td>
             </tr>
+
             @foreach($expenses as $item)
-            <tr>
-                <td class="text-left" style="padding-left: 20px;">{{ $item['label'] ?? '' }}</td>
+            <tr class="data-row">
+                <td class="lbl">{{ $item['label'] ?? '' }}</td>
                 @foreach($currencies as $curr)
-                <td class="text-right">{{ number_format($item['amounts'][$curr] ?? 0, 2) }}</td>
+                <td class="amt">{{ number_format($item['amounts'][$curr] ?? 0, 2) }}</td>
                 @endforeach
-                <td class="text-right" style="font-weight: bold; color: #1A237E;">{{ number_format($item['total_usd'] ?? 0, 2) }}</td>
+                <td class="total-col">{{ number_format($item['total_usd'] ?? 0, 2) }}</td>
             </tr>
             @endforeach
-            <tr class="total-row">
-                <td class="text-left">Total Operating Expenses</td>
+
+            <tr class="sub-total">
+                <td>Total Operating Expenses</td>
                 @foreach($currencies as $curr)
-                <td class="text-right">{{ number_format($totalExpenses[$curr] ?? 0, 2) }}</td>
+                <td class="amt">{{ number_format($totalExpenses[$curr] ?? 0, 2) }}</td>
                 @endforeach
-                <td class="text-right" style="color: #1A237E;">{{ number_format($gExp, 2) }}</td>
+                <td class="total-col">{{ number_format($gExp, 2) }}</td>
             </tr>
 
-            <tr><td colspan="{{ count($currencies) + 2 }}" style="border: none; padding: 10px;"></td></tr>
+            <tr class="spacer"><td colspan="{{ $colCount }}"></td></tr>
 
-            <!-- NET INCOME -->
-            <tr class="net-income-row">
-                <td class="text-left">NET INCOME</td>
+            {{-- NET INCOME --}}
+            <tr class="net-row">
+                <td>NET INCOME</td>
                 @foreach($currencies as $curr)
-                <td class="text-right">{{ number_format($netIncome[$curr] ?? 0, 2) }}</td>
+                <td class="amt">{{ number_format($netIncome[$curr] ?? 0, 2) }}</td>
                 @endforeach
-                <td class="text-right {{ $gNet >= 0 ? 'positive' : 'negative' }}">{{ number_format($gNet, 2) }}</td>
+                <td class="total-col {{ $gNet >= 0 ? 'positive' : 'negative' }}">{{ number_format($gNet, 2) }}</td>
             </tr>
+
         </tbody>
     </table>
 
-    <br/>
-
-    <!-- FINANCIAL KPI SUMMARY -->
+    {{-- KPI --}}
     @php
         $grossMargin = $gRev > 0 ? (($gRev - $gExp) / $gRev) * 100 : 0;
-        $netMargin = $gRev > 0 ? ($gNet / $gRev) * 100 : 0;
-        $opRatio = $gRev > 0 ? ($gExp / $gRev) * 100 : 0;
-        
-        $kpis = [
-            ['Total Revenue', number_format($gRev, 2)],
-            ['Total Expense', number_format($gExp, 2)],
-            ['Gross Profit Margin', number_format($grossMargin, 1) . '%'],
-            ['Net Profit Margin', number_format($netMargin, 1) . '%'],
-            ['Operation Ratio', number_format($opRatio, 1) . '%'],
-            ['Net Profit', number_format($gNet, 2)],
-        ];
+        $netMargin   = $gRev > 0 ? ($gNet / $gRev) * 100 : 0;
+        $opRatio     = $gRev > 0 ? ($gExp / $gRev) * 100 : 0;
     @endphp
 
-    <table style="width: 100%; border: 1px solid #90CAF9;">
-        <tr class="kpi-header">
-            <td colspan="2">Financial KPI Summary</td>
+    <table class="kpi-table">
+        <tr class="kpi-title"><td colspan="2">Financial KPI Summary</td></tr>
+        <tr class="kpi-hdr">
+            <td style="width: 55%;">KPI</td>
+            <td class="text-right" style="width: 45%;">Value</td>
         </tr>
-        <tr class="kpi-sub-header">
-            <td style="width: 50%;">KPI</td>
-            <td class="text-right" style="width: 50%;">Value</td>
+        <tr class="kpi-data"><td>Total Revenue (USD)</td><td class="text-right">${{ number_format($gRev, 2) }}</td></tr>
+        <tr class="kpi-data"><td>Total Expenses (USD)</td><td class="text-right">${{ number_format($gExp, 2) }}</td></tr>
+        <tr class="kpi-data"><td>Gross Profit Margin</td><td class="text-right">{{ number_format($grossMargin, 1) }}%</td></tr>
+        <tr class="kpi-data"><td>Net Profit Margin</td><td class="text-right">{{ number_format($netMargin, 1) }}%</td></tr>
+        <tr class="kpi-data"><td>Operating Expense Ratio</td><td class="text-right">{{ number_format($opRatio, 1) }}%</td></tr>
+        <tr class="kpi-bottom">
+            <td>Net Profit (USD)</td>
+            <td class="text-right {{ $gNet >= 0 ? 'positive' : 'negative' }}">${{ number_format($gNet, 2) }}</td>
         </tr>
-        @foreach($kpis as $k => $kpi)
-            @php $isLast = ($k == count($kpis) - 1); @endphp
-            <tr class="{{ $isLast ? 'kpi-last-row' : 'kpi-row' }}">
-                <td>{{ $kpi[0] }}</td>
-                <td class="text-right {{ $isLast ? ($gNet >= 0 ? 'positive' : 'negative') : '' }}">{{ $kpi[1] }}</td>
-            </tr>
-        @endforeach
     </table>
 
-    <!-- APPROVAL SECTION -->
-    <div class="approval-section">
-        <div class="approval-title">Approval</div>
-        <table class="approval-table">
+    {{-- SIGNATURES --}}
+    <div class="sig-section">
+        <div class="sig-title">Approval &amp; Signatures</div>
+        <table class="sig-tbl">
             <tr>
                 <td>
-                    <div style="font-weight: bold; color: #424242;">Prepared</div>
-                    <div class="signature-line"></div>
-                    <div>Finance Officer</div>
-                    <div style="color: #757575; font-size: 8px;">{{ date('d-m-Y') }}</div>
+                    <div class="s-role">Prepared By</div>
+                    <div class="s-line"></div>
+                    <div class="s-name">Finance Officer</div>
+                    <div class="s-date">Date: ___/___/______</div>
                 </td>
                 <td>
-                    <div style="font-weight: bold; color: #424242;">Checked By</div>
-                    <div class="signature-line"></div>
-                    <div>Accounting Manager</div>
-                    <div style="color: #757575; font-size: 8px;">{{ date('d-m-Y') }}</div>
+                    <div class="s-role">Reviewed By</div>
+                    <div class="s-line"></div>
+                    <div class="s-name">Accounting Manager</div>
+                    <div class="s-date">Date: ___/___/______</div>
                 </td>
                 <td>
-                    <div style="font-weight: bold; color: #424242;">Approved By</div>
-                    <div class="signature-line"></div>
-                    <div>General Manager</div>
-                    <div style="color: #757575; font-size: 8px;">{{ date('d-m-Y') }}</div>
+                    <div class="s-role">Approved By</div>
+                    <div class="s-line"></div>
+                    <div class="s-name">General Manager</div>
+                    <div class="s-date">Date: ___/___/______</div>
                 </td>
             </tr>
         </table>

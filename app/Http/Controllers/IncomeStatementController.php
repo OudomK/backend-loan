@@ -58,7 +58,19 @@ class IncomeStatementController extends Controller
             $miscCurrs = DB::table('miscellaneous_transactions')->whereNull('deleted_at')->whereBetween('transaction_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
             $borrowingCurrs = DB::table('borrowings')->whereNull('deleted_at')->whereBetween('borrowing_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
 
-            $rawCurrs = array_merge(['USD'], $loanCurrs, $miscCurrs, $borrowingCurrs);
+            // Bug fix: Also detect currencies from repayment transactions (loans started outside the period but with repayments in the period)
+            $repaymentLoanCurrs = DB::table('repayment_transactions')
+                ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
+                ->whereNull('repayment_transactions.deleted_at')
+                ->whereNull('loans.deleted_at')
+                ->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate])
+                ->pluck('loans.currency')->unique()->toArray();
+
+            // Bug fix: Also detect currencies from revenues and expenses tables
+            $revenueCurrs = DB::table('revenues')->whereNull('deleted_at')->whereBetween('transaction_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
+            $expenseCurrs = DB::table('expenses')->whereNull('deleted_at')->whereBetween('transaction_date', [$fromDate, $toDate])->pluck('currency')->unique()->toArray();
+
+            $rawCurrs = array_merge(['USD'], $loanCurrs, $miscCurrs, $borrowingCurrs, $repaymentLoanCurrs, $revenueCurrs, $expenseCurrs);
             $normalized = [];
             foreach ($rawCurrs as $c) {
                 if (empty($c))
@@ -188,7 +200,7 @@ class IncomeStatementController extends Controller
 
             // ── EXPENSES ─────────────────────────────────────────────
             if ($curr === 'USD') {
-                $pQuery = DB::table('payrolls')->whereNull('deleted_at')->whereBetween('payment_date', [$fromDate, $toDate]);
+                $pQuery = DB::table('payrolls')->whereNull('deleted_at')->where('status', 'paid')->whereBetween('payment_date', [$fromDate, $toDate]);
 
                 // Salary Expense = Base Salary - Deduction
                 $salary = (double) (clone $pQuery)->sum('salary') - (double) (clone $pQuery)->sum('deduction');

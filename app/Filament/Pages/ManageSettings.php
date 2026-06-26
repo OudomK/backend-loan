@@ -13,6 +13,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Notifications\Notification;
+use Filament\Support\RawJs;
 use App\Models\Setting;
 use App\Support\AdminFontRegistry;
 use Illuminate\Support\Facades\Hash;
@@ -93,10 +94,10 @@ class ManageSettings extends Page implements HasForms
             'copyright_text' => $dbSettings['copyright_text'] ?? '© ' . date('Y') . ' ' . config('app.company_name'),
             'exchange_rate_khr_to_usd' => $dbSettings['exchange_rate_khr_to_usd'] ?? 4000,
             'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,
-            'commission_income_rate' => $dbSettings['commission_income_rate'] ?? 20,
             'default_penalty_usd' => $dbSettings['default_penalty_usd'] ?? 2.5,
             'default_penalty_khr' => $dbSettings['default_penalty_khr'] ?? 10000,
             'prepayment_days' => $dbSettings['prepayment_days'] ?? 3,
+            'chart_max_amount' => $dbSettings['chart_max_amount'] ?? '',
             'enable_dividend_tax' => $this->toBool($dbSettings['enable_dividend_tax'] ?? false, false),
             'auto_dividend_tax' => $this->toBool($dbSettings['auto_dividend_tax'] ?? false, false),
             'dividend_tax_rate' => $dbSettings['dividend_tax_rate'] ?? 0,
@@ -262,7 +263,7 @@ class ManageSettings extends Page implements HasForms
                                         ->success()
                                         ->send();
                                         
-                                    $set('available_fonts_count', (string) \App\Support\AdminFontRegistry::count());
+                                    $set('available_fonts_count', (string) AdminFontRegistry::count());
                                     
                                 } catch (\Throwable $e) {
                                     Notification::make()
@@ -332,13 +333,6 @@ class ManageSettings extends Page implements HasForms
                             ->label('Default Interest Rate (%)')
                             ->numeric()
                             ->step('0.01'),
-                        TextInput::make('commission_income_rate')
-                            ->label('Commission Income Rate (%)')
-                            ->helperText('Used to auto-calculate Commission Income from Admin Fee value when a new loan is created.')
-                            ->numeric()
-                            ->step('0.01')
-                            ->minValue(0)
-                            ->default(20),
                         TextInput::make('default_penalty_usd')
                             ->label('Default Penalty (USD/Day)')
                             ->numeric()
@@ -346,6 +340,8 @@ class ManageSettings extends Page implements HasForms
                         TextInput::make('default_penalty_khr')
                             ->label('Default Penalty (KHR/Day)')
                             ->numeric()
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
                             ->step('100'),
                         TextInput::make('prepayment_days')
                             ->label('Prepayment Days Show (Days)')
@@ -353,6 +349,15 @@ class ManageSettings extends Page implements HasForms
                             ->numeric()
                             ->minValue(1)
                             ->default(3),
+                        TextInput::make('chart_max_amount')
+                            ->label('Chart Max Amount ($)')
+                            ->helperText('Maximum Y-axis value for the Productivity bar chart on the Dashboard. Leave empty for auto-scale.')
+                            ->numeric()
+                            ->mask(RawJs::make('$money($input)'))
+                            ->stripCharacters(',')
+                            ->step('1000')
+                            ->minValue(0)
+                            ->placeholder('Auto'),
                     ])->columns(2),
 
                 Section::make('Dividend Configuration')

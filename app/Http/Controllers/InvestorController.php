@@ -17,6 +17,7 @@ class InvestorController extends Controller
                 $q->where('customer_code', 'like', "%{$search}%")
                     ->orWhere('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('latin_name', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
                     ->orWhere('id_number', 'like', "%{$search}%");
             });
@@ -31,6 +32,7 @@ class InvestorController extends Controller
             'customer_code' => 'nullable|string|unique:investors',
             'first_name' => 'required|string',
             'last_name' => 'required|string',
+            'latin_name' => 'nullable|string',
             'gender' => 'nullable|string',
             'marital_status' => 'nullable|in:Single,Married,Divorced,Widowed',
             'dob' => 'nullable|string',
@@ -64,20 +66,21 @@ class InvestorController extends Controller
         return response()->json($investor, 201);
     }
 
-    public function show($id)
+    public function show(string $id)
     {
         $investor = Investor::findOrFail($id);
         return response()->json($investor);
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, string $id)
     {
         $investor = Investor::findOrFail($id);
 
         $validated = $request->validate([
             'first_name' => 'sometimes|required|string',
             'last_name' => 'sometimes|required|string',
-            'gender' => 'nullable|string',
+            'latin_name' => 'sometimes|nullable|string',
+            'gender' => 'sometimes|nullable|string',
             'marital_status' => 'nullable|in:Single,Married,Divorced,Widowed',
             'dob' => 'nullable|string',
             'age' => 'nullable|integer',
@@ -98,7 +101,7 @@ class InvestorController extends Controller
         return response()->json($investor);
     }
 
-    public function destroy($id)
+    public function destroy(string $id)
     {
         $investor = Investor::findOrFail($id);
         $investor->delete();

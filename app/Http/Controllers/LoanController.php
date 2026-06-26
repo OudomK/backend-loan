@@ -9,17 +9,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Services\BalloonPaymentCalculator;
-use App\Services\CommissionIncomeService;
 
 class LoanController extends Controller
 {
     protected \App\Services\LoanCalculator $calculator;
-    protected CommissionIncomeService $commissionIncomeService;
-
-    public function __construct(\App\Services\LoanCalculator $calculator, CommissionIncomeService $commissionIncomeService)
+    public function __construct(\App\Services\LoanCalculator $calculator)
     {
         $this->calculator = $calculator;
-        $this->commissionIncomeService = $commissionIncomeService;
     }
 
     public function getPaymentQrs()
@@ -97,6 +93,13 @@ class LoanController extends Controller
             'payment_qr_id' => 'nullable|exists:payment_qrs,id',
             'pay_day_1' => 'nullable|integer|min:1|max:31',
             'pay_day_2' => 'nullable|integer|min:1|max:31',
+        ], [
+            'borrower_id.required' => 'សូមជ្រើសរើសអតិថិជន។',
+            'borrower_id.exists' => 'អតិថិជនមិនត្រឹមត្រូវ។',
+            'loan_officer_id.exists' => 'សូមជ្រើសរើសមន្ត្រីឥណទានឱ្យបានត្រឹមត្រូវ។',
+            'payment_qr_id.exists' => 'សូមជ្រើសរើស QR Code បង់ប្រាក់ឱ្យបានត្រឹមត្រូវ។',
+            'co_borrower_id.exists' => 'អ្នកខ្ចីរួមមិនត្រឹមត្រូវ។',
+            'guarantor_id.exists' => 'អ្នកធានាមិនត្រឹមត្រូវ។',
         ]);
 
         $requestedAmount = (float) ($validated['amount'] ?? 0);
@@ -141,7 +144,6 @@ class LoanController extends Controller
         DB::beginTransaction();
         try {
             $loan = Loan::create($validated);
-            $this->commissionIncomeService->syncForLoan($loan);
 
             // Save collaterals if any
             if (isset($validated['collaterals'])) {

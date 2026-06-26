@@ -187,12 +187,24 @@ class DividendController extends Controller
                 'status' => 'Draft',
             ]);
 
+            $remainingAmount = $totalAmount;
+            $sharesCount = $shares->count();
+            $currentIndex = 0;
+
             // Create pending transactions
             foreach ($shares as $share) {
+                $currentIndex++;
+                if ($currentIndex === $sharesCount) {
+                    $transactionAmount = round($remainingAmount, 2);
+                } else {
+                    $transactionAmount = round(($share->share_qty / $totalSharesCount) * $totalAmount, 2);
+                    $remainingAmount -= $transactionAmount;
+                }
+
                 DividendTransaction::create([
                     'dividend_id' => $dividend->id,
                     'capital_share_id' => $share->id,
-                    'amount' => $share->share_qty * $perShare,
+                    'amount' => $transactionAmount,
                     'currency' => $validated['currency'],
                     'status' => 'Pending',
                 ]);
@@ -231,7 +243,7 @@ class DividendController extends Controller
                 if ($share) {
                     $share->increment('dividends', $transaction->amount);
                     $share->increment('total_dividend_paid', $transaction->amount);
-                    $share->update(['last_dividend_date' => now()]);
+                    $share->update(['last_dividend_date' => $paidAt->toDateString()]);
 
                     // Also record in CapitalShareTransaction
                     CapitalShareTransaction::create([
@@ -297,13 +309,25 @@ class DividendController extends Controller
             $totalAmount = $perShare * $totalSharesCount;
         }
 
+        $remainingAmount = round($totalAmount, 2);
+        $sharesCount = $shares->count();
+        $currentIndex = 0;
+
         // Build recipient list
-        $recipients = $shares->map(function (CapitalShare $share) use ($perShare) {
+        $recipients = $shares->map(function (CapitalShare $share) use (&$remainingAmount, &$currentIndex, $sharesCount, $totalSharesCount, $totalAmount) {
+            $currentIndex++;
+            if ($currentIndex === $sharesCount) {
+                $transactionAmount = round($remainingAmount, 2);
+            } else {
+                $transactionAmount = round(($share->share_qty / $totalSharesCount) * $totalAmount, 2);
+                $remainingAmount -= $transactionAmount;
+            }
+
             return [
                 'holder_id' => $share->holder_id,
                 'holder_name' => $this->resolveHolderName($share),
                 'share_qty' => $share->share_qty,
-                'amount' => $share->share_qty * $perShare,
+                'amount' => $transactionAmount,
             ];
         });
 

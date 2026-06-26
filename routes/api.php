@@ -121,6 +121,7 @@ Route::get('/app/settings', function () {
         'default_payment_qr_id' => $dbSettings['default_payment_qr_id'] ?? null,
         'co_phone_display_mode' => $dbSettings['co_phone_display_mode'] ?? 'one_line',
         'co_phone_display_count' => $dbSettings['co_phone_display_count'] ?? '3',
+        'chart_max_amount' => $dbSettings['chart_max_amount'] ?? '',
     ]);
 });
 
@@ -176,6 +177,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/loan-operation/stats', [LoanOperationController::class, 'getStats']);
     Route::get('/loan-operation/activity', [LoanOperationController::class, 'getRecentActivity']);
+    Route::get('/loan-operation/export-excel', [LoanOperationController::class, 'exportExcel']);
 
     Route::get('/loan-modification/search', [RescheduleRefinanceController::class, 'searchActiveLoans']);
     Route::post('/loan-modification/reschedule', [RescheduleRefinanceController::class, 'reschedule']);
@@ -224,6 +226,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('investors', InvestorController::class);
 
     Route::get('borrowings', [BorrowingController::class, 'getBorrowings']);
+    Route::get('borrowings/next-sequence', [BorrowingController::class, 'getNextSequence']);
     Route::get('borrowings/export-excel', [BorrowingController::class, 'exportExcel']);
     Route::get('borrowings/export-pdf', [BorrowingController::class, 'exportPdf']);
     Route::get('lenders', [BorrowingController::class, 'getLenders']);
@@ -235,6 +238,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('borrowings/{id}/repayments', [BorrowingController::class, 'getRepayments']);
 
     Route::get('borrowings/{id}/schedule', [BorrowingController::class, 'getSchedule']);
+
+    // Export Payment History
+    Route::get('loans/{id}/export-payment-history', [CustomerHistoryController::class, 'exportPaymentHistory']);
 
     Route::middleware('json.unescaped_unicode')->group(function () {
         Route::get('saving-accounts-report', [SavingAccountController::class, 'getSavingReport']);
@@ -275,6 +281,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('positions', PositionController::class);
     Route::post('employees/upload-photo', [EmployeeController::class, 'uploadPhoto']);
+    Route::get('employees/next-code', [EmployeeController::class, 'getNextCode']);
     Route::apiResource('employees', EmployeeController::class);
     Route::apiResource('payrolls', PayrollController::class);
 

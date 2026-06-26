@@ -27,6 +27,7 @@ class Saver extends Model
         'customer_code',
         'first_name',
         'last_name',
+        'latin_name',
         'gender',
         'marital_status',
         'age',
@@ -45,7 +46,7 @@ class Saver extends Model
         'customer_type'
     ];
 
-    public function setDobAttribute($value)
+    public function setDobAttribute(mixed $value)
     {
         if ($value) {
             try {
@@ -56,7 +57,7 @@ class Saver extends Model
         }
     }
 
-    public function setIdExpiryAttribute($value)
+    public function setIdExpiryAttribute(mixed $value)
     {
         if ($value) {
             try {

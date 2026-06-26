@@ -53,6 +53,7 @@ class CustomerImportController extends Controller
             $headers = [
                 'First Name',
                 'Last Name',
+                'Latin Name',
                 'Gender',
                 'DOB (DD/MM/YYYY)',
                 'Phone',
@@ -79,18 +80,19 @@ class CustomerImportController extends Controller
             // Add sample row
             $sheet->setCellValue('A2', 'Sok');
             $sheet->setCellValue('B2', 'Chea');
-            $sheet->setCellValue('C2', 'Male');
-            $sheet->setCellValue('D2', '30/12/1990');
-            $sheet->setCellValue('E2', '012345678');
-            $sheet->setCellValue('F2', 'National ID');
-            $sheet->setCellValue('G2', '0123456789');
-            $sheet->setCellValue('H2', '31/12/2030');
-            $sheet->setCellValue('I2', 'Farmer');
-            $sheet->setCellValue('J2', 'Married');
-            $sheet->setCellValue('K2', 'Village A');
-            $sheet->setCellValue('L2', 'Commune B');
-            $sheet->setCellValue('M2', 'District C');
-            $sheet->setCellValue('N2', 'Province D');
+            $sheet->setCellValue('C2', 'Sok Chea');
+            $sheet->setCellValue('D2', 'Male');
+            $sheet->setCellValue('E2', '30/12/1990');
+            $sheet->setCellValue('F2', '012345678');
+            $sheet->setCellValue('G2', 'National ID');
+            $sheet->setCellValue('H2', '0123456789');
+            $sheet->setCellValue('I2', '31/12/2030');
+            $sheet->setCellValue('J2', 'Farmer');
+            $sheet->setCellValue('K2', 'Married');
+            $sheet->setCellValue('L2', 'Village A');
+            $sheet->setCellValue('M2', 'Commune B');
+            $sheet->setCellValue('N2', 'District C');
+            $sheet->setCellValue('O2', 'Province D');
 
             $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xlsx');
 

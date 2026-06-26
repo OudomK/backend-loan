@@ -69,7 +69,7 @@
             @foreach($items as $index => $item)
             @php
                 $isRealCapital = ($item['category'] ?? '') === 'Real Capital';
-                $share = (int)($item['share_qty'] ?? 0);
+                $share = (float)($item['share_qty'] ?? 0);
                 $amount = (float)($item['amount'] ?? 0);
                 $balance = (float)($item['balance'] ?? 0);
                 $div = $isRealCapital ? (float)($item['dividends'] ?? 0) : 0;

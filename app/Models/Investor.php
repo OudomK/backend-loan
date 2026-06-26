@@ -28,6 +28,7 @@ class Investor extends Model
         'customer_code',
         'first_name',
         'last_name',
+        'latin_name',
         'gender',
         'marital_status',
         'age',
@@ -59,12 +60,12 @@ class Investor extends Model
         }
     }
 
-    public function setDobAttribute($value)
+    public function setDobAttribute(mixed $value)
     {
         $this->attributes['dob'] = $this->normalizeDateInput($value);
     }
 
-    public function setIdExpiryAttribute($value)
+    public function setIdExpiryAttribute(mixed $value)
     {
         $this->attributes['id_expiry'] = $this->normalizeDateInput($value);
     }

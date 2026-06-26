@@ -12,11 +12,11 @@ use App\Services\LoanCalculator;
 use App\Services\BalloonPaymentCalculator;
 
 /**
- * Handles CRUD operations for Capital Shares.
- * 
+ * Handles Capital & Share records.
+ *
  * Logic Note:
- * - 'Real Capital' entries are linked to 'investors' via 'investor_id'.
- * - 'Loan Capital' entries are linked to 'lenders' via 'lender_id'.
+ * - The Capital & Share page is the Real Capital workflow.
+ * - Loan Capital is handled by the borrowing flow and should not appear here.
  */
 class CapitalShareController extends Controller
 {
@@ -64,6 +64,7 @@ class CapitalShareController extends Controller
             'lender_type' => $type,
             'category' => $s->category,
             'share_qty' => $s->share_qty,
+            'share_qty_formatted' => (float) $s->share_qty . ' %',
             'par_value' => $s->par_value,
             'total_capital' => $s->total_capital,
             'currency' => $s->currency,
@@ -89,8 +90,8 @@ class CapitalShareController extends Controller
     private function deriveCapitalValues(array $validated, ?CapitalShare $existing = null): array
     {
         $shareQty = array_key_exists('share_qty', $validated)
-            ? (int) $validated['share_qty']
-            : (int) ($existing?->share_qty ?? 0);
+            ? round((float) $validated['share_qty'], 4)
+            : round((float) ($existing?->share_qty ?? 0), 4);
 
         $amount = array_key_exists('amount', $validated)
             ? round((float) $validated['amount'], 2)
@@ -126,6 +127,7 @@ class CapitalShareController extends Controller
     private function getSharesData(?Request $request = null)
     {
         $shares = CapitalShare::with(['lender', 'investor'])
+            ->where('category', 'Real Capital')
             ->orderBy('id', 'desc')
             ->get();
             
@@ -201,7 +203,7 @@ class CapitalShareController extends Controller
             'lender_id' => "required|exists:$lenderTable,id",
             'category' => 'required|string',
             'par_value' => 'nullable|numeric|min:0',
-            'share_qty' => 'nullable|integer|min:0',
+            'share_qty' => 'nullable|numeric|min:0',
             'currency' => 'required|string',
 
             // New Borrowing/Share Fields
@@ -316,7 +318,7 @@ class CapitalShareController extends Controller
             'lender_id' => "nullable|exists:$lenderTable,id",
             'category' => 'nullable|string',
             'status' => 'nullable|string',
-            'share_qty' => 'nullable|integer|min:0',
+            'share_qty' => 'nullable|numeric|min:0',
             'par_value' => 'nullable|numeric|min:0',
             'currency' => 'nullable|string',
 
@@ -424,14 +426,14 @@ class CapitalShareController extends Controller
         }
 
         $validated = $request->validate([
-            'share_qty' => 'nullable|integer|min:1',
-            'amount' => 'nullable|numeric|min:0.01',
+            'share_qty' => 'nullable|numeric|min:0',
+            'amount' => 'nullable|numeric|min:0',
             'payment_method' => 'nullable|string',
             'transaction_date' => 'nullable|date',
             'description' => 'nullable|string',
         ]);
 
-        if (empty($validated['share_qty']) && empty($validated['amount'])) {
+        if (!array_key_exists('share_qty', $validated) && !array_key_exists('amount', $validated) && empty($validated['share_qty']) && empty($validated['amount']) && $validated['share_qty'] !== 0 && $validated['share_qty'] !== "0" && $validated['amount'] !== 0 && $validated['amount'] !== "0") {
             return response()->json([
                 'message' => 'Please provide a share quantity or amount to add.',
             ], 422);
@@ -440,38 +442,41 @@ class CapitalShareController extends Controller
         return DB::transaction(function () use ($share, $validated) {
             $parValue = $share->par_value > 0 ? (float) $share->par_value : 1;
 
-            // Calculate based on what was provided
-            if (!empty($validated['amount'])) {
-                $inputAmount = round((float) $validated['amount'], 2);
-                $remainder = fmod($inputAmount, $parValue);
-                if ($remainder > 0.001 && ($parValue - $remainder) > 0.001) {
-                    return response()->json([
-                        'message' => 'Amount must match share multiples based on par value.',
-                    ], 422);
-                }
+            $hasAmount = array_key_exists('amount', $validated) && $validated['amount'] !== null && $validated['amount'] !== '';
+            $hasShareQty = array_key_exists('share_qty', $validated) && $validated['share_qty'] !== null && $validated['share_qty'] !== '';
 
-                $addShares = (int) floor($inputAmount / $parValue);
-                $addAmount = round($addShares * $parValue, 2);
-            } else {
-                $addShares = (int) $validated['share_qty'];
-                $addAmount = round($addShares * $parValue, 2);
+            // Scenario 1: Both Amount and Share Qty are provided (e.g. Add $1000 and explicitly get 0 shares, or add $1000 and get 5 shares)
+            if ($hasAmount && $hasShareQty) {
+                $addAmount = round((float) $validated['amount'], 2);
+                $addShares = round((float) $validated['share_qty'], 4);
+            } 
+            // Scenario 2: Only Amount is provided (e.g. Add $1000, let system auto-calculate shares)
+            elseif ($hasAmount) {
+                $addAmount = round((float) $validated['amount'], 2);
+                $currentShareValue = (float) $share->share_qty > 0 ? (float) $share->balance / (float) $share->share_qty : $parValue;
+                $addShares = round($addAmount / $currentShareValue, 4);
+            } 
+            // Scenario 3: Only Share Qty is provided (e.g. Add 5 shares, let system auto-calculate amount)
+            else {
+                $addShares = round((float) $validated['share_qty'], 4);
+                $currentShareValue = (float) $share->share_qty > 0 ? (float) $share->balance / (float) $share->share_qty : $parValue;
+                $addAmount = round($addShares * $currentShareValue, 2);
             }
 
-            if ($addShares <= 0) {
+            if ($addShares <= 0 && $addAmount <= 0) {
                 return response()->json([
-                    'message' => 'Amount is below one share value. Please enter a valid share quantity or amount.',
+                    'message' => 'Amount and Share Quantity cannot both be 0.',
                 ], 422);
             }
 
-            $newShareQty = (int) $share->share_qty + $addShares;
-            $newTotalCapital = round($newShareQty * $parValue, 2);
-
-            // Accumulate balance (do NOT reset to newTotalCapital - that can reduce balance)
+            $newShareQty = round((float) $share->share_qty + $addShares, 4);
+            $newAmount = round((float) $share->amount + $addAmount, 2);
             $newBalance = round((float) $share->balance + $addAmount, 2);
+
             DB::table('capital_shares')->where('id', $share->id)->whereNull('deleted_at')->update([
                 'share_qty'     => $newShareQty,
-                'total_capital' => $newTotalCapital,
-                'amount'        => $newTotalCapital,
+                'total_capital' => $newAmount,
+                'amount'        => $newAmount,
                 'balance'       => $newBalance,
                 'updated_at'    => now(),
             ]);
@@ -505,14 +510,14 @@ class CapitalShareController extends Controller
         }
 
         $validated = $request->validate([
-            'share_qty' => 'nullable|integer|min:1',
-            'amount' => 'nullable|numeric|min:0.01',
+            'share_qty' => 'nullable|numeric|min:0',
+            'amount' => 'nullable|numeric|min:0',
             'payment_method' => 'nullable|string',
             'transaction_date' => 'nullable|date',
             'description' => 'nullable|string',
         ]);
 
-        if (empty($validated['share_qty']) && empty($validated['amount'])) {
+        if (!array_key_exists('share_qty', $validated) && !array_key_exists('amount', $validated) && empty($validated['share_qty']) && empty($validated['amount']) && $validated['share_qty'] !== 0 && $validated['share_qty'] !== "0" && $validated['amount'] !== 0 && $validated['amount'] !== "0") {
             return response()->json([
                 'message' => 'Please provide a share quantity or amount to withdraw.',
             ], 422);
@@ -520,30 +525,34 @@ class CapitalShareController extends Controller
 
         $parValue = $share->par_value > 0 ? (float) $share->par_value : 1;
 
-        // Calculate based on what was provided
-        if (!empty($validated['amount'])) {
-            $inputAmount = round((float) $validated['amount'], 2);
-            $remainder = fmod($inputAmount, $parValue);
-            if ($remainder > 0.001 && ($parValue - $remainder) > 0.001) {
-                return response()->json([
-                    'message' => 'Amount must match share multiples based on par value.',
-                ], 422);
-            }
+        $hasAmount = array_key_exists('amount', $validated) && $validated['amount'] !== null && $validated['amount'] !== '';
+        $hasShareQty = array_key_exists('share_qty', $validated) && $validated['share_qty'] !== null && $validated['share_qty'] !== '';
 
-            $withdrawShares = (int) floor($inputAmount / $parValue);
-            $withdrawAmount = round($withdrawShares * $parValue, 2);
-        } else {
-            $withdrawShares = (int) $validated['share_qty'];
-            $withdrawAmount = round($withdrawShares * $parValue, 2);
+        // Scenario 1: Both Amount and Share Qty are provided
+        if ($hasAmount && $hasShareQty) {
+            $withdrawAmount = round((float) $validated['amount'], 2);
+            $withdrawShares = round((float) $validated['share_qty'], 4);
+        } 
+        // Scenario 2: Only Amount is provided, auto-calculate withdrawn shares
+        elseif ($hasAmount) {
+            $withdrawAmount = round((float) $validated['amount'], 2);
+            $currentShareValue = (float) $share->share_qty > 0 ? (float) $share->balance / (float) $share->share_qty : $parValue;
+            $withdrawShares = round($withdrawAmount / $currentShareValue, 4);
+        } 
+        // Scenario 3: Only Share Qty is provided, auto-calculate withdrawn amount
+        else {
+            $withdrawShares = round((float) $validated['share_qty'], 4);
+            $currentShareValue = (float) $share->share_qty > 0 ? (float) $share->balance / (float) $share->share_qty : $parValue;
+            $withdrawAmount = round($withdrawShares * $currentShareValue, 2);
         }
 
-        if ($withdrawShares <= 0) {
+        if ($withdrawShares <= 0 && $withdrawAmount <= 0) {
             return response()->json([
-                'message' => 'Amount is below one share value. Please enter a valid share quantity or amount.',
+                'message' => 'Amount and Share Quantity cannot both be 0.',
             ], 422);
         }
 
-        if ((int) $share->share_qty < $withdrawShares) {
+        if (round((float) $share->share_qty, 4) < $withdrawShares) {
             return response()->json(['message' => 'Insufficient share quantity'], 400);
         }
 
@@ -551,15 +560,15 @@ class CapitalShareController extends Controller
             return response()->json(['message' => 'Insufficient capital balance'], 422);
         }
 
-        return DB::transaction(function () use ($share, $validated, $withdrawShares, $withdrawAmount, $parValue) {
-            $newShareQty = (int) $share->share_qty - $withdrawShares;
-            $newTotalCapital = round($newShareQty * $parValue, 2);
+        return DB::transaction(function () use ($share, $validated, $withdrawShares, $withdrawAmount) {
+            $newShareQty = round((float) $share->share_qty - $withdrawShares, 4);
+            $newAmount = round(max(0, (float) $share->amount - $withdrawAmount), 2);
             $newBalance = round(max(0, (float) $share->balance - $withdrawAmount), 2);
 
             DB::table('capital_shares')->where('id', $share->id)->whereNull('deleted_at')->update([
                 'share_qty' => $newShareQty,
-                'total_capital' => $newTotalCapital,
-                'amount' => $newTotalCapital,
+                'total_capital' => $newAmount,
+                'amount' => $newAmount,
                 'balance' => $newBalance,
                 'status' => $newShareQty <= 0 || $newBalance <= 0.001 ? 'Withdrawn' : 'Active',
                 'updated_at' => now(),
@@ -587,7 +596,12 @@ class CapitalShareController extends Controller
     {
         $transactions = CapitalShareTransaction::where('capital_share_id', $id)
             ->orderBy('transaction_date', 'desc')
-            ->get();
+            ->get()
+            ->map(function ($t) {
+                $arr = $t->toArray();
+                $arr['share_qty_formatted'] = (float) $t->share_qty > 0 ? (float) $t->share_qty . '%' : '-';
+                return $arr;
+            });
         return response()->json($transactions);
     }
 
@@ -734,7 +748,7 @@ class CapitalShareController extends Controller
             ], 422);
         }
 
-        if ((int) $share->share_qty <= 0 || (float) $share->balance <= 0.001) {
+        if (round((float) $share->share_qty, 4) <= 0 || (float) $share->balance <= 0.001) {
             return response()->json([
                 'message' => 'No active shares available to sell.',
             ], 422);
@@ -747,7 +761,7 @@ class CapitalShareController extends Controller
         ]);
 
         return DB::transaction(function () use ($share, $validated) {
-            $soldShares = (int) $share->share_qty;
+            $soldShares = round((float) $share->share_qty, 4);
             $withdrawAmount = round((float) $share->balance, 2);
 
             $share->update([
@@ -839,5 +853,6 @@ class CapitalShareController extends Controller
         return 'CSA-' . str_pad(mt_rand(1, 999999), 6, '0', STR_PAD_LEFT);
     }
 }
+
 
 

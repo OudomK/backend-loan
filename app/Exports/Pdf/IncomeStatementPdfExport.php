@@ -11,7 +11,6 @@ class IncomeStatementPdfExport
 {
     public function download(array $data, Request $request)
     {
-        $dateLabel = Carbon::today()->format('d/m/Y');
         $fileLabel = Carbon::today()->format('Ymd');
         
         $companyName = Setting::where('key', 'company_name')->value('value') ?? 'Quick Fund Finance Plc.';
@@ -20,9 +19,9 @@ class IncomeStatementPdfExport
         $logoPath = Setting::where('key', 'company_logo')->value('value');
         $logoImg = '';
         if ($logoPath && file_exists(storage_path('app/public/' . $logoPath))) {
-            $logoImg = '<img src="' . storage_path('app/public/' . $logoPath) . '" width="60" style="max-height: 60px;" />';
+            $logoImg = '<img src="' . storage_path('app/public/' . $logoPath) . '" width="50" />';
         } elseif (file_exists(public_path('images/logo.jpg'))) {
-            $logoImg = '<img src="' . public_path('images/logo.jpg') . '" width="60" style="max-height: 60px;" />';
+            $logoImg = '<img src="' . public_path('images/logo.jpg') . '" width="50" />';
         }
 
         $html = view('exports.income_statement_pdf', [
@@ -32,11 +31,11 @@ class IncomeStatementPdfExport
         $pdfFont = Setting::where('key', 'pdf_export_font')->value('value') ?? 'khmeros';
         
         $mpdf = new Mpdf([
-            'format' => 'A4-P', // Portrait is usually better for income statement, but can adjust if needed
+            'format' => 'A4-P',
             'margin_left' => 15,
             'margin_right' => 15,
-            'margin_top' => 45,
-            'margin_bottom' => 20,
+            'margin_top' => 38,
+            'margin_bottom' => 18,
             'margin_header' => 5,
             'margin_footer' => 5,
             'autoScriptToLang' => true,
@@ -48,30 +47,33 @@ class IncomeStatementPdfExport
         
         $fromDate = $data['period']['from_date'] ?? '';
         $toDate = $data['period']['to_date'] ?? '';
-        $periodLabel = "For the period " . \Carbon\Carbon::parse($fromDate)->format('F d, Y') . " to " . \Carbon\Carbon::parse($toDate)->format('F d, Y');
+        $fromFmt = Carbon::parse($fromDate)->format('F d, Y');
+        $toFmt = Carbon::parse($toDate)->format('F d, Y');
 
+        // ── HEADER ──
         $mpdf->SetHTMLHeader('
-            <table width="100%" style="border: none; padding-bottom: 10px; border-bottom: 2px solid #BBDEFB;">
+            <table width="100%" style="border-collapse: collapse; border-bottom: 1px solid #000; padding-bottom: 5px;">
                 <tr>
-                    <td width="20%" style="border: none; vertical-align: middle; text-align: left;">
-                        ' . $logoImg . '
+                    <td width="15%" style="vertical-align: middle; border: none;">' . $logoImg . '</td>
+                    <td width="70%" style="text-align: center; vertical-align: middle; border: none;">
+                        <div style="font-size: 13px; font-weight: bold; color: #000;">' . htmlspecialchars($companyName) . '</div>
+                        <div style="font-size: 10px; color: #555; margin-top: 1px;">' . htmlspecialchars($companyNameKh) . '</div>
+                        <div style="font-size: 11px; font-weight: bold; color: #000; margin-top: 4px; letter-spacing: 1px;">INCOME STATEMENT</div>
+                        <div style="font-size: 9px; color: #555; margin-top: 1px;">របាយការណ៍ចំណូល និង ចំណាយ</div>
+                        <div style="font-size: 8px; color: #333; margin-top: 3px; font-style: italic;">For the period ' . $fromFmt . ' to ' . $toFmt . '</div>
                     </td>
-                    <td width="60%" style="border: none; text-align: center; vertical-align: middle;">
-                        <div style="font-size: 16px; font-weight: bold; color: #1A237E; margin-bottom: 4px;">' . $companyName . '</div>
-                        <div style="font-size: 14px; font-weight: bold; color: #000; letter-spacing: 1px; margin-bottom: 4px;">INCOME STATEMENT</div>
-                        <div style="font-size: 11px; color: #666; font-weight: bold; margin-bottom: 6px;">របាយការណ៍ចំណូល និង ចំណាយ</div>
-                        <div style="font-size: 10px; color: #1A237E; font-style: italic; background-color: #E3F2FD; padding: 3px 10px; display: inline-block; border-radius: 3px;">' . $periodLabel . '</div>
-                    </td>
-                    <td width="20%" style="border: none;"></td>
+                    <td width="15%" style="border: none;"></td>
                 </tr>
             </table>
         ');
 
+        // ── FOOTER ──
         $mpdf->SetHTMLFooter('
-            <table width="100%" style="font-size: 8px; color: #666; border-top: 1px solid #E0E0E0; padding-top: 5px;">
+            <table width="100%" style="border-collapse: collapse; border-top: 0.5px solid #999; font-size: 7px; color: #888; padding-top: 3px;">
                 <tr>
-                    <td width="50%" align="left">Printed on: ' . Carbon::now()->format('d M Y, H:i') . '</td>
-                    <td width="50%" style="text-align: right;">Income Statement Report - Page {PAGENO} of {nbpg}</td>
+                    <td width="33%" style="text-align: left; border: none;">Printed: ' . Carbon::now()->format('d/m/Y H:i') . '</td>
+                    <td width="34%" style="text-align: center; border: none;">' . htmlspecialchars($companyName) . '</td>
+                    <td width="33%" style="text-align: right; border: none;">Page {PAGENO} of {nbpg}</td>
                 </tr>
             </table>
         ');

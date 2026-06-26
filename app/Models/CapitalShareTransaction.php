@@ -32,6 +32,10 @@ class CapitalShareTransaction extends Model
         'performed_by',
     ];
 
+    protected $casts = [
+        'share_qty' => 'float',
+    ];
+
     public function capitalShare(): BelongsTo
     {
         return $this->belongsTo(CapitalShare::class);

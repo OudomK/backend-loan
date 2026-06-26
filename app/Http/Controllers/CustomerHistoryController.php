@@ -381,4 +381,19 @@ class CustomerHistoryController extends Controller
             'loans' => $loansPayload,
         ]);
     }
+
+    public function exportPaymentHistory(Request $request, $id)
+    {
+        $loan = Loan::with('payments', 'borrower', 'coBorrower', 'guarantor')->findOrFail($id);
+        
+        $historyData = $this->loanToHistoryArray($loan);
+        
+        $customerName = trim(($loan->borrower->first_name ?? '') . ' ' . ($loan->borrower->last_name ?? ''));
+        if (empty($customerName)) {
+            $customerName = 'N/A';
+        }
+
+        $export = new \App\Exports\Excel\PaymentHistoryExcelExport();
+        return $export->download($historyData, $loan->loan_code ?? 'N/A', $customerName, $loan->currency, $request);
+    }
 }

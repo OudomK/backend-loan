@@ -29,7 +29,7 @@ class CapitalShareTransactionsTable
             ->columns([
                 TextColumn::make('transaction_date')
                     ->label('Date')
-                    ->date('d/m/Y')
+                    ->dateTime('d/m/Y H:i')
                     ->description(fn($record): ?string => collect([
                         filled($record->capitalShare?->account_no) ? 'Acc ' . $record->capitalShare->account_no : null,
                         filled($record->transaction_type) ? $record->transaction_type : null,

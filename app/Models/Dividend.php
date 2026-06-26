@@ -34,6 +34,47 @@ class Dividend extends Model
         'net_amount' => 'decimal:2',
     ];
 
+    /**
+     * Fields that CANNOT be changed once the dividend is distributed (Completed).
+     */
+    protected static array $lockedFields = [
+        'total_amount',
+        'dividend_per_share',
+        'currency',
+        'distribution_basis',
+        'total_shares_count',
+        'tax_amount',
+        'net_amount',
+    ];
+
+    protected static function booted(): void
+    {
+        static::updating(function (Dividend $dividend) {
+            if ($dividend->getOriginal('status') === 'Completed') {
+                foreach (static::$lockedFields as $field) {
+                    if ($dividend->isDirty($field)) {
+                        throw new \RuntimeException(
+                            "Cannot modify '{$field}' on a completed dividend (ID: {$dividend->id}). Financial data is locked after distribution."
+                        );
+                    }
+                }
+            }
+        });
+
+        static::deleting(function (Dividend $dividend) {
+            if ($dividend->status === 'Completed') {
+                throw new \RuntimeException(
+                    "Cannot delete a completed dividend (ID: {$dividend->id}). It has already been distributed."
+                );
+            }
+        });
+    }
+
+    public function isLocked(): bool
+    {
+        return $this->status === 'Completed';
+    }
+
     public function transactions()
     {
         return $this->hasMany(DividendTransaction::class);

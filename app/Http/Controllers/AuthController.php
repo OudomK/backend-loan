@@ -25,6 +25,23 @@ class AuthController extends Controller
 
         $loginField = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
 
+        $userModel = \App\Models\User::where($loginField, $login)->first();
+
+        if (!$userModel) {
+            activity('auth')
+                ->withProperties([
+                    'login' => $login,
+                    'login_field' => $loginField,
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->userAgent(),
+                ])
+                ->log('Failed login attempt: User not found');
+
+            throw ValidationException::withMessages([
+                'login' => ['ឈ្មោះគណនី ឬ អ៊ីមែលមិនត្រឹមត្រូវទេ'],
+            ]);
+        }
+
         if (!Auth::attempt([$loginField => $login, 'password' => $password])) {
             activity('auth')
                 ->withProperties([
@@ -33,10 +50,10 @@ class AuthController extends Controller
                     'ip' => $request->ip(),
                     'user_agent' => $request->userAgent(),
                 ])
-                ->log('Failed login attempt');
+                ->log('Failed login attempt: Incorrect password');
 
             throw ValidationException::withMessages([
-                'login' => [__('auth.failed')],
+                'password' => ['លេខសម្ងាត់មិនត្រឹមត្រូវទេ'],
             ]);
         }
 

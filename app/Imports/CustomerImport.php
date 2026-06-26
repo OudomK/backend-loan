@@ -19,18 +19,19 @@ class CustomerImport
      * Expected Columns (0-indexed):
      * 0: First Name*
      * 1: Last Name*
-     * 2: Gender
-     * 3: DOB (DD/MM/YYYY)
-     * 4: Phone
-     * 5: ID Type (e.g., National ID)
-     * 6: ID Number
-     * 7: ID Expiry (DD/MM/YYYY)
-     * 8: Occupation
-     * 9: Marital Status
-     * 10: Village
-     * 11: Commune
-     * 12: District
-     * 13: Province
+     * 2: Latin Name
+     * 3: Gender
+     * 4: DOB (DD/MM/YYYY)
+     * 5: Phone
+     * 6: ID Type (e.g., National ID)
+     * 7: ID Number
+     * 8: ID Expiry (DD/MM/YYYY)
+     * 9: Occupation
+     * 10: Marital Status
+     * 11: Village
+     * 12: Commune
+     * 13: District
+     * 14: Province
      */
     public function import(string $filePath, string $type)
     {
@@ -60,6 +61,7 @@ class CustomerImport
 
                 $firstName = trim($row[0] ?? '');
                 $lastName = trim($row[1] ?? '');
+                $latinName = trim($row[2] ?? '');
 
                 if (empty($firstName) || empty($lastName)) {
                     $errors[] = "Row " . ($index + 2) . ": First Name and Last Name are required.";
@@ -74,18 +76,19 @@ class CustomerImport
                     'customer_code' => $customerCode,
                     'first_name' => $firstName,
                     'last_name' => $lastName,
-                    'gender' => trim($row[2] ?? 'Male'),
-                    'dob' => $this->parseDate($row[3] ?? null),
-                    'phone' => trim($row[4] ?? ''),
-                    'id_type' => trim($row[5] ?? 'National ID'),
-                    'id_number' => trim($row[6] ?? ''),
-                    'id_expiry' => $this->parseDate($row[7] ?? null),
-                    'occupation' => trim($row[8] ?? ''),
-                    'marital_status' => trim($row[9] ?? ''),
-                    'village' => trim($row[10] ?? ''),
-                    'commune' => trim($row[11] ?? ''),
-                    'district' => trim($row[12] ?? ''),
-                    'province' => trim($row[13] ?? ''),
+                    'latin_name' => $latinName,
+                    'gender' => trim($row[3] ?? 'Male'),
+                    'dob' => $this->parseDate($row[4] ?? null),
+                    'phone' => trim($row[5] ?? ''),
+                    'id_type' => trim($row[6] ?? 'National ID'),
+                    'id_number' => trim($row[7] ?? ''),
+                    'id_expiry' => $this->parseDate($row[8] ?? null),
+                    'occupation' => trim($row[9] ?? ''),
+                    'marital_status' => trim($row[10] ?? ''),
+                    'village' => trim($row[11] ?? ''),
+                    'commune' => trim($row[12] ?? ''),
+                    'district' => trim($row[13] ?? ''),
+                    'province' => trim($row[14] ?? ''),
                     'status' => 'Active',
                 ];
 
@@ -146,13 +149,23 @@ class CustomerImport
         if (!$modelClass)
             return 0;
 
-        $lastRecord = $modelClass::withTrashed()->orderBy('id', 'desc')->first();
+        // Parse the actual numeric suffix from the highest customer_code
+        // to avoid duplicate code conflicts (id ≠ code sequence after deletions/manual edits)
+        $separator = ($prefix === 'INV') ? '' : '-';
+        $pattern = $prefix . $separator;
+
+        $lastRecord = $modelClass::withTrashed()
+            ->where('customer_code', 'like', $pattern . '%')
+            ->orderByRaw("CAST(SUBSTRING(customer_code, ?) AS UNSIGNED) DESC", [strlen($pattern) + 1])
+            ->first();
+
         if (!$lastRecord) {
             return 0;
         }
 
-        // Just use the latest ID as the sequence basis to match BorrowerController logic
-        return $lastRecord->id;
+        // Extract numeric part after the prefix+separator
+        $numericPart = substr($lastRecord->customer_code, strlen($pattern));
+        return (int) $numericPart;
     }
 
 

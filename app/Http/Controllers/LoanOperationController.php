@@ -137,11 +137,39 @@ class LoanOperationController extends Controller
             ->paginate(15);
 
         // Ensure admin_fee is in the response (each loan already has it; makeVisible if ever hidden)
-        $loans->getCollection()->each(function ($loan) {
+        $loans->getCollection()->transform(function ($loan) {
             $loan->makeVisible(['admin_fee']);
+            
+            // Abbreviate Refinance and Reschedule for better display
+            if ($loan->loan_code) {
+                $loan->loan_code = str_ireplace(['-Refinanced', '-Rescheduled'], ['-RF', '-RS'], $loan->loan_code);
+            }
+            if ($loan->purpose) {
+                $loan->purpose = str_ireplace(['Refinance', 'Reschedule'], ['RF', 'RS'], $loan->purpose);
+            }
+            
+            return $loan;
         });
 
         return response()->json($loans);
+    }
+
+    /**
+     * Export all active loans to Excel
+     */
+    public function exportExcel(Request $request)
+    {
+        $loans = Loan::with(['borrower'])
+            ->where('status', '!=', 'completed')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        $loans->each(function ($loan) {
+            $loan->makeVisible(['admin_fee']);
+        });
+
+        $export = new \App\Exports\Excel\LoanOperationExcelExport();
+        return $export->download($loans, $request);
     }
 
     private function portfolioSnapshot(Loan $loan, Carbon $referenceDate): array

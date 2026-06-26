@@ -169,7 +169,7 @@ class CapitalShareExcelExport
             $no = 1;
             foreach ($items as $item) {
                 $isRealCapital = ($item['category'] ?? '') === 'Real Capital';
-                $shareQty = (int) ($item['share_qty'] ?? 0);
+                $shareQty = (float) ($item['share_qty'] ?? 0);
                 $amount = (float) ($item['amount'] ?? 0);
                 $balance = (float) ($item['balance'] ?? 0);
                 $dividends = $isRealCapital ? (float) ($item['dividends'] ?? 0) : 0.0;
@@ -221,7 +221,7 @@ class CapitalShareExcelExport
                         $sheet->getStyle($columnLetter . $row)->getNumberFormat()->setFormatCode('#,##0.00');
                         $sheet->getStyle($columnLetter . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
                     } elseif ($colIndex === 9) { // Share Qty
-                        $sheet->setCellValue($columnLetter . $row, (int) $val);
+                        $sheet->setCellValue($columnLetter . $row, (float) $val);
                         $sheet->getStyle($columnLetter . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                     } else {
                         $sheet->setCellValue($columnLetter . $row, $val);

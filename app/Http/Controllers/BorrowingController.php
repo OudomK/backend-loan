@@ -102,6 +102,14 @@ class BorrowingController extends Controller
         return $data;
     }
 
+    public function getNextSequence()
+    {
+        $lastBorrowing = Borrowing::orderBy('id', 'desc')->first();
+        $nextId = $lastBorrowing ? $lastBorrowing->id + 1 : 1;
+        $sequence = str_pad($nextId, 3, '0', STR_PAD_LEFT);
+        return response()->json(['sequence' => $sequence]);
+    }
+
     public function getBorrowings()
     {
         return response()->json($this->getBorrowingsData());
@@ -231,7 +239,7 @@ class BorrowingController extends Controller
 
         if ($hasRepayments && $criticalChangedAfterRepayment) {
             return response()->json([
-                'message' => 'Cannot change amount, term, rate, payment method, or pay dates after repayments have been recorded.',
+                'message' => 'មិនអាចកែប្រែចំនួនប្រាក់ រយៈពេល អត្រាការប្រាក់ វិធីសាស្ត្របង់ប្រាក់ ឬកាលបរិច្ឆេទបង់ប្រាក់បានទេ បន្ទាប់ពីមានប្រតិបត្តិការសងប្រាក់រួចរាល់។',
             ], 422);
         }
 
@@ -280,6 +288,15 @@ class BorrowingController extends Controller
             ], 422);
         }
         $validated['payment_method'] = $paymentMethod;
+
+        $lastBorrowing = Borrowing::orderBy('id', 'desc')->first();
+        $nextId = $lastBorrowing ? $lastBorrowing->id + 1 : 1;
+        $sequence = str_pad($nextId, 3, '0', STR_PAD_LEFT);
+
+        $validated['transaction_no'] = $validated['transaction_no'] ?? 'TRN-' . $sequence;
+        $validated['loan_account'] = $validated['loan_account'] ?? 'LA-' . $sequence;
+        $validated['account_no'] = $validated['account_no'] ?? 'ACC-' . $sequence;
+        $validated['contract_no'] = $validated['contract_no'] ?? 'CON-' . $sequence;
 
         $validated['status'] = 'active';
 

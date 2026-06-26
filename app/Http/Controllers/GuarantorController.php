@@ -18,6 +18,7 @@ class GuarantorController extends Controller
                 $like = "%{$search}%";
                 $q->where('first_name', 'like', $like)
                     ->orWhere('last_name', 'like', $like)
+                    ->orWhere('latin_name', 'like', $like)
                     ->orWhere('id_number', 'like', $like)
                     ->orWhere('phone', 'like', $like)
                     ->orWhere('age', 'like', $like)
@@ -32,6 +33,7 @@ class GuarantorController extends Controller
                     'id',
                     'first_name',
                     'last_name',
+                    'latin_name',
                     'phone',
                     'id_number',
                     'customer_code',
@@ -62,6 +64,7 @@ class GuarantorController extends Controller
                         'id' => (string) $guarantor->id,
                         'first_name' => (string) ($guarantor->first_name ?? ''),
                         'last_name' => (string) ($guarantor->last_name ?? ''),
+                        'latin_name' => (string) ($guarantor->latin_name ?? ''),
                         'name' => trim(($guarantor->first_name ?? '') . ' ' . ($guarantor->last_name ?? '')),
                         'phone' => (string) ($guarantor->phone ?? ''),
                         'id_number' => (string) ($guarantor->id_number ?? ''),
@@ -94,6 +97,7 @@ class GuarantorController extends Controller
             'customer_code' => 'nullable|string|unique:guarantors',
             'first_name' => 'nullable|string|max:255',
             'last_name' => 'nullable|string|max:255',
+            'latin_name' => 'nullable|string|max:255',
             'gender' => 'nullable|string',
             'marital_status' => 'nullable|string',
             'age' => 'nullable|integer',
@@ -131,6 +135,7 @@ class GuarantorController extends Controller
             'customer_code' => 'sometimes|nullable|string|unique:guarantors,customer_code,' . $guarantor->id,
             'first_name' => 'sometimes|nullable|string|max:255',
             'last_name' => 'sometimes|nullable|string|max:255',
+            'latin_name' => 'sometimes|nullable|string|max:255',
             'gender' => 'nullable|string',
             'marital_status' => 'nullable|string',
             'age' => 'nullable|integer',

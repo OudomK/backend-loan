@@ -31,6 +31,12 @@ class EmployeeController extends Controller
         $data = $request->validated();
         $data['currency'] = CurrencyHelper::normalize($data['currency'] ?? CurrencyHelper::USD);
 
+        if (empty($data['employee_code'])) {
+            $latest = Employee::orderBy('id', 'desc')->first();
+            $nextId = $latest ? $latest->id + 1 : 1;
+            $data['employee_code'] = 'EMP-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+        }
+
         $employee = Employee::create($data);
 
         $this->employeeService->syncWithLoanOfficer($employee);
@@ -82,5 +88,14 @@ class EmployeeController extends Controller
         }
 
         return response()->json(['message' => 'Upload failed'], 400);
+    }
+
+    public function getNextCode()
+    {
+        $latest = Employee::orderBy('id', 'desc')->first();
+        $nextId = $latest ? $latest->id + 1 : 1;
+        $code = 'EMP-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+        
+        return response()->json(['code' => $code]);
     }
 }

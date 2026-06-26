@@ -76,6 +76,7 @@ class Borrowing extends Model
         $deletedSchedules = $this->schedules()->count();
         $this->schedules()->delete();
 
+
         $amount = (float) $this->amount;
         $rate = (float) $this->interest_rate / 100;
         $terms = (int) $this->term_months;
@@ -83,27 +84,53 @@ class Borrowing extends Model
         $method = strtolower($this->payment_method); // Balloon, Declining
 
         $currentBalance = $amount;
+
+        // Calculate EMI for Declining method
+        $emi = 0;
+        if ($method === 'declining') {
+            if ($rate > 0) {
+                $emi = ($amount * $rate * pow(1 + $rate, $terms)) / (pow(1 + $rate, $terms) - 1);
+            } else {
+                $emi = $amount / $terms;
+            }
+        }
+
         for ($i = 1; $i <= $terms; $i++) {
             $dueDate = $startDate->copy()->addMonths($i - 1);
-            $interest = round($currentBalance * $rate, 2);
             $principal = 0;
+            $interest = 0;
 
-            if ($method === 'declining' || $method === 'fixed') {
+            if ($method === 'fixed') {
+                // Fixed (Flat Rate): Interest is always based on total original amount
+                $interest = round($amount * $rate, 2);
                 $principal = round($amount / $terms, 2);
+                if ($i === $terms) {
+                    $principal = $currentBalance; // Adjust last month
+                }
+            } elseif ($method === 'declining') {
+                // Declining (EMI): Fixed total payment, interest drops, principal increases
+                $interest = round($currentBalance * $rate, 2);
+                $principal = round($emi - $interest, 2);
+                if ($i === $terms) {
+                    $principal = $currentBalance; // Adjust last month
+                }
+            } elseif ($method === 'balloon' || $method === 'negotiable') {
+                // Balloon: Interest only, principal paid at the end
+                $interest = round($currentBalance * $rate, 2);
                 if ($i === $terms) {
                     $principal = $currentBalance;
                 }
-            } elseif ($method === 'balloon' || $method === 'negotiable') {
-                if ($i === $terms) {
-                    $principal = $amount;
-                }
             } else {
-                // Default to Fixed Principal if unknown
+                // Default to Fixed (Flat Rate) if unknown
+                $interest = round($amount * $rate, 2);
                 $principal = round($amount / $terms, 2);
                 if ($i === $terms) {
                     $principal = $currentBalance;
                 }
             }
+
+            // Ensure no negative principal due to rounding errors
+            if ($principal < 0) $principal = 0;
 
             $this->schedules()->create([
                 'installment_no' => $i,
@@ -115,6 +142,7 @@ class Borrowing extends Model
             ]);
 
             $currentBalance -= $principal;
+            $currentBalance = round($currentBalance, 2); // Prevent floating point drift
         }
 
         activity('borrowings')

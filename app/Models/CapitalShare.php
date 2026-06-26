@@ -42,6 +42,7 @@ class CapitalShare extends Model
 
     protected $casts = [
         'repayment_schedule' => 'array',
+        'share_qty' => 'float',
     ];
 
     public function lender(): BelongsTo
