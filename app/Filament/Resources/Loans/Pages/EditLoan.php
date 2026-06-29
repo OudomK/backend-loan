@@ -6,6 +6,8 @@ use App\Filament\Resources\Loans\LoanResource;
 use App\Models\Loan;
 
 use Filament\Actions\DeleteAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\RestoreAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditLoan extends EditRecord
@@ -18,6 +20,8 @@ class EditLoan extends EditRecord
     {
         return [
             DeleteAction::make(),
+            ForceDeleteAction::make(),
+            RestoreAction::make(),
         ];
     }
 }
