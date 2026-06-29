@@ -32,7 +32,8 @@ class LoanOfficerPerformance extends BaseWidget
                 return LoanOfficer::query()
                     ->where('status', 'active')
                     ->withCount(['loans as active_loans_count' => fn (Builder $q) => $q->where('status', 'active')])
-                    ->withSum(['loans as portfolio_sum' => fn (Builder $q) => $q->where('status', 'active')], 'amount')
+                    ->withSum(['loans as portfolio_usd' => fn (Builder $q) => $q->where('status', 'active')->where('currency', 'USD')], 'amount')
+                    ->withSum(['loans as portfolio_khr' => fn (Builder $q) => $q->where('status', 'active')->where('currency', 'KHR')], 'amount')
                     ->withCount(['loans as overdue_loans_count' => fn (Builder $q) => $q->where('status', 'active')->where('aging', '>', 0)])
                     ->orderByDesc('active_loans_count');
             })
@@ -49,9 +50,14 @@ class LoanOfficerPerformance extends BaseWidget
                     ->badge()
                     ->color('info'),
 
-                Tables\Columns\TextColumn::make('portfolio_sum')
+                Tables\Columns\TextColumn::make('portfolio')
                     ->label('Portfolio')
-                    ->formatStateUsing(fn ($state) => CurrencyHelper::display((float) ($state ?? 0), CurrencyHelper::USD))
+                    ->getStateUsing(fn ($record) => $record)
+                    ->formatStateUsing(fn ($state) => CurrencyHelper::displayDual(
+                        (float) ($state->portfolio_usd ?? 0),
+                        (float) ($state->portfolio_khr ?? 0)
+                    ))
+                    ->html()
                     ->alignEnd()
                     ->color('success')
                     ->weight('bold'),
@@ -65,12 +71,21 @@ class LoanOfficerPerformance extends BaseWidget
                 Tables\Columns\TextColumn::make('mtd_collections')
                     ->label('MTD Collections')
                     ->getStateUsing(function ($record) {
-                        $total = (float) RepaymentTransaction::whereMonth('transaction_date', now()->month)
+                        $usd = (float) RepaymentTransaction::whereMonth('transaction_date', now()->month)
                             ->whereYear('transaction_date', now()->year)
                             ->where('collector_id', $record->id)
+                            ->whereHas('loan', fn ($q) => $q->where('currency', 'USD'))
                             ->sum('amount_paid');
-                        return CurrencyHelper::display($total, CurrencyHelper::USD);
+                            
+                        $khr = (float) RepaymentTransaction::whereMonth('transaction_date', now()->month)
+                            ->whereYear('transaction_date', now()->year)
+                            ->where('collector_id', $record->id)
+                            ->whereHas('loan', fn ($q) => $q->where('currency', 'KHR'))
+                            ->sum('amount_paid');
+                            
+                        return CurrencyHelper::displayDual($usd, $khr);
                     })
+                    ->html()
                     ->alignEnd()
                     ->color('info')
                     ->weight('bold'),
