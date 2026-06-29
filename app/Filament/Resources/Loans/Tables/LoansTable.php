@@ -5,7 +5,13 @@ namespace App\Filament\Resources\Loans\Tables;
 use App\Support\CurrencyHelper;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
+use Filament\Actions\DeleteAction;
+use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
+use Filament\Actions\ForceDeleteBulkAction;
+use Filament\Actions\RestoreAction;
+use Filament\Actions\RestoreBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
@@ -119,13 +125,13 @@ class LoansTable
                     ->color('warning')
                     ->iconButton()
                     ->tooltip('Manage loan'),
-                \Filament\Actions\DeleteAction::make()
+                DeleteAction::make()
                     ->iconButton()
                     ->tooltip('Delete loan'),
-                \Filament\Actions\ForceDeleteAction::make()
+                ForceDeleteAction::make()
                     ->iconButton()
                     ->tooltip('Permanently delete loan'),
-                \Filament\Actions\RestoreAction::make()
+                RestoreAction::make()
                     ->iconButton()
                     ->tooltip('Restore loan'),
             ])
@@ -136,10 +142,10 @@ class LoansTable
                     ->button(),
             ])
             ->bulkActions([
-                \Filament\Actions\BulkActionGroup::make([
-                    \Filament\Actions\DeleteBulkAction::make(),
-                    \Filament\Actions\ForceDeleteBulkAction::make(),
-                    \Filament\Actions\RestoreBulkAction::make(),
+                BulkActionGroup::make([
+                    DeleteBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
                 ]),
             ]);
     }
