@@ -117,9 +117,15 @@ class LoansTable
                     ->color('warning')
                     ->iconButton()
                     ->tooltip('Manage loan'),
-                \Filament\Actions\DeleteAction::make(),
-                \Filament\Actions\ForceDeleteAction::make(),
-                \Filament\Actions\RestoreAction::make(),
+                \Filament\Actions\DeleteAction::make()
+                    ->iconButton()
+                    ->tooltip('Delete loan'),
+                \Filament\Actions\ForceDeleteAction::make()
+                    ->iconButton()
+                    ->tooltip('Permanently delete loan'),
+                \Filament\Actions\RestoreAction::make()
+                    ->iconButton()
+                    ->tooltip('Restore loan'),
             ])
             ->headerActions([
                 CreateAction::make()
