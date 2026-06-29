@@ -117,9 +117,9 @@ class LoansTable
                     ->color('warning')
                     ->iconButton()
                     ->tooltip('Manage loan'),
-                \Filament\Tables\Actions\DeleteAction::make(),
-                \Filament\Tables\Actions\ForceDeleteAction::make(),
-                \Filament\Tables\Actions\RestoreAction::make(),
+                \Filament\Actions\DeleteAction::make(),
+                \Filament\Actions\ForceDeleteAction::make(),
+                \Filament\Actions\RestoreAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()
