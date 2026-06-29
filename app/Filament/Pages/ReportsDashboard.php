@@ -7,7 +7,17 @@ use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class ReportsDashboard extends Page
 {
-    use HasPageShield;
+    use HasPageShield {
+        canAccess as shieldCanAccess;
+    }
+
+    public static function canAccess(): bool
+    {
+        if (!\App\Services\FeatureToggle::isAccessible('feature_reports', \Filament\Facades\Filament::auth()->user())) {
+            return false;
+        }
+        return static::shieldCanAccess();
+    }
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-document-chart-bar';
     protected static string|\UnitEnum|null $navigationGroup = 'Reports';
@@ -170,12 +180,21 @@ class ReportsDashboard extends Page
                 ],
             ],
         ];
+
+        return collect($groups)->map(function ($group) {
+            $group['reports'] = collect($group['reports'])->filter(function ($report) {
+                return !isset($report['feature']) || \App\Services\FeatureToggle::isAccessible($report['feature'], \Filament\Facades\Filament::auth()->user());
+            })->toArray();
+            return $group;
+        })->toArray();
     }
+
+
 
     public function getReportStats(): array
     {
         $groups = $this->getReportGroups();
-        $reports = collect($groups)->flatMap(fn (array $group) => $group['reports'] ?? []);
+        $reports = collect($groups)->flatMap(fn(array $group) => $group['reports'] ?? []);
 
         $total = $reports->count();
         $api = $reports->where('type', 'API')->count();

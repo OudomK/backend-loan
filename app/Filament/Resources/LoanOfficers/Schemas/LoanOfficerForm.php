@@ -28,8 +28,8 @@ class LoanOfficerForm
                             ->schema([
                                 Select::make('employee_id')
                                     ->label('Link to Employee')
-                                    ->relationship('employee', 'name', fn (Builder $query) => $query->orderBy('name'))
-                                    ->getOptionLabelFromRecordUsing(fn ($record) => trim(($record->employee_code ? "{$record->employee_code} - " : '') . $record->name))
+                                    ->relationship('employee', 'name', fn(Builder $query) => $query->orderBy('name'))
+                                    ->getOptionLabelFromRecordUsing(fn($record) => trim(($record->employee_code ? "{$record->employee_code} - " : '') . $record->name))
                                     ->searchable()
                                     ->preload()
                                     ->unique(ignoreRecord: true)
@@ -110,10 +110,6 @@ class LoanOfficerForm
                                 DatePicker::make('start_date')
                                     ->label('Start Date')
                                     ->native(false),
-                                TextInput::make('max_loan_amount')
-                                    ->label('Max Loan Amount')
-                                    ->numeric()
-                                    ->prefix('$'),
                             ]),
                     ]),
             ]);

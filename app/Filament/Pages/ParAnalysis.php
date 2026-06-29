@@ -10,7 +10,17 @@ use BezhanSalleh\FilamentShield\Traits\HasPageShield;
 
 class ParAnalysis extends Page
 {
-    use HasPageShield;
+    use HasPageShield {
+        canAccess as shieldCanAccess;
+    }
+
+    public static function canAccess(): bool
+    {
+        if (!\App\Services\FeatureToggle::isAccessible('feature_par_analysis', \Filament\Facades\Filament::auth()->user())) {
+            return false;
+        }
+        return static::shieldCanAccess();
+    }
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-shield-exclamation';
     protected static string|\UnitEnum|null $navigationGroup = 'Reports';
@@ -54,7 +64,7 @@ class ParAnalysis extends Page
             'loss' => ['label' => '360+ Days (Loss)', 'usd' => 0.0, 'khr' => 0.0, 'count' => 0],
         ];
 
-        /** @var \App\Models\Loan $loan */
+        /** @var Loan $loan */
         foreach ($activeLoans as $loan) {
             $snapshot = $this->portfolioSnapshot($loan, $referenceDate);
             $currentOS = $snapshot['outstanding'];

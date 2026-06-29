@@ -13,15 +13,37 @@ class TranslationsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Translations')
+            ->description('Manage system translations and localizations.')
+            ->headerActions([
+                \Filament\Actions\CreateAction::make()
+                    ->label('New translation')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
+            ])
             ->columns([
                 TextColumn::make('key')
-                    ->searchable(),
+                    ->label('Translation Key')
+                    ->searchable()
+                    ->badge()
+                    ->color('primary')
+                    ->icon('heroicon-o-key')
+                    ->copyable()
+                    ->copyMessage('Key copied to clipboard')
+                    ->sortable()
+                    ->weight('bold'),
                 TextColumn::make('en')
+                    ->label('English (EN)')
                     ->searchable()
-                    ->limit(50),
+                    ->wrap()
+                    ->icon('heroicon-o-language')
+                    ->color('info'),
                 TextColumn::make('kh')
+                    ->label('Khmer (KH)')
                     ->searchable()
-                    ->limit(50),
+                    ->wrap()
+                    ->icon('heroicon-o-language')
+                    ->color('success'),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -35,12 +57,17 @@ class TranslationsTable
                 //
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->button()
+                    ->outlined()
+                    ->icon('heroicon-o-pencil-square'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->striped()
+            ->deferLoading();
     }
 }

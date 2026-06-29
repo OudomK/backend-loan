@@ -63,12 +63,7 @@ class LoanOfficersTable
                     ->sortable()
                     ->visibleFrom('2xl')
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('max_loan_amount')
-                    ->label('Max Loan Amount')
-                    ->formatStateUsing(fn($state): string => $state !== null ? '$' . number_format((float) $state, 2) : '-')
-                    ->sortable()
-                    ->visibleFrom('xl')
-                    ->toggleable(isToggledHiddenByDefault: true),
+
                 TextColumn::make('status')
                     ->badge()
                     ->formatStateUsing(fn(?string $state): string => ucfirst(strtolower((string) $state)))

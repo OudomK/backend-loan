@@ -120,7 +120,7 @@ class RoleResource extends Resource
             ->onIcon('heroicon-s-shield-check')
             ->offIcon('heroicon-s-shield-exclamation')
             ->label(__('filament-shield::filament-shield.field.select_all.name'))
-            ->helperText(fn (): HtmlString => new HtmlString(__('filament-shield::filament-shield.field.select_all.message')))
+            ->helperText(fn(): HtmlString => new HtmlString(__('filament-shield::filament-shield.field.select_all.message')))
             ->live()
             ->afterStateUpdated(function (Livewire $livewire, Set $set, Get $get, bool $state): void {
                 if (($get('category') ?? 'admin') === 'system_ui') {
@@ -131,7 +131,7 @@ class RoleResource extends Resource
 
                 static::toggleEntitiesViaSelectAll($livewire, $set, $state);
             })
-            ->dehydrated(fn (bool $state): bool => $state);
+            ->dehydrated(fn(bool $state): bool => $state);
     }
 
     protected static function toggleSystemUiViaSelectAll(Set $set, bool $state): void
@@ -168,7 +168,7 @@ class RoleResource extends Resource
         $expanded = collect($permissions);
 
         foreach ($permissions as $permission) {
-            if (! is_string($permission)) {
+            if (!is_string($permission)) {
                 continue;
             }
 
@@ -188,63 +188,47 @@ class RoleResource extends Resource
     public static function isResourceDisabled(string $fqcn): bool
     {
         /** @var \App\Models\User|null $user */
-        $user = \Filament\Facades\Filament::auth()->user();
+        $user = Filament::auth()->user();
 
-        if (!\App\Services\FeatureToggle::isAccessible('expense_categories', $user) && $fqcn === \App\Filament\Resources\ExpenseCategories\ExpenseCategoryResource::class) {
-            return true;
-        }
-        if (!\App\Services\FeatureToggle::isAccessible('revenue_categories', $user) && $fqcn === \App\Filament\Resources\RevenueCategories\RevenueCategoryResource::class) {
-            return true;
-        }
-        if (!\App\Services\FeatureToggle::isAccessible('payment_qrs', $user) && $fqcn === \App\Filament\Resources\PaymentQrs\PaymentQrResource::class) {
-            return true;
-        }
-        if (!\App\Services\FeatureToggle::isAccessible('custom_fonts', $user) && $fqcn === \App\Filament\Resources\CustomFonts\CustomFontResource::class) {
-            return true;
-        }
-        if (!\App\Services\FeatureToggle::isAccessible('activity_logs', $user) && $fqcn === \App\Filament\Resources\ActivityLogs\ActivityLogResource::class) {
-            return true;
-        }
-        if (!\App\Services\FeatureToggle::isAccessible('collateral_management', $user) && $fqcn === \App\Filament\Resources\CollateralResource::class) {
-            return true;
-        }
+        $map = [
+            \App\Filament\Resources\CustomFonts\CustomFontResource::class => 'feature_custom_fonts',
+            \App\Filament\Resources\LoanProducts\LoanProductResource::class => 'feature_loan_products',
+            \App\Filament\Resources\Translations\TranslationResource::class => 'feature_translations',
+            \App\Filament\Resources\ActivityLogs\ActivityLogResource::class => 'feature_activity_logs',
+            \App\Filament\Resources\PaymentQrs\PaymentQrResource::class => 'feature_payment_qrs',
+            
+            \App\Filament\Resources\ExpenseCategories\ExpenseCategoryResource::class => 'feature_expense_categories',
+            \App\Filament\Resources\RevenueCategories\RevenueCategoryResource::class => 'feature_revenue_categories',
+            \App\Filament\Resources\Expenses\ExpenseResource::class => 'feature_expenses',
+            \App\Filament\Resources\Revenues\RevenueResource::class => 'feature_revenues',
+            \App\Filament\Resources\MiscellaneousTransactions\MiscellaneousTransactionResource::class => 'feature_misc_transactions',
+            
+            \App\Filament\Resources\Loans\LoanResource::class => 'feature_loans',
+            \App\Filament\Resources\RepaymentTransactions\RepaymentTransactionResource::class => 'feature_repayment_transactions',
+            \App\Filament\Resources\OverdueLoans\OverdueLoanResource::class => 'feature_overdue_payments',
+            \App\Filament\Resources\LoanModifications\LoanModificationResource::class => 'feature_loan_modifications',
+            \App\Filament\Resources\CollateralResource::class => 'feature_collaterals',
+            
+            \App\Filament\Resources\SavingAccounts\SavingAccountResource::class => 'feature_borrowings',
+            \App\Filament\Resources\BorrowingRepayments\BorrowingRepaymentResource::class => 'feature_borrowing_repayments',
+            \App\Filament\Resources\CapitalShares\CapitalShareResource::class => 'feature_capital_shares',
+            \App\Filament\Resources\CapitalShareTransactions\CapitalShareTransactionResource::class => 'feature_capital_share_transactions',
+            \App\Filament\Resources\Dividends\DividendResource::class => 'feature_dividends',
+            \App\Filament\Resources\Investors\InvestorResource::class => 'feature_investors',
+            
+            \App\Filament\Resources\Borrowers\BorrowerResource::class => 'feature_borrowers',
+            \App\Filament\Resources\CoBorrowers\CoBorrowerResource::class => 'feature_co_borrowers',
+            \App\Filament\Resources\Guarantors\GuarantorResource::class => 'feature_guarantors',
+            \App\Filament\Resources\LoanOfficers\LoanOfficerResource::class => 'feature_loan_officers',
+            
+            \App\Filament\Resources\Employees\EmployeeResource::class => 'feature_employees',
+            \App\Filament\Resources\Payrolls\PayrollResource::class => 'feature_payrolls',
+            \App\Filament\Resources\Positions\PositionResource::class => 'feature_positions',
+        ];
 
-        if ($fqcn === \App\Filament\Resources\Expenses\ExpenseResource::class) {
-            return !\App\Services\FeatureToggle::isAccessible('general_expenses', $user);
-        }
-
-        if ($fqcn === \App\Filament\Resources\Revenues\RevenueResource::class) {
-            return !\App\Services\FeatureToggle::isAccessible('general_revenues', $user);
-        }
-
-        if (!\App\Services\FeatureToggle::isAccessible('hr_payroll', $user)) {
-            if (in_array($fqcn, [
-                \App\Filament\Resources\Employees\EmployeeResource::class,
-                \App\Filament\Resources\Positions\PositionResource::class,
-                \App\Filament\Resources\Payrolls\PayrollResource::class,
-                \App\Filament\Resources\MiscellaneousTransactions\MiscellaneousTransactionResource::class,
-            ])) {
-                return true;
-            }
-        }
-
-        if (!\App\Services\FeatureToggle::isAccessible('capital_share', $user)) {
-            if (in_array($fqcn, [
-                \App\Filament\Resources\CapitalShares\CapitalShareResource::class,
-                \App\Filament\Resources\CapitalShareTransactions\CapitalShareTransactionResource::class,
-                \App\Filament\Resources\Investors\InvestorResource::class,
-            ])) {
-                return true;
-            }
-        }
-
-        if (!\App\Services\FeatureToggle::isAccessible('savings', $user)) {
-            if (in_array($fqcn, [
-                \App\Filament\Resources\SavingAccounts\SavingAccountResource::class,
-                \App\Filament\Resources\BorrowingRepayments\BorrowingRepaymentResource::class,
-            ])) {
-                return true;
-            }
+        if (array_key_exists($fqcn, $map)) {
+            $key = $map[$fqcn];
+            return !\App\Services\FeatureToggle::isAccessible($key, $user);
         }
 
         return false;
@@ -264,7 +248,7 @@ class RoleResource extends Resource
                 );
 
                 return Section::make($sectionLabel)
-                    ->description(fn (): \Illuminate\Support\HtmlString => new \Illuminate\Support\HtmlString('<span style="word-break: break-word;">' . Utils::showModelPath($entity['modelFqcn']) . '</span>'))
+                    ->description(fn(): HtmlString => new HtmlString('<span style="word-break: break-word;">' . Utils::showModelPath($entity['modelFqcn']) . '</span>'))
                     ->compact()
                     ->schema([
                         static::getCheckBoxListComponentForResource($entity),
@@ -354,7 +338,7 @@ class RoleResource extends Resource
                                             ->label('Show Feature')
                                             ->live()
                                             ->afterStateHydrated(function (Toggle $component, $record) use ($key) {
-                                                if (! $record) {
+                                                if (!$record) {
                                                     return;
                                                 }
 
@@ -366,16 +350,16 @@ class RoleResource extends Resource
                                             }),
                                         CheckboxList::make("ui_feature_{$key}_actions")
                                             ->label('Actions')
-                                            ->options(fn () => static::getSystemUiActionsForGroup($groupName))
+                                            ->options(fn() => static::getSystemUiActionsForGroup($groupName))
                                             ->columns(2)
                                             ->visible(fn($get) => $get("ui_feature_{$key}_show") && $groupName !== 'Menu Visibility')
                                             ->afterStateHydrated(function (CheckboxList $component, $record) use ($key) {
-                                                if (! $record) {
+                                                if (!$record) {
                                                     return;
                                                 }
 
                                                 $actions = $record->permissions->pluck('name')
-                                                    ->filter(fn($permission) => str_starts_with($permission, "ui:{$key}:") && ! str_ends_with($permission, ':view'))
+                                                    ->filter(fn($permission) => str_starts_with($permission, "ui:{$key}:") && !str_ends_with($permission, ':view'))
                                                     ->map(fn($permission) => str_replace("ui:{$key}:", '', $permission))
                                                     ->toArray();
 

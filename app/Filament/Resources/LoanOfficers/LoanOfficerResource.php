@@ -126,9 +126,6 @@ class LoanOfficerResource extends Resource
             'status' => $status,
             'gender' => filled($gender) ? (string) $gender : null,
             'start_date' => filled($startDate) ? $startDate : null,
-            'max_loan_amount' => filled($data['max_loan_amount'] ?? null)
-                ? round((float) $data['max_loan_amount'], 2)
-                : null,
         ]);
     }
 }

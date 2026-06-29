@@ -11,19 +11,18 @@ class LoanOfficer extends Model
     use SoftDeletes, Auditable;
 
 
-    protected $fillable = ['employee_id', 'name', 'phone', 'phone_2', 'phone_3', 'status', 'start_date', 'max_loan_amount', 'gender'];
+    protected $fillable = ['employee_id', 'name', 'phone', 'phone_2', 'phone_3', 'status', 'start_date', 'gender'];
 
     protected $casts = [
         'start_date' => 'date',
-        'max_loan_amount' => 'decimal:2',
     ];
 
-    public function setStatusAttribute($value): void
+    public function setStatusAttribute(?string $value): void
     {
         $this->attributes['status'] = $value === null ? null : strtolower((string) $value);
     }
 
-    public function getStatusAttribute($value): ?string
+    public function getStatusAttribute(?string $value): ?string
     {
         return $value === null ? null : strtolower((string) $value);
     }
