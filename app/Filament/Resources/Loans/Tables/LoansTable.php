@@ -8,6 +8,7 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 
 class LoansTable
@@ -109,6 +110,7 @@ class LoansTable
                     ->label('Product')
                     ->searchable()
                     ->preload(),
+                TrashedFilter::make(),
             ])
             ->recordActions([
                 EditAction::make()
@@ -134,8 +136,10 @@ class LoansTable
                     ->button(),
             ])
             ->bulkActions([
-                BulkActionGroup::make([
-                    //
+                \Filament\Actions\BulkActionGroup::make([
+                    \Filament\Actions\DeleteBulkAction::make(),
+                    \Filament\Actions\ForceDeleteBulkAction::make(),
+                    \Filament\Actions\RestoreBulkAction::make(),
                 ]),
             ]);
     }
