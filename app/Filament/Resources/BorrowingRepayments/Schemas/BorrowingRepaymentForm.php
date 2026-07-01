@@ -91,11 +91,7 @@ class BorrowingRepaymentForm
                                             ->placeholder('0.00')
                                             ->live(),
                                         Select::make('payment_method')
-                                            ->options([
-                                                'Cash' => 'Cash',
-                                                'Bank Transfer' => 'Bank Transfer',
-                                                'Cheque' => 'Cheque',
-                                            ])
+                                            ->options(\App\Models\PaymentMethod::where('is_active', true)->pluck('name', 'name')->toArray())
                                             ->default('Cash')
                                             ->native(false)
                                             ->placeholder('Select payment method')

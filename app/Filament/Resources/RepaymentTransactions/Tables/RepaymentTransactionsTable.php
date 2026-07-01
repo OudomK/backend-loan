@@ -111,13 +111,7 @@ class RepaymentTransactionsTable
             ])
             ->filters([
                 SelectFilter::make('payment_method')
-                    ->options([
-                        'Cash' => 'Cash',
-                        'Bank Transfer' => 'Bank Transfer',
-                        'Mobile Money' => 'Mobile Money',
-                        'Cheque' => 'Cheque',
-                        'Internal' => 'Internal',
-                    ]),
+                    ->options(\App\Models\PaymentMethod::where('is_active', true)->pluck('name', 'name')->toArray()),
                 SelectFilter::make('repayment_type')
                     ->options([
                         'Normal' => 'Normal',

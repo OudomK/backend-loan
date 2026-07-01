@@ -127,11 +127,7 @@ class BorrowingRepaymentsTable
             ])
             ->filters([
                 SelectFilter::make('payment_method')
-                    ->options([
-                        'Cash' => 'Cash',
-                        'Bank Transfer' => 'Bank Transfer',
-                        'Cheque' => 'Cheque',
-                    ]),
+                    ->options(\App\Models\PaymentMethod::where('is_active', true)->pluck('name', 'name')->toArray()),
                 SelectFilter::make('payment_status')
                     ->options([
                         'confirmed' => 'Confirmed',

@@ -75,11 +75,7 @@ class CapitalShareTransactionForm
                                             ->placeholder('0')
                                             ->live(),
                                         Select::make('payment_method')
-                                            ->options([
-                                                'Cash' => 'Cash',
-                                                'Bank Transfer' => 'Bank Transfer',
-                                                'Cheque' => 'Cheque',
-                                            ])
+                                            ->options(\App\Models\PaymentMethod::where('is_active', true)->pluck('name', 'name')->toArray())
                                             ->placeholder('Optional')
                                             ->native(false),
                                         DateTimePicker::make('transaction_date')

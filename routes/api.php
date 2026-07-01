@@ -131,6 +131,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/admin/sso', [AuthController::class, 'getSsoUrl']);
     
     Route::get('/relationships', [\App\Http\Controllers\RelationshipController::class, 'index']);
+    Route::get('/payment-methods', [\App\Http\Controllers\PaymentMethodController::class, 'index']);
 
     Route::get('/user', function (Request $request) {
         $user = $request->user();

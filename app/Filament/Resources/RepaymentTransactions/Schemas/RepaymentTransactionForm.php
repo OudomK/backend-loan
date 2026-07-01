@@ -61,13 +61,7 @@ class RepaymentTransactionForm
                                         ])
                                             ->schema([
                                                 Select::make('payment_method')
-                                                    ->options([
-                                                        'Cash' => 'Cash',
-                                                        'Bank Transfer' => 'Bank Transfer',
-                                                        'Mobile Money' => 'Mobile Money',
-                                                        'Cheque' => 'Cheque',
-                                                        'Internal' => 'Internal',
-                                                    ])
+                                                    ->options(\App\Models\PaymentMethod::where('is_active', true)->pluck('name', 'name')->toArray())
                                                     ->default('Cash')
                                                     ->native(false)
                                                     ->required(),

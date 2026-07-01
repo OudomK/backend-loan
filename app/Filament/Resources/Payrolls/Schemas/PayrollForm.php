@@ -69,12 +69,7 @@ class PayrollForm
                                     ->default('pending')
                                     ->required(),
                                 Select::make('payment_method')
-                                    ->options([
-                                        'Cash' => 'Cash',
-                                        'Bank Transfer' => 'Bank Transfer',
-                                        'ABA' => 'ABA',
-                                        'ACLEDA' => 'ACLEDA',
-                                    ])
+                                    ->options(\App\Models\PaymentMethod::where('is_active', true)->pluck('name', 'name')->toArray())
                                     ->searchable(),
                             ]),
                         Grid::make([

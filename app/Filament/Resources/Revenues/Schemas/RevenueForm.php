@@ -59,12 +59,7 @@ class RevenueForm
                                     ->prefixIcon('heroicon-o-hashtag'),
                                 
                                 Select::make('payment_method')
-                                    ->options([
-                                        'Cash' => 'Cash',
-                                        'Bank Transfer' => 'Bank Transfer',
-                                        'Cheque' => 'Cheque',
-                                        'Other' => 'Other',
-                                    ])
+                                    ->options(\App\Models\PaymentMethod::where('is_active', true)->pluck('name', 'name')->toArray())
                                     ->default('Cash')
                                     ->prefixIcon('heroicon-o-wallet'),
                             ]),
