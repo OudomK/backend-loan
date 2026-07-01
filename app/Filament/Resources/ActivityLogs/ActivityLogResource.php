@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ActivityLogs;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\ActivityLogs\Pages\ListActivityLogs;
 use App\Filament\Resources\ActivityLogs\Pages\ViewActivityLog;
 use App\Filament\Resources\ActivityLogs\Schemas\ActivityLogForm;
@@ -16,6 +17,9 @@ use Filament\Tables\Table;
 
 class ActivityLogResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'activity_logs';
     protected static ?string $model = ActivityLog::class;
 
     protected static ?string $navigationLabel = 'Audit Logs';

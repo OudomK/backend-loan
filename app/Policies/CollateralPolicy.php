@@ -14,7 +14,7 @@ class CollateralPolicy
 
     public function before(AuthUser $user, string $ability): ?bool
     {
-        if (!\App\Services\FeatureToggle::isAccessible('collateral_management', $user)) {
+        if (!\App\Services\FeatureToggle::isAccessible('collaterals', $user)) {
             return false;
         }
 

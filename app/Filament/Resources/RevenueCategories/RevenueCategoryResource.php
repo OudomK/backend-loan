@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\RevenueCategories;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\RevenueCategories\Pages\CreateRevenueCategory;
 use App\Filament\Resources\RevenueCategories\Pages\EditRevenueCategory;
 use App\Filament\Resources\RevenueCategories\Pages\ListRevenueCategories;
@@ -17,6 +18,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class RevenueCategoryResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'revenue_categories';
     protected static ?string $model = RevenueCategory::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-presentation-chart-line';

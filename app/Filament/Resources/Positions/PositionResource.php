@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Positions;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Positions\Pages\CreatePosition;
 use App\Filament\Resources\Positions\Pages\EditPosition;
 use App\Filament\Resources\Positions\Pages\ListPositions;
@@ -17,6 +18,9 @@ use Filament\Tables\Table;
 
 class PositionResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'positions';
     protected static ?string $model = Position::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-academic-cap';

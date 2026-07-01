@@ -87,12 +87,6 @@ class UsersTable
                     ->iconButton()
                     ->tooltip('Manage user')
                     ->visible(fn ($record): bool => self::canManageRecord($record) && ! self::isTrashed($record)),
-                DeleteAction::make()
-                    ->visible(fn ($record): bool => self::canManageRecord($record) && ! self::isTrashed($record)),
-                RestoreAction::make()
-                    ->visible(fn ($record): bool => self::canManageRecord($record) && self::isTrashed($record)),
-                ForceDeleteAction::make()
-                    ->visible(fn ($record): bool => self::canManageRecord($record) && self::isTrashed($record)),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -102,9 +96,7 @@ class UsersTable
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
+                    // Deletions removed
                 ]),
             ]);
     }

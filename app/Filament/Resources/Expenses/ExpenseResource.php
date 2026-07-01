@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Expenses;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Expenses\Pages\CreateExpense;
 use App\Filament\Resources\Expenses\Pages\EditExpense;
 use App\Filament\Resources\Expenses\Pages\ListExpenses;
@@ -20,6 +21,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class ExpenseResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'expenses';
     protected static ?string $model = Expense::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';

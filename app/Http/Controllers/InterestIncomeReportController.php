@@ -197,7 +197,7 @@ class InterestIncomeReportController extends Controller
                 'disb_date' => $loan->disb_date,
                 'loan_code' => \App\Support\FormatHelper::formatLoanCode((string) ($loan->loan_code ?? 'N/A')),
                 'customer_code' => $loan->customer_code ?? 'N/A',
-                'customer_name' => trim(($loan->last_name ?? '') . ' ' . ($loan->first_name ?? '')) ?: 'Unknown',
+                'customer_name' => trim(($loan->first_name ?? '') . ' ' . ($loan->last_name ?? '')) ?: 'Unknown',
                 'loan_amount' => (double) ($loan->loan_amount ?? 0),
                 'currency' => $loan->currency ?? 'USD',
                 'interest_rate' => (double) ($loan->interest_rate ?? 0),

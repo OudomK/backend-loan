@@ -150,12 +150,18 @@ class InvestorForm
                                                 'Driving License' => 'Driving License',
                                             ])
                                             ->columnSpanFull(),
-                                        Grid::make(2)
+                                        Grid::make(3)
                                             ->schema([
                                                 TextInput::make('id_number')
                                                     ->label('ID Number')
                                                     ->required()
                                                     ->unique(ignoreRecord: true),
+                                                TextInput::make('id_issue_date')
+                                                    ->label('Issue Date')
+                                                    ->placeholder('DD/MM/YYYY')
+                                                    ->mask('99/99/9999')
+                                                    ->rule('date_format:d/m/Y')
+                                                    ->formatStateUsing(fn ($state) => self::formatDateForDisplay($state)),
                                                 TextInput::make('id_expiry')
                                                     ->label('Expiry Date')
                                                     ->placeholder('DD/MM/YYYY')

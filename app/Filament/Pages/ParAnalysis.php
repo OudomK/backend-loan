@@ -16,7 +16,7 @@ class ParAnalysis extends Page
 
     public static function canAccess(): bool
     {
-        if (!\App\Services\FeatureToggle::isAccessible('feature_par_analysis', \Filament\Facades\Filament::auth()->user())) {
+        if (!\App\Services\FeatureToggle::isAccessible('par_analysis', \Filament\Facades\Filament::auth()->user())) {
             return false;
         }
         return static::shieldCanAccess();

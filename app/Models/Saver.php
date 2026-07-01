@@ -11,6 +11,7 @@ class Saver extends Model
     use SoftDeletes, Auditable;
 
     protected $table = 'savers';
+    protected $appends = ['formatted_gender'];
 
     protected static function booted()
     {
@@ -35,6 +36,7 @@ class Saver extends Model
         'phone',
         'id_type',
         'id_number',
+        'id_issue_date',
         'id_expiry',
         'occupation',
         'village',
@@ -45,6 +47,11 @@ class Saver extends Model
         'status',
         'customer_type'
     ];
+
+    public function getFormattedGenderAttribute()
+    {
+        return empty($this->gender) ? '' : strtoupper(substr($this->gender, 0, 1));
+    }
 
     public function setDobAttribute(mixed $value)
     {
@@ -64,6 +71,17 @@ class Saver extends Model
                 $this->attributes['id_expiry'] = \Carbon\Carbon::createFromFormat('d/m/Y', $value)->format('Y-m-d');
             } catch (\Exception $e) {
                 $this->attributes['id_expiry'] = null;
+            }
+        }
+    }
+
+    public function setIdIssueDateAttribute(mixed $value)
+    {
+        if ($value) {
+            try {
+                $this->attributes['id_issue_date'] = \Carbon\Carbon::createFromFormat('d/m/Y', $value)->format('Y-m-d');
+            } catch (\Exception $e) {
+                $this->attributes['id_issue_date'] = null;
             }
         }
     }

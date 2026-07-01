@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Loans;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Loans\Pages\CreateLoan;
 use App\Filament\Resources\Loans\Pages\EditLoan;
 use App\Filament\Resources\Loans\Pages\ListLoans;
@@ -17,6 +18,9 @@ use Filament\Tables\Table;
 
 class LoanResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'loans';
     protected static ?string $model = Loan::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;

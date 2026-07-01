@@ -54,7 +54,10 @@ class TranslationsTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                \Filament\Tables\Filters\SelectFilter::make('key')
+                    ->label('Filter by Key')
+                    ->options(fn () => \App\Models\Translation::pluck('key', 'key')->toArray())
+                    ->searchable(),
             ])
             ->recordActions([
                 EditAction::make()

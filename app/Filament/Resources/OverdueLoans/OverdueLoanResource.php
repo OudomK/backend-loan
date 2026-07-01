@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\OverdueLoans;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\OverdueLoans\Pages\CreateOverdueLoan;
 use App\Filament\Resources\OverdueLoans\Pages\EditOverdueLoan;
 use App\Filament\Resources\OverdueLoans\Pages\ListOverdueLoans;
@@ -17,6 +18,9 @@ use Filament\Tables\Table;
 
 class OverdueLoanResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'overdue_payments';
     protected static ?string $model = Payment::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedClock;

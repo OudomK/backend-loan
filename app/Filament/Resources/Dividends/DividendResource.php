@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Dividends;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Dividends\Pages\CreateDividend;
 use App\Filament\Resources\Dividends\Pages\EditDividend;
 use App\Filament\Resources\Dividends\Pages\ListDividends;
@@ -18,6 +19,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class DividendResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'dividends';
     protected static ?string $model = Dividend::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedBanknotes;

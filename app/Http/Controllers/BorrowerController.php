@@ -18,11 +18,16 @@ class BorrowerController extends Controller
 
             $query->where(function ($q) use ($search) {
                 $like = "%{$search}%";
+                $searchNoSpace = str_replace(' ', '', $search);
+                $likeNoSpace = "%{$searchNoSpace}%";
+                
                 $q->where('first_name', 'like', $like)
                     ->orWhere('last_name', 'like', $like)
                     ->orWhere('latin_name', 'like', $like)
                     ->orWhere('id_number', 'like', $like)
+                    ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(id_number, ' ', '')"), 'like', $likeNoSpace)
                     ->orWhere('phone', 'like', $like)
+                    ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(phone, ' ', '')"), 'like', $likeNoSpace)
                     ->orWhere('customer_code', 'like', $like)
                     ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(last_name, ' ', first_name)"), 'like', $like)
                     ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', $like)
@@ -123,6 +128,7 @@ class BorrowerController extends Controller
             'phone' => 'nullable|string|max:60',
             'id_type' => 'nullable|string',
             'id_number' => 'nullable|string|unique:borrowers',
+            'id_issue_date' => 'nullable|date_format:d/m/Y',
             'id_expiry' => 'nullable|date_format:d/m/Y',
             'occupation' => 'nullable|string',
             'village' => 'nullable|string',
@@ -162,6 +168,7 @@ class BorrowerController extends Controller
             'phone' => 'sometimes|nullable|string|max:60',
             'id_type' => 'nullable|string',
             'id_number' => 'sometimes|nullable|string|unique:borrowers,id_number,' . $borrower->id,
+            'id_issue_date' => 'nullable|date_format:d/m/Y',
             'id_expiry' => 'nullable|date_format:d/m/Y',
             'occupation' => 'nullable|string',
             'village' => 'nullable|string',

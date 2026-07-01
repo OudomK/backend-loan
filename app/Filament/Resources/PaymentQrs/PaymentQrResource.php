@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\PaymentQrs;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\PaymentQrs\Pages\CreatePaymentQr;
 use App\Filament\Resources\PaymentQrs\Pages\EditPaymentQr;
 use App\Filament\Resources\PaymentQrs\Pages\ListPaymentQrs;
@@ -17,6 +18,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PaymentQrResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'payment_qrs';
     protected static ?string $model = PaymentQr::class;
 
     protected static string|\BackedEnum|null $navigationIcon = Heroicon::OutlinedQrCode;

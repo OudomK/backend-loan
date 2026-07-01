@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LoanModifications;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\LoanModifications\Pages\ManageLoanModifications;
 use App\Models\LoanModification;
 use BackedEnum;
@@ -21,6 +22,9 @@ use Filament\Tables\Table;
 
 class LoanModificationResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'loan_modifications';
     protected static ?string $model = LoanModification::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedDocumentText;

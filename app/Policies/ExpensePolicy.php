@@ -14,7 +14,7 @@ class ExpensePolicy
 
     public function before(AuthUser $user, string $ability): ?bool
     {
-        if (!\App\Services\FeatureToggle::isAccessible('general_expenses', $user)) {
+        if (!\App\Services\FeatureToggle::isAccessible('expenses', $user)) {
             return false;
         }
 

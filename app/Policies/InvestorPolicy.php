@@ -14,7 +14,7 @@ class InvestorPolicy
 
     public function before(AuthUser $user, string $ability): ?bool
     {
-        if (!\App\Services\FeatureToggle::isAccessible('capital_share', $user)) {
+        if (!\App\Services\FeatureToggle::isAccessible('investors', $user)) {
             return false;
         }
         return null;

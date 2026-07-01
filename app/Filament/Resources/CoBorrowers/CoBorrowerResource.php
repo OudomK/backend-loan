@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\CoBorrowers;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\CoBorrowers\Pages\CreateCoBorrower;
 use App\Filament\Resources\CoBorrowers\Pages\EditCoBorrower;
 use App\Filament\Resources\CoBorrowers\Pages\ListCoBorrowers;
@@ -18,6 +19,9 @@ use Illuminate\Validation\ValidationException;
 
 class CoBorrowerResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'co_borrowers';
     protected static ?string $model = CoBorrower::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-users';

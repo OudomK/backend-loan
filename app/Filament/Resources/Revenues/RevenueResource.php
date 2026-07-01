@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Revenues;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Revenues\Pages\CreateRevenue;
 use App\Filament\Resources\Revenues\Pages\EditRevenue;
 use App\Filament\Resources\Revenues\Pages\ListRevenues;
@@ -19,6 +20,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class RevenueResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'revenues';
     protected static ?string $model = Revenue::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';

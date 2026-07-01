@@ -188,6 +188,9 @@ class LoanForm
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
                                                     ->default(0),
+                                                TextInput::make('purpose')
+                                                    ->label('Purpose')
+                                                    ->maxLength(255),
                                             ]),
                                         Grid::make([
                                             'default' => 1,

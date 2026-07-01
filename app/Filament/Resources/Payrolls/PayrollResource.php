@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Payrolls;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Payrolls\Pages\CreatePayroll;
 use App\Filament\Resources\Payrolls\Pages\EditPayroll;
 use App\Filament\Resources\Payrolls\Pages\ListPayrolls;
@@ -18,6 +19,9 @@ use Filament\Tables\Table;
 
 class PayrollResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'payrolls';
     protected static ?string $model = Payroll::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';

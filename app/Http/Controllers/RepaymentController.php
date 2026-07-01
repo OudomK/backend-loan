@@ -27,75 +27,78 @@ class RepaymentController extends Controller
             : "total_paid < ({$baseExpression})";
     }
 
-    /**
-     * Get loans due today or overdue.
-     */
-    public function getDueList()
+    private function formatLoans(\Illuminate\Support\Collection $loans, Carbon $today): array
     {
-        $today = Carbon::today();
+        return $loans->map(function ($loan) use ($today) {
+            $paymentDueExpression = $this->unpaidPaymentExpressionForLoan($loan);
+            $nextPayment = $loan->payments()
+                ->whereRaw($paymentDueExpression)
+                ->where('payment_date', '<=', $today->toDateString()) // Adjust to match either
+                ->orderBy('payment_date', 'asc')
+                ->first();
 
-        $dueToday = Loan::with([
-            'borrower' => function ($q) {
-                $q->withTrashed();
+            if (!$nextPayment) {
+                $nextPayment = $loan->payments()
+                    ->whereRaw($paymentDueExpression)
+                    ->orderBy('payment_date', 'asc')
+                    ->first();
             }
-        ])
+
+            if (!$nextPayment) {
+                return null;
+            }
+
+            $dueAmount = ($nextPayment->principal_amount + $nextPayment->interest_amount + ($nextPayment->fee_amount ?? 0)) - $nextPayment->total_paid;
+            $symbol = str_contains((string) $loan->currency, 'KHR') ? '៛' : '$';
+
+            return [
+                'id' => (string) $loan->id,
+                'name' => $loan->borrower
+                    ? ($loan->borrower->first_name . ' ' . $loan->borrower->last_name)
+                    : 'Unknown (Deleted)',
+                'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
+                'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
+                'amount' => $symbol . number_format($dueAmount, 2),
+                'principal' => (string) number_format($nextPayment->principal_amount, 2),
+                'interest' => (string) number_format($nextPayment->interest_amount, 2),
+                'installment_no' => (string) $nextPayment->payment_number,
+                'dpd' => '0',
+                'symbol' => $symbol,
+                'loan_officer_id' => (string) $loan->loan_officer_id,
+                'village' => (string) optional($loan->borrower)->village,
+                'commune' => (string) optional($loan->borrower)->commune,
+                'province' => (string) optional($loan->borrower)->province,
+            ];
+        })->filter()->values()->all();
+    }
+
+    private function getDueTodayLoans(Carbon $today): \Illuminate\Database\Eloquent\Collection
+    {
+        return Loan::with(['borrower' => fn($q) => $q->withTrashed()])
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('payment_date', $today)
                     ->whereRaw($this->unpaidInstallmentExpression());
             })
             ->get();
+    }
 
-        $formatDueToday = function ($loans) use ($today) {
-            return $loans->map(function ($loan) use ($today) {
-                $paymentDueExpression = $this->unpaidPaymentExpressionForLoan($loan);
-                $nextPayment = $loan->payments()
-                    ->whereRaw($paymentDueExpression)
-                    ->where('payment_date', $today->toDateString())
-                    ->orderBy('payment_date', 'asc')
-                    ->first();
-
-                if (!$nextPayment) {
-                    $nextPayment = $loan->payments()
-                        ->whereRaw($paymentDueExpression)
-                        ->orderBy('payment_date', 'asc')
-                        ->first();
-                }
-
-                $dueAmount = ($nextPayment->principal_amount + $nextPayment->interest_amount + ($nextPayment->fee_amount ?? 0)) - $nextPayment->total_paid;
-                $symbol = str_contains((string) $loan->currency, 'KHR') ? '៛' : '$';
-
-                return [
-                    'id' => (string) $loan->id,
-                    'name' => $loan->borrower
-                        ? ($loan->borrower->first_name . ' ' . $loan->borrower->last_name)
-                        : 'Unknown (Deleted)',
-                    'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
-                    'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
-                    'amount' => $symbol . number_format($dueAmount, 2),
-                    'principal' => (string) number_format($nextPayment->principal_amount, 2),
-                    'interest' => (string) number_format($nextPayment->interest_amount, 2),
-                    'installment_no' => (string) $nextPayment->payment_number,
-                    'dpd' => '0',
-                    'symbol' => $symbol,
-                ];
-            });
-        };
-
-        $overdueRows = collect();
-        $overdueLoans = Loan::with([
-            'borrower' => function ($q) {
-                $q->withTrashed();
-            }
-        ])
+    private function getOverdueLoans(Carbon $today): \Illuminate\Database\Eloquent\Collection
+    {
+        return Loan::with(['borrower' => fn($q) => $q->withTrashed()])
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today) {
                 $query->where('payment_date', '<', $today)
                     ->whereRaw($this->unpaidInstallmentExpression());
             })
             ->get();
+    }
 
-        /** @var \App\Models\Loan $loan */
+    private function formatOverdueLoans(\Illuminate\Support\Collection $overdueLoans, Carbon $today): array
+    {
+        $overdueRows = collect();
+
+        /** @var Loan $loan */
         foreach ($overdueLoans as $loan) {
             $paymentDueExpression = $this->unpaidPaymentExpressionForLoan($loan);
             $overduePayments = $loan->payments()
@@ -123,17 +126,22 @@ class RepaymentController extends Controller
                     'installment_no' => (string) $payment->payment_number,
                     'dpd' => (string) $dpd,
                     'symbol' => $symbol,
+                    'loan_officer_id' => (string) $loan->loan_officer_id,
+                    'village' => (string) optional($loan->borrower)->village,
+                    'commune' => (string) optional($loan->borrower)->commune,
+                    'province' => (string) optional($loan->borrower)->province,
                 ]);
             }
         }
 
+        return $overdueRows->values()->all();
+    }
+
+    private function getPrepaymentLoans(Carbon $today): \Illuminate\Database\Eloquent\Collection
+    {
         $prepaymentDays = (int) (\App\Models\Setting::where('key', 'prepayment_days')->value('value') ?? 3);
 
-        $prepaymentLoans = Loan::with([
-            'borrower' => function ($q) {
-                $q->withTrashed();
-            }
-        ])
+        return Loan::with(['borrower' => fn($q) => $q->withTrashed()])
             ->where('status', 'active')
             ->whereHas('payments', function ($query) use ($today, $prepaymentDays) {
                 $query->where('payment_date', '>', $today)
@@ -145,43 +153,28 @@ class RepaymentController extends Controller
                     ->whereRaw($this->unpaidInstallmentExpression());
             })
             ->get();
+    }
 
-        $formatPrepayment = function ($loans) use ($today) {
-            return $loans->map(function ($loan) use ($today) {
-                $paymentDueExpression = $this->unpaidPaymentExpressionForLoan($loan);
-                $nextPayment = $loan->payments()
-                    ->whereRaw($paymentDueExpression)
-                    ->orderBy('payment_date', 'asc')
-                    ->first();
+    /**
+     * Get loans due today or overdue.
+     */
+    public function getDueList(): \Illuminate\Http\JsonResponse
+    {
+        $today = Carbon::today();
 
-                if (!$nextPayment) {
-                    return null;
-                }
+        $dueTodayList = $this->formatLoans($this->getDueTodayLoans($today), $today);
+        $overdueList = $this->formatOverdueLoans($this->getOverdueLoans($today), $today);
+        $prepaymentList = $this->formatLoans($this->getPrepaymentLoans($today), $today);
 
-                $dueAmount = ($nextPayment->principal_amount + $nextPayment->interest_amount + ($nextPayment->fee_amount ?? 0)) - $nextPayment->total_paid;
-                $symbol = str_contains((string) $loan->currency, 'KHR') ? '៛' : '$';
-
-                return [
-                    'id' => (string) $loan->id,
-                    'name' => $loan->borrower
-                        ? ($loan->borrower->first_name . ' ' . $loan->borrower->last_name)
-                        : 'Unknown (Deleted)',
-                    'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
-                    'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
-                    'amount' => $symbol . number_format($dueAmount, 2),
-                    'principal' => (string) number_format($nextPayment->principal_amount, 2),
-                    'interest' => (string) number_format($nextPayment->interest_amount, 2),
-                    'installment_no' => (string) $nextPayment->payment_number,
-                    'dpd' => '0',
-                    'symbol' => $symbol,
-                ];
-            })->filter()->values()->all();
-        };
+        $combined = collect($dueTodayList)
+            ->merge($overdueList)
+            ->merge($prepaymentList)
+            ->sortBy('payment_date')
+            ->values()
+            ->all();
 
         return response()->json([
-            'due_today' => $formatDueToday($dueToday),
-            'overdue' => $overdueRows->values()->all(),
-            'prepayment' => $formatPrepayment($prepaymentLoans),
+            'combined' => $combined,
         ]);
     }
 
@@ -209,6 +202,8 @@ class RepaymentController extends Controller
                     ->orWhereHas('borrower', function ($bq) use ($like) {
                         $bq->where('first_name', 'LIKE', $like)
                             ->orWhere('last_name', 'LIKE', $like)
+                            ->orWhere('latin_name', 'LIKE', $like)
+                            ->orWhere('phone', 'LIKE', $like)
                             ->orWhereRaw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) LIKE ?", [$like])
                             ->orWhereRaw("CONCAT(COALESCE(last_name, ''), ' ', COALESCE(first_name, '')) LIKE ?", [$like]);
                     });
@@ -228,6 +223,10 @@ class RepaymentController extends Controller
                 'interest' => (string) $loan->interest_rate,
                 'currency' => (string) $loan->currency,
                 'symbol' => $symbol,
+                'loan_officer_id' => (string) $loan->loan_officer_id,
+                'village' => (string) optional($loan->borrower)->village,
+                'commune' => (string) optional($loan->borrower)->commune,
+                'province' => (string) optional($loan->borrower)->province,
             ];
         }));
     }

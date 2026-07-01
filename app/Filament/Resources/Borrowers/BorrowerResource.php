@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Borrowers;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Borrowers\Pages\CreateBorrower;
 use App\Filament\Resources\Borrowers\Pages\EditBorrower;
 use App\Filament\Resources\Borrowers\Pages\ListBorrowers;
@@ -17,6 +18,9 @@ use Illuminate\Validation\ValidationException;
 
 class BorrowerResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'borrowers';
     protected static ?string $model = Borrower::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-user-group';

@@ -58,9 +58,6 @@ class PaymentQrsTable
                     ->color('warning')
                     ->iconButton()
                     ->tooltip('Edit QR code'),
-                DeleteAction::make()
-                    ->iconButton()
-                    ->tooltip('Delete QR code'),
                 RestoreAction::make()
                     ->iconButton()
                     ->tooltip('Restore QR code'),
@@ -76,7 +73,6 @@ class PaymentQrsTable
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
                     RestoreBulkAction::make(),
                     ForceDeleteBulkAction::make(),
                 ]),

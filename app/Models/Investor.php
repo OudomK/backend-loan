@@ -12,6 +12,7 @@ class Investor extends Model
     use SoftDeletes, Auditable;
 
     protected $table = 'investors';
+    protected $appends = ['formatted_gender'];
 
     protected static function booted()
     {
@@ -36,6 +37,7 @@ class Investor extends Model
         'phone',
         'id_type',
         'id_number',
+        'id_issue_date',
         'id_expiry',
         'occupation',
         'village',
@@ -46,6 +48,11 @@ class Investor extends Model
         'status',
         'customer_type'
     ];
+
+    public function getFormattedGenderAttribute()
+    {
+        return empty($this->gender) ? '' : strtoupper(substr($this->gender, 0, 1));
+    }
 
     public function getAgeAttribute()
     {
@@ -68,6 +75,11 @@ class Investor extends Model
     public function setIdExpiryAttribute(mixed $value)
     {
         $this->attributes['id_expiry'] = $this->normalizeDateInput($value);
+    }
+
+    public function setIdIssueDateAttribute(mixed $value)
+    {
+        $this->attributes['id_issue_date'] = $this->normalizeDateInput($value);
     }
 
     private function normalizeDateInput(mixed $value): ?string

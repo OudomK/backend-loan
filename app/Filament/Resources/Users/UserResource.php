@@ -46,8 +46,8 @@ class UserResource extends Resource
         $user = Filament::auth()->user();
         $superAdminRole = Utils::getSuperAdminName();
 
-        if (! $user?->hasRole($superAdminRole)) {
-            $query->whereDoesntHave('roles', fn (Builder $query) => $query->where('name', $superAdminRole));
+        if (!$user?->hasRole($superAdminRole)) {
+            $query->whereDoesntHave('roles', fn(Builder $query) => $query->where('name', $superAdminRole));
         }
 
         return $query;

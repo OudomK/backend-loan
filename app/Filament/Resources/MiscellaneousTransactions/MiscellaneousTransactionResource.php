@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MiscellaneousTransactions;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\MiscellaneousTransactions\Pages\CreateMiscellaneousTransaction;
 use App\Filament\Resources\MiscellaneousTransactions\Pages\EditMiscellaneousTransaction;
 use App\Filament\Resources\MiscellaneousTransactions\Pages\ListMiscellaneousTransactions;
@@ -21,6 +22,9 @@ use Illuminate\Validation\ValidationException;
 
 class MiscellaneousTransactionResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'misc_transactions';
     protected static ?string $model = MiscellaneousTransaction::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-credit-card';

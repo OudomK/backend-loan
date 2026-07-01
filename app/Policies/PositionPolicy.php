@@ -14,7 +14,7 @@ class PositionPolicy
 
     public function before(AuthUser $user, string $ability): ?bool
     {
-        if (!\App\Services\FeatureToggle::isAccessible('hr_payroll', $user)) {
+        if (!\App\Services\FeatureToggle::isAccessible('positions', $user)) {
             return false;
         }
         return null;

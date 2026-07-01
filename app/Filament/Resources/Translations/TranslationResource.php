@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Translations;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Translations\Pages\CreateTranslation;
 use App\Filament\Resources\Translations\Pages\EditTranslation;
 use App\Filament\Resources\Translations\Pages\ListTranslations;
@@ -16,6 +17,9 @@ use Filament\Tables\Table;
 
 class TranslationResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'translations';
     protected static ?string $model = Translation::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;

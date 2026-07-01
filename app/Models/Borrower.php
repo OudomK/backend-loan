@@ -12,6 +12,12 @@ class Borrower extends Model
     use SoftDeletes, Auditable;
 
     protected $table = 'borrowers';
+    protected $appends = ['formatted_gender', 'name'];
+
+    public function getNameAttribute()
+    {
+        return trim("{$this->first_name} {$this->last_name}");
+    }
 
     protected static function booted()
     {
@@ -36,6 +42,7 @@ class Borrower extends Model
         'phone',
         'id_type',
         'id_number',
+        'id_issue_date',
         'id_expiry',
         'occupation',
         'village',
@@ -60,6 +67,11 @@ class Borrower extends Model
         }
     }
 
+    public function getFormattedGenderAttribute()
+    {
+        return empty($this->gender) ? '' : strtoupper(substr($this->gender, 0, 1));
+    }
+
     public function setDobAttribute(mixed $value)
     {
         $this->attributes['dob'] = $this->normalizeDateInput($value);
@@ -68,6 +80,11 @@ class Borrower extends Model
     public function setIdExpiryAttribute(mixed $value)
     {
         $this->attributes['id_expiry'] = $this->normalizeDateInput($value);
+    }
+
+    public function setIdIssueDateAttribute(mixed $value)
+    {
+        $this->attributes['id_issue_date'] = $this->normalizeDateInput($value);
     }
 
     private function normalizeDateInput(mixed $value): ?string

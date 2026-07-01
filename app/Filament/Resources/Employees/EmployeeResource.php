@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Employees;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Employees\Pages\CreateEmployee;
 use App\Filament\Resources\Employees\Pages\EditEmployee;
 use App\Filament\Resources\Employees\Pages\ListEmployees;
@@ -17,6 +18,9 @@ use Filament\Tables\Table;
 
 class EmployeeResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'employees';
     protected static ?string $model = Employee::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-identification';

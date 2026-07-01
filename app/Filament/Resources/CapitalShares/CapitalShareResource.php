@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\CapitalShares;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\CapitalShares\Pages\CreateCapitalShare;
 use App\Filament\Resources\CapitalShares\Pages\EditCapitalShare;
 use App\Filament\Resources\CapitalShares\Pages\ListCapitalShares;
@@ -20,6 +21,9 @@ use Illuminate\Validation\ValidationException;
 
 class CapitalShareResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'capital_shares';
     protected static ?string $model = CapitalShare::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-chart-pie';

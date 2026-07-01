@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\BorrowingRepayments;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\BorrowingRepayments\Pages\CreateBorrowingRepayment;
 use App\Filament\Resources\BorrowingRepayments\Pages\EditBorrowingRepayment;
 use App\Filament\Resources\BorrowingRepayments\Pages\ListBorrowingRepayments;
@@ -22,6 +23,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class BorrowingRepaymentResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'borrowing_repayments';
     protected static ?string $model = BorrowingRepayment::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-banknotes';

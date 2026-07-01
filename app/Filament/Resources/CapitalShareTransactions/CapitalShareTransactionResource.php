@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\CapitalShareTransactions;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\CapitalShareTransactions\Pages\ListCapitalShareTransactions;
 use App\Filament\Resources\CapitalShareTransactions\Schemas\CapitalShareTransactionForm;
 use App\Models\CapitalShare;
@@ -18,6 +19,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class CapitalShareTransactionResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'capital_share_transactions';
     protected static ?string $model = CapitalShareTransaction::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-arrows-right-left';

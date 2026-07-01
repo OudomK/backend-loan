@@ -13,7 +13,7 @@ class ReportsDashboard extends Page
 
     public static function canAccess(): bool
     {
-        if (!\App\Services\FeatureToggle::isAccessible('feature_reports', \Filament\Facades\Filament::auth()->user())) {
+        if (!\App\Services\FeatureToggle::isAccessible('reports', \Filament\Facades\Filament::auth()->user())) {
             return false;
         }
         return static::shieldCanAccess();

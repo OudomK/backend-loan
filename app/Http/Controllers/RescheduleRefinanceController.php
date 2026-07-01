@@ -21,10 +21,21 @@ class RescheduleRefinanceController extends Controller
         $loans = Loan::with(['borrower', 'payments'])
             ->where('status', 'active')
             ->where(function ($q) use ($query) {
-                $q->where('loan_code', 'like', "%$query%")
-                    ->orWhereHas('borrower', function ($bq) use ($query) {
-                        $bq->where('first_name', 'like', "%$query%")
-                            ->orWhere('last_name', 'like', "%$query%");
+                $like = "%{$query}%";
+                $queryNoSpace = str_replace(' ', '', $query);
+                $likeNoSpace = "%{$queryNoSpace}%";
+
+                $q->where('loan_code', 'like', $like)
+                    ->orWhereHas('borrower', function ($bq) use ($like, $likeNoSpace) {
+                        $bq->where('first_name', 'like', $like)
+                            ->orWhere('last_name', 'like', $like)
+                            ->orWhere('latin_name', 'like', $like)
+                            ->orWhere('id_number', 'like', $like)
+                            ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(id_number, ' ', '')"), 'like', $likeNoSpace)
+                            ->orWhere('phone', 'like', $like)
+                            ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(phone, ' ', '')"), 'like', $likeNoSpace)
+                            ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(last_name, ' ', first_name)"), 'like', $like)
+                            ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', $like);
                     });
             })
             ->limit(10)

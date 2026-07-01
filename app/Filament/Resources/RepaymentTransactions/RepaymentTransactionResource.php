@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\RepaymentTransactions;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\RepaymentTransactions\Pages\CreateRepaymentTransaction;
 use App\Filament\Resources\RepaymentTransactions\Pages\EditRepaymentTransaction;
 use App\Filament\Resources\RepaymentTransactions\Pages\ListRepaymentTransactions;
@@ -17,6 +18,9 @@ use Filament\Tables\Table;
 
 class RepaymentTransactionResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'repayment_transactions';
     protected static ?string $model = RepaymentTransaction::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;

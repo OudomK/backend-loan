@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LoanOfficers;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\LoanOfficers\Pages\CreateLoanOfficer;
 use App\Filament\Resources\LoanOfficers\Pages\EditLoanOfficer;
 use App\Filament\Resources\LoanOfficers\Pages\ListLoanOfficers;
@@ -19,6 +20,9 @@ use Illuminate\Validation\ValidationException;
 
 class LoanOfficerResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'loan_officers';
     protected static ?string $model = LoanOfficer::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-user-circle';

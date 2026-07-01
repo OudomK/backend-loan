@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Investors;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Investors\Pages\CreateInvestor;
 use App\Filament\Resources\Investors\Pages\EditInvestor;
 use App\Filament\Resources\Investors\Pages\ListInvestors;
@@ -16,6 +17,9 @@ use Filament\Tables\Table;
 
 class InvestorResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'investors';
     protected static ?string $model = Investor::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-briefcase';

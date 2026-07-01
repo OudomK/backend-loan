@@ -129,6 +129,8 @@ Route::get('/app/settings', function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/admin/sso', [AuthController::class, 'getSsoUrl']);
+    
+    Route::get('/relationships', [\App\Http\Controllers\RelationshipController::class, 'index']);
 
     Route::get('/user', function (Request $request) {
         $user = $request->user();

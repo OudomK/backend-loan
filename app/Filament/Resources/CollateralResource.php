@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Collaterals\Pages\CreateCollateral;
 use App\Filament\Resources\Collaterals\Pages\EditCollateral;
 use App\Filament\Resources\Collaterals\Pages\ListCollaterals;
@@ -16,6 +17,9 @@ use Filament\Tables\Table;
 
 class CollateralResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'collaterals';
     protected static ?string $model = Collateral::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';

@@ -115,7 +115,7 @@ class CoBorrowerForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 3,
+                            'xl' => 4,
                         ])
                             ->schema([
                                 Select::make('id_type')
@@ -132,6 +132,13 @@ class CoBorrowerForm
                                     ->label('ID Number')
                                     ->maxLength(100)
                                     ->unique(ignoreRecord: true),
+                                TextInput::make('id_issue_date')
+                                    ->label('Identity Issued')
+                                    ->placeholder('DD/MM/YYYY')
+                                    ->helperText('Format: DD/MM/YYYY')
+                                    ->mask('99/99/9999')
+                                    ->rule('date_format:d/m/Y')
+                                    ->formatStateUsing(fn ($state) => $state ? Carbon::parse($state)->format('d/m/Y') : null),
                                 TextInput::make('id_expiry')
                                     ->label('Identity Expiry')
                                     ->placeholder('DD/MM/YYYY')

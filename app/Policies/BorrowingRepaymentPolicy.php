@@ -14,7 +14,7 @@ class BorrowingRepaymentPolicy
 
     public function before(AuthUser $user, string $ability): ?bool
     {
-        if (!\App\Services\FeatureToggle::isAccessible('savings', $user)) {
+        if (!\App\Services\FeatureToggle::isAccessible('borrowing_repayments', $user)) {
             return false;
         }
         return null;

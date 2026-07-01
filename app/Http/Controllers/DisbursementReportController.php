@@ -23,20 +23,25 @@ class DisbursementReportController extends Controller
         $toDateStr = $toDate->toDateString();
         $fromDateStr = $fromDate->toDateString();
 
-        // 1. Get Officers
-        $officerQuery = LoanOfficer::with('employee');
-        if ($officerId && $officerId !== 'all') {
-            $officerQuery->where('id', $officerId);
-        }
-        // Only include officers that actually have loans
-        $officerQuery->whereHas('loans');
-        $officers = $officerQuery->get();
+        // 1. Get Combinations of Officer and Currency
+        $combinations = Loan::with('officer.employee')
+            ->select('loan_officer_id', 'currency')
+            ->whereNotNull('loan_officer_id')
+            ->when($officerId && $officerId !== 'all', function ($q) use ($officerId) {
+                $q->where('loan_officer_id', $officerId);
+            })
+            ->groupBy('loan_officer_id', 'currency')
+            ->get();
 
         $reportData = [];
 
-        foreach ($officers as $officer) {
+        foreach ($combinations as $combo) {
+            $officer = $combo->officer;
+            $currency = $combo->currency;
+            if (!$officer || !$currency) continue;
+
             // --- Disbursement Section ---
-            $disbQuery = Loan::query()->where('loan_officer_id', $officer->id);
+            $disbQuery = Loan::query()->where('loan_officer_id', $officer->id)->where('currency', $currency);
 
             $oldDisb = (clone $disbQuery)->where('start_date', '<', $fromDateStr);
             $newDisb = (clone $disbQuery)->whereBetween('start_date', [$fromDateStr, $toDateStr]);
@@ -57,6 +62,7 @@ class DisbursementReportController extends Controller
                 },
             ])
                 ->where('loan_officer_id', $officer->id)
+                ->where('currency', $currency)
                 ->where('start_date', '<=', $toDateStr)
                 ->where('status', '!=', 'pending')
                 ->where(function ($query) use ($toDateStr) {
@@ -166,8 +172,8 @@ class DisbursementReportController extends Controller
             $totalClient = collect($activeBorrowerIds)->unique()->count();
 
             // --- Portfolio Mutation Section ---
-            $transactions = RepaymentTransaction::query()->whereHas('loan', function ($q) use ($officer) {
-                $q->where('loan_officer_id', $officer->id);
+            $transactions = RepaymentTransaction::query()->whereHas('loan', function ($q) use ($officer, $currency) {
+                $q->where('loan_officer_id', $officer->id)->where('currency', $currency);
             })->whereBetween('transaction_date', [$fromDateStr, $toDateStr])->get();
 
             $principalCollected = $transactions->sum('principal_paid');
@@ -182,8 +188,8 @@ class DisbursementReportController extends Controller
             });
 
             // --- Due Section (Payments scheduled within the period) ---
-            $duePayments = \App\Models\Payment::whereHas('loan', function ($q) use ($officer) {
-                $q->where('loan_officer_id', $officer->id);
+            $duePayments = \App\Models\Payment::whereHas('loan', function ($q) use ($officer, $currency) {
+                $q->where('loan_officer_id', $officer->id)->where('currency', $currency);
             })->whereBetween('payment_date', [$fromDateStr, $toDateStr])->get();
 
             $principalDue = $duePayments->sum('principal_amount');
@@ -192,12 +198,14 @@ class DisbursementReportController extends Controller
 
             // --- Write-Off Section ---
             $woCurLoans = Loan::query()->where('loan_officer_id', $officer->id)
+                ->where('currency', $currency)
                 ->whereNotNull('written_off_at')
                 ->whereBetween('written_off_at', [$fromDateStr, $toDateStr])
                 ->get();
 
             $yearStart = Carbon::parse($toDateStr)->startOfYear()->toDateString();
             $woYtdLoans = Loan::query()->where('loan_officer_id', $officer->id)
+                ->where('currency', $currency)
                 ->whereNotNull('written_off_at')
                 ->whereBetween('written_off_at', [$yearStart, $toDateStr])
                 ->get();
@@ -210,6 +218,7 @@ class DisbursementReportController extends Controller
             $reportData[] = [
                 'co_code' => str_pad($officer->id, 4, '0', STR_PAD_LEFT),
                 'co_name' => $officer->employee ? $officer->employee->name : $officer->name,
+                'currency' => $currency,
 
                 // No. Disb
                 'no_disb_old' => $noDisbOld,
@@ -284,7 +293,7 @@ class DisbursementReportController extends Controller
 
         $officerName = 'ALL';
         if ($officerId && $officerId !== 'all') {
-            $officer = \App\Models\LoanOfficer::find($officerId);
+            $officer = LoanOfficer::find($officerId);
             if ($officer) {
                 $officerName = $officer->name;
             }

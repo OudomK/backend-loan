@@ -14,7 +14,7 @@ class RevenuePolicy
 
     public function before(AuthUser $user, string $ability): ?bool
     {
-        if (!\App\Services\FeatureToggle::isAccessible('general_revenues', $user)) {
+        if (!\App\Services\FeatureToggle::isAccessible('revenues', $user)) {
             return false;
         }
 

@@ -233,19 +233,20 @@ class ManageSettings extends Page implements HasForms
                             ->live()
                             ->helperText('Upload a .ttf or .otf file from your computer to import it instantly into the system as a custom font.')
                             ->afterStateUpdated(function ($state, callable $set) {
-                                if (empty($state)) return;
-                                
+                                if (empty($state))
+                                    return;
+
                                 try {
                                     $filePath = $state;
                                     $basename = pathinfo($filePath, PATHINFO_FILENAME);
-                                    
+
                                     // Make name pretty, e.g. "KANTUMRUYPRO-BOLD" -> "Kantumruypro Bold"
                                     $cleanName = preg_replace('/[^a-zA-Z0-9\s]/', ' ', $basename);
                                     $cleanName = ucwords(trim(preg_replace('/\s+/', ' ', strtolower($cleanName))));
-                                    
+
                                     // Key must be unique slug
                                     $key = strtolower(str_replace(' ', '_', $cleanName));
-                                    
+
                                     \App\Models\CustomFont::updateOrCreate(
                                         ['key' => $key],
                                         [
@@ -255,16 +256,16 @@ class ManageSettings extends Page implements HasForms
                                             'is_active' => true,
                                         ]
                                     );
-                                    
+
                                     $set('import_font_file', null);
-                                    
+
                                     Notification::make()
                                         ->title("Font '{$cleanName}' imported successfully!")
                                         ->success()
                                         ->send();
-                                        
+
                                     $set('available_fonts_count', (string) AdminFontRegistry::count());
-                                    
+
                                 } catch (\Throwable $e) {
                                     Notification::make()
                                         ->title('Failed to import font')
@@ -291,35 +292,35 @@ class ManageSettings extends Page implements HasForms
                             ->dehydrated(false),
                         Select::make('admin_font_family')
                             ->label('Admin Panel Font')
-                            ->options(fn () => AdminFontRegistry::options())
+                            ->options(fn() => AdminFontRegistry::options())
                             ->default(AdminFontRegistry::defaultKey())
                             ->required()
                             ->native(false)
                             ->helperText('System fonts: ' . AdminFontRegistry::coreCount() . '. Imported active fonts: ' . AdminFontRegistry::activeCustomCount() . '.'),
                         Select::make('frontend_font_family')
                             ->label('QuickFund App Font')
-                            ->options(fn () => AdminFontRegistry::options())
+                            ->options(fn() => AdminFontRegistry::options())
                             ->default('battambang')
                             ->required()
                             ->native(false)
                             ->helperText('Used by Flutter frontend app. The app auto-syncs this setting about every 5 seconds.'),
                         Select::make('pdf_export_font')
                             ->label('PDF Export Font')
-                            ->options(fn () => AdminFontRegistry::options())
+                            ->options(fn() => AdminFontRegistry::options())
                             ->default('noto_sans_khmer')
                             ->required()
                             ->native(false)
                             ->helperText('Used by all PDF exports generated from the Flutter frontend app.'),
                         Select::make('print_schedule_font')
                             ->label('Print Schedule Font')
-                            ->options(fn () => AdminFontRegistry::options())
+                            ->options(fn() => AdminFontRegistry::options())
                             ->default('noto_sans_khmer')
                             ->required()
                             ->native(false)
                             ->helperText('Used by repayment schedule print preview and printed schedule output.'),
                         Select::make('excel_export_font')
                             ->label('Excel Export Font')
-                            ->options(fn () => array_combine(array_values(AdminFontRegistry::options()), array_values(AdminFontRegistry::options())))
+                            ->options(fn() => array_combine(array_values(AdminFontRegistry::options()), array_values(AdminFontRegistry::options())))
                             ->default('Khmer OS Siemreap')
                             ->required()
                             ->native(false)

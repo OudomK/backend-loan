@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LoanProducts;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\LoanProducts\Pages\CreateLoanProduct;
 use App\Filament\Resources\LoanProducts\Pages\EditLoanProduct;
 use App\Filament\Resources\LoanProducts\Pages\ListLoanProducts;
@@ -18,6 +19,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class LoanProductResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'loan_products';
     protected static ?string $model = LoanProduct::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;

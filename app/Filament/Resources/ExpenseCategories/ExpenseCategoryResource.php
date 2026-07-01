@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\ExpenseCategories;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\ExpenseCategories\Pages\CreateExpenseCategory;
 use App\Filament\Resources\ExpenseCategories\Pages\EditExpenseCategory;
 use App\Filament\Resources\ExpenseCategories\Pages\ListExpenseCategories;
@@ -18,6 +19,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class ExpenseCategoryResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'expense_categories';
     protected static ?string $model = ExpenseCategory::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-tag';

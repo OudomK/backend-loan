@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\CustomFonts;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\CustomFonts\Pages\CreateCustomFont;
 use App\Filament\Resources\CustomFonts\Pages\EditCustomFont;
 use App\Filament\Resources\CustomFonts\Pages\ListCustomFonts;
@@ -18,21 +19,14 @@ use Filament\Tables\Table;
 
 class CustomFontResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'custom_fonts';
     protected static ?string $model = CustomFont::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedRectangleStack;
 
     protected static ?string $recordTitleAttribute = 'name';
-
-    public static function shouldRegisterNavigation(): bool
-    {
-        return FeatureToggle::isAccessible('custom_fonts', Filament::auth()->user());
-    }
-
-    public static function canAccess(): bool
-    {
-        return FeatureToggle::isAccessible('custom_fonts', Filament::auth()->user());
-    }
 
     public static function form(Schema $schema): Schema
     {

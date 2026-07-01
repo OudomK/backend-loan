@@ -155,7 +155,7 @@ class WriteOffCollectionReportController extends Controller
                 $collateralType = $loan->collaterals->first()?->type ?? '';
 
                 return [
-                    'disbursement_date' => $loan->start_date ?? '',
+                    'disb_date' => $loan->start_date ?? '',
                     'loan_code' => \App\Support\FormatHelper::formatLoanCode((string) ($loan->loan_code ?? '')),
                     'customer_code' => $borrower->customer_code ?? '',
                     'borrower_name' => $borrowerName,
@@ -168,7 +168,7 @@ class WriteOffCollectionReportController extends Controller
                     'province' => $borrower->province ?? '',
                     'collateral_type' => $collateralType,
                     'co_repay' => $loan->officer->name ?? '',
-                    'maturity_date' => $loan->maturity_date,
+                    'maturity_date' => $loan->maturity_date ?? ($loan->payments->last()?->payment_date ?? ''),
                     'currency' => $loan->currency,
                     'term' => (int) ($loan->duration_months ?? 0),
                     'amount' => (float) ($loan->amount ?? 0),

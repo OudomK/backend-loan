@@ -19,7 +19,7 @@ class FeatureToggle
 
         return Cache::rememberForever($cacheKey, function () use ($featureKey) {
             $setting = Setting::where('key', 'feature_' . $featureKey)->first();
-            
+
             if (!$setting) {
                 return true; // Default to true if not set
             }
@@ -56,7 +56,7 @@ class FeatureToggle
 
     private static function userIsSuperAdmin(?Authenticatable $user): bool
     {
-        if (! $user) {
+        if (!$user) {
             return false;
         }
 

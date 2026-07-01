@@ -191,44 +191,45 @@ class RoleResource extends Resource
         $user = Filament::auth()->user();
 
         $map = [
-            \App\Filament\Resources\CustomFonts\CustomFontResource::class => 'feature_custom_fonts',
-            \App\Filament\Resources\LoanProducts\LoanProductResource::class => 'feature_loan_products',
-            \App\Filament\Resources\Translations\TranslationResource::class => 'feature_translations',
-            \App\Filament\Resources\ActivityLogs\ActivityLogResource::class => 'feature_activity_logs',
-            \App\Filament\Resources\PaymentQrs\PaymentQrResource::class => 'feature_payment_qrs',
-            
-            \App\Filament\Resources\ExpenseCategories\ExpenseCategoryResource::class => 'feature_expense_categories',
-            \App\Filament\Resources\RevenueCategories\RevenueCategoryResource::class => 'feature_revenue_categories',
-            \App\Filament\Resources\Expenses\ExpenseResource::class => 'feature_expenses',
-            \App\Filament\Resources\Revenues\RevenueResource::class => 'feature_revenues',
-            \App\Filament\Resources\MiscellaneousTransactions\MiscellaneousTransactionResource::class => 'feature_misc_transactions',
-            
-            \App\Filament\Resources\Loans\LoanResource::class => 'feature_loans',
-            \App\Filament\Resources\RepaymentTransactions\RepaymentTransactionResource::class => 'feature_repayment_transactions',
-            \App\Filament\Resources\OverdueLoans\OverdueLoanResource::class => 'feature_overdue_payments',
-            \App\Filament\Resources\LoanModifications\LoanModificationResource::class => 'feature_loan_modifications',
-            \App\Filament\Resources\CollateralResource::class => 'feature_collaterals',
-            
-            \App\Filament\Resources\SavingAccounts\SavingAccountResource::class => 'feature_borrowings',
-            \App\Filament\Resources\BorrowingRepayments\BorrowingRepaymentResource::class => 'feature_borrowing_repayments',
-            \App\Filament\Resources\CapitalShares\CapitalShareResource::class => 'feature_capital_shares',
-            \App\Filament\Resources\CapitalShareTransactions\CapitalShareTransactionResource::class => 'feature_capital_share_transactions',
-            \App\Filament\Resources\Dividends\DividendResource::class => 'feature_dividends',
-            \App\Filament\Resources\Investors\InvestorResource::class => 'feature_investors',
-            
-            \App\Filament\Resources\Borrowers\BorrowerResource::class => 'feature_borrowers',
-            \App\Filament\Resources\CoBorrowers\CoBorrowerResource::class => 'feature_co_borrowers',
-            \App\Filament\Resources\Guarantors\GuarantorResource::class => 'feature_guarantors',
-            \App\Filament\Resources\LoanOfficers\LoanOfficerResource::class => 'feature_loan_officers',
-            
-            \App\Filament\Resources\Employees\EmployeeResource::class => 'feature_employees',
-            \App\Filament\Resources\Payrolls\PayrollResource::class => 'feature_payrolls',
-            \App\Filament\Resources\Positions\PositionResource::class => 'feature_positions',
+            \App\Filament\Resources\CustomFonts\CustomFontResource::class => 'custom_fonts',
+            \App\Filament\Resources\LoanProducts\LoanProductResource::class => 'loan_products',
+            \App\Filament\Resources\Translations\TranslationResource::class => 'translations',
+            \App\Filament\Resources\ActivityLogs\ActivityLogResource::class => 'activity_logs',
+            \App\Filament\Resources\PaymentQrs\PaymentQrResource::class => 'payment_qrs',
+
+            \App\Filament\Resources\ExpenseCategories\ExpenseCategoryResource::class => 'expense_categories',
+            \App\Filament\Resources\RevenueCategories\RevenueCategoryResource::class => 'revenue_categories',
+            \App\Filament\Resources\Expenses\ExpenseResource::class => 'expenses',
+            \App\Filament\Resources\Revenues\RevenueResource::class => 'revenues',
+            \App\Filament\Resources\MiscellaneousTransactions\MiscellaneousTransactionResource::class => 'misc_transactions',
+
+            \App\Filament\Resources\Loans\LoanResource::class => 'loans',
+            \App\Filament\Resources\RepaymentTransactions\RepaymentTransactionResource::class => 'repayment_transactions',
+            \App\Filament\Resources\OverdueLoans\OverdueLoanResource::class => 'overdue_payments',
+            \App\Filament\Resources\LoanModifications\LoanModificationResource::class => 'loan_modifications',
+            \App\Filament\Resources\CollateralResource::class => 'collaterals',
+
+            \App\Filament\Resources\SavingAccounts\SavingAccountResource::class => 'borrowings',
+            \App\Filament\Resources\BorrowingRepayments\BorrowingRepaymentResource::class => 'borrowing_repayments',
+            \App\Filament\Resources\CapitalShares\CapitalShareResource::class => 'capital_shares',
+            \App\Filament\Resources\CapitalShareTransactions\CapitalShareTransactionResource::class => 'capital_share_transactions',
+            \App\Filament\Resources\Dividends\DividendResource::class => 'dividends',
+            \App\Filament\Resources\Investors\InvestorResource::class => 'investors',
+
+            \App\Filament\Resources\Borrowers\BorrowerResource::class => 'borrowers',
+            \App\Filament\Resources\CoBorrowers\CoBorrowerResource::class => 'co_borrowers',
+            \App\Filament\Resources\Guarantors\GuarantorResource::class => 'guarantors',
+            \App\Filament\Resources\LoanOfficers\LoanOfficerResource::class => 'loan_officers',
+
+            \App\Filament\Resources\Employees\EmployeeResource::class => 'employees',
+            \App\Filament\Resources\Payrolls\PayrollResource::class => 'payrolls',
+            \App\Filament\Resources\Positions\PositionResource::class => 'positions',
+            \App\Filament\Resources\Relationships\RelationshipResource::class => 'relationships',
         ];
 
         if (array_key_exists($fqcn, $map)) {
             $key = $map[$fqcn];
-            return !\App\Services\FeatureToggle::isAccessible($key, $user);
+            return !\App\Services\FeatureToggle::isEnabled($key);
         }
 
         return false;

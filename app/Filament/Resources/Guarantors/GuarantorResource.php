@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Guarantors;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\Guarantors\Pages\CreateGuarantor;
 use App\Filament\Resources\Guarantors\Pages\EditGuarantor;
 use App\Filament\Resources\Guarantors\Pages\ListGuarantors;
@@ -18,6 +19,9 @@ use Illuminate\Validation\ValidationException;
 
 class GuarantorResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'guarantors';
     protected static ?string $model = Guarantor::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-shield-check';

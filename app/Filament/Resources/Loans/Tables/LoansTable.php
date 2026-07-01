@@ -92,6 +92,10 @@ class LoansTable
                         'written_off' => 'danger',
                         default => 'gray',
                     }),
+                TextColumn::make('purpose')
+                    ->label('Purpose')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -125,15 +129,6 @@ class LoansTable
                     ->color('warning')
                     ->iconButton()
                     ->tooltip('Manage loan'),
-                DeleteAction::make()
-                    ->iconButton()
-                    ->tooltip('Delete loan'),
-                ForceDeleteAction::make()
-                    ->iconButton()
-                    ->tooltip('Permanently delete loan'),
-                RestoreAction::make()
-                    ->iconButton()
-                    ->tooltip('Restore loan'),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -143,9 +138,7 @@ class LoansTable
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                    ForceDeleteBulkAction::make(),
-                    RestoreBulkAction::make(),
+                    // Deletion removed
                 ]),
             ]);
     }

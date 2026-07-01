@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Customer extends Model
 {
     use SoftDeletes, Auditable;
+    protected $appends = ['formatted_gender'];
     protected $fillable = [
         'first_name',
         'last_name',
@@ -19,6 +20,7 @@ class Customer extends Model
         'phone',
         'id_type',
         'id_number',
+        'id_issue_date',
         'id_expiry',
         'occupation',
         'village',
@@ -28,6 +30,11 @@ class Customer extends Model
         'photo',
         'status'
     ];
+
+    public function getFormattedGenderAttribute()
+    {
+        return empty($this->gender) ? '' : strtoupper(substr($this->gender, 0, 1));
+    }
 
     /**
      * Set the birth date.
@@ -59,6 +66,23 @@ class Customer extends Model
                 $this->attributes['id_expiry'] = \Carbon\Carbon::createFromFormat('d/m/Y', $value)->format('Y-m-d');
             } catch (\Exception $e) {
                 $this->attributes['id_expiry'] = null;
+            }
+        }
+    }
+
+    /**
+     * Set the identity issue date.
+     *
+     * @param  string  $value
+     * @return void
+     */
+    public function setIdIssueDateAttribute($value)
+    {
+        if ($value) {
+            try {
+                $this->attributes['id_issue_date'] = \Carbon\Carbon::createFromFormat('d/m/Y', $value)->format('Y-m-d');
+            } catch (\Exception $e) {
+                $this->attributes['id_issue_date'] = null;
             }
         }
     }

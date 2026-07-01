@@ -36,43 +36,37 @@ class AdminControl extends Page implements HasForms
     public function mount(): void
     {
         $this->form->fill([
+            'custom_fonts' => FeatureToggle::isEnabled('custom_fonts'),
+            'loan_products' => FeatureToggle::isEnabled('loan_products'),
+            'relationships' => FeatureToggle::isEnabled('relationships'),
+            'translations' => FeatureToggle::isEnabled('translations'),
+            'activity_logs' => FeatureToggle::isEnabled('activity_logs'),
+            'payment_qrs' => FeatureToggle::isEnabled('payment_qrs'),
             'expense_categories' => FeatureToggle::isEnabled('expense_categories'),
             'revenue_categories' => FeatureToggle::isEnabled('revenue_categories'),
-            'general_expenses' => FeatureToggle::isEnabled('general_expenses'),
-            'general_revenues' => FeatureToggle::isEnabled('general_revenues'),
-            'collateral_management' => FeatureToggle::isEnabled('collateral_management'),
-            'hr_payroll' => FeatureToggle::isEnabled('hr_payroll'),
-            'capital_share' => FeatureToggle::isEnabled('capital_share'),
-            'feature_custom_fonts' => FeatureToggle::isEnabled('feature_custom_fonts'),
-            'feature_loan_products' => FeatureToggle::isEnabled('feature_loan_products'),
-            'feature_translations' => FeatureToggle::isEnabled('feature_translations'),
-            'feature_activity_logs' => FeatureToggle::isEnabled('feature_activity_logs'),
-            'feature_payment_qrs' => FeatureToggle::isEnabled('feature_payment_qrs'),
-            'feature_expense_categories' => FeatureToggle::isEnabled('feature_expense_categories'),
-            'feature_revenue_categories' => FeatureToggle::isEnabled('feature_revenue_categories'),
-            'feature_expenses' => FeatureToggle::isEnabled('feature_expenses'),
-            'feature_revenues' => FeatureToggle::isEnabled('feature_revenues'),
-            'feature_misc_transactions' => FeatureToggle::isEnabled('feature_misc_transactions'),
-            'feature_loans' => FeatureToggle::isEnabled('feature_loans'),
-            'feature_repayment_transactions' => FeatureToggle::isEnabled('feature_repayment_transactions'),
-            'feature_overdue_payments' => FeatureToggle::isEnabled('feature_overdue_payments'),
-            'feature_loan_modifications' => FeatureToggle::isEnabled('feature_loan_modifications'),
-            'feature_collaterals' => FeatureToggle::isEnabled('feature_collaterals'),
-            'feature_borrowings' => FeatureToggle::isEnabled('feature_borrowings'),
-            'feature_borrowing_repayments' => FeatureToggle::isEnabled('feature_borrowing_repayments'),
-            'feature_capital_shares' => FeatureToggle::isEnabled('feature_capital_shares'),
-            'feature_capital_share_transactions' => FeatureToggle::isEnabled('feature_capital_share_transactions'),
-            'feature_dividends' => FeatureToggle::isEnabled('feature_dividends'),
-            'feature_investors' => FeatureToggle::isEnabled('feature_investors'),
-            'feature_borrowers' => FeatureToggle::isEnabled('feature_borrowers'),
-            'feature_co_borrowers' => FeatureToggle::isEnabled('feature_co_borrowers'),
-            'feature_guarantors' => FeatureToggle::isEnabled('feature_guarantors'),
-            'feature_loan_officers' => FeatureToggle::isEnabled('feature_loan_officers'),
-            'feature_employees' => FeatureToggle::isEnabled('feature_employees'),
-            'feature_payrolls' => FeatureToggle::isEnabled('feature_payrolls'),
-            'feature_positions' => FeatureToggle::isEnabled('feature_positions'),
-            'feature_reports' => FeatureToggle::isEnabled('feature_reports'),
-            'feature_par_analysis' => FeatureToggle::isEnabled('feature_par_analysis'),
+            'expenses' => FeatureToggle::isEnabled('expenses'),
+            'revenues' => FeatureToggle::isEnabled('revenues'),
+            'misc_transactions' => FeatureToggle::isEnabled('misc_transactions'),
+            'loans' => FeatureToggle::isEnabled('loans'),
+            'repayment_transactions' => FeatureToggle::isEnabled('repayment_transactions'),
+            'overdue_payments' => FeatureToggle::isEnabled('overdue_payments'),
+            'loan_modifications' => FeatureToggle::isEnabled('loan_modifications'),
+            'collaterals' => FeatureToggle::isEnabled('collaterals'),
+            'borrowings' => FeatureToggle::isEnabled('borrowings'),
+            'borrowing_repayments' => FeatureToggle::isEnabled('borrowing_repayments'),
+            'capital_shares' => FeatureToggle::isEnabled('capital_shares'),
+            'capital_share_transactions' => FeatureToggle::isEnabled('capital_share_transactions'),
+            'dividends' => FeatureToggle::isEnabled('dividends'),
+            'investors' => FeatureToggle::isEnabled('investors'),
+            'borrowers' => FeatureToggle::isEnabled('borrowers'),
+            'co_borrowers' => FeatureToggle::isEnabled('co_borrowers'),
+            'guarantors' => FeatureToggle::isEnabled('guarantors'),
+            'loan_officers' => FeatureToggle::isEnabled('loan_officers'),
+            'employees' => FeatureToggle::isEnabled('employees'),
+            'payrolls' => FeatureToggle::isEnabled('payrolls'),
+            'positions' => FeatureToggle::isEnabled('positions'),
+            'reports' => FeatureToggle::isEnabled('reports'),
+            'par_analysis' => FeatureToggle::isEnabled('par_analysis'),
         ]);
     }
 
@@ -83,71 +77,72 @@ class AdminControl extends Page implements HasForms
                 Section::make('General Configuration')
                     ->description('Toggle un-grouped features.')
                     ->schema([
-                        Toggle::make('feature_custom_fonts')->label('Enable Custom Fonts')->default(true),
-                        Toggle::make('feature_loan_products')->label('Enable Loan Products')->default(true),
-                    ])->columns(2),
+                        Toggle::make('custom_fonts')->label('Enable Custom Fonts')->default(true),
+                        Toggle::make('loan_products')->label('Enable Loan Products')->default(true),
+                        Toggle::make('relationships')->label('Enable Relationships')->default(true),
+                    ])->columns(3),
 
                 Section::make('Administration')
                     ->description('Toggle administrative tools.')
                     ->schema([
-                        Toggle::make('feature_translations')->label('Enable Translations')->default(true),
-                        Toggle::make('feature_activity_logs')->label('Enable Audit Logs')->default(true),
-                        Toggle::make('feature_payment_qrs')->label('Enable Payment QR Codes')->default(true),
+                        Toggle::make('translations')->label('Enable Translations')->default(true),
+                        Toggle::make('activity_logs')->label('Enable Audit Logs')->default(true),
+                        Toggle::make('payment_qrs')->label('Enable Payment QR Codes')->default(true),
                     ])->columns(3),
 
                 Section::make('Financial Management')
                     ->description('Toggle financial categories and transactions.')
                     ->schema([
-                        Toggle::make('feature_expense_categories')->label('Enable Expense Categories')->default(true),
-                        Toggle::make('feature_revenue_categories')->label('Enable Revenue Categories')->default(true),
-                        Toggle::make('feature_expenses')->label('Enable Expenses')->default(true),
-                        Toggle::make('feature_revenues')->label('Enable Revenues')->default(true),
-                        Toggle::make('feature_misc_transactions')->label('Enable Miscellaneous Transactions')->default(true),
+                        Toggle::make('expense_categories')->label('Enable Expense Categories')->default(true),
+                        Toggle::make('revenue_categories')->label('Enable Revenue Categories')->default(true),
+                        Toggle::make('expenses')->label('Enable Expenses')->default(true),
+                        Toggle::make('revenues')->label('Enable Revenues')->default(true),
+                        Toggle::make('misc_transactions')->label('Enable Miscellaneous Transactions')->default(true),
                     ])->columns(3),
 
                 Section::make('Credit Operations')
                     ->description('Toggle loan and credit related features.')
                     ->schema([
-                        Toggle::make('feature_loans')->label('Enable Loans')->default(true),
-                        Toggle::make('feature_repayment_transactions')->label('Enable Repayment Transactions')->default(true),
-                        Toggle::make('feature_overdue_payments')->label('Enable Overdue Payments')->default(true),
-                        Toggle::make('feature_loan_modifications')->label('Enable Loan Modifications')->default(true),
-                        Toggle::make('feature_collaterals')->label('Enable Collaterals')->default(true),
+                        Toggle::make('loans')->label('Enable Loans')->default(true),
+                        Toggle::make('repayment_transactions')->label('Enable Repayment Transactions')->default(true),
+                        Toggle::make('overdue_payments')->label('Enable Overdue Payments')->default(true),
+                        Toggle::make('loan_modifications')->label('Enable Loan Modifications')->default(true),
+                        Toggle::make('collaterals')->label('Enable Collaterals')->default(true),
                     ])->columns(3),
 
                 Section::make('Fund Management')
                     ->description('Toggle shares, investments, and borrowing.')
                     ->schema([
-                        Toggle::make('feature_borrowings')->label('Enable Borrowings')->default(true),
-                        Toggle::make('feature_borrowing_repayments')->label('Enable Borrowing Repayments')->default(true),
-                        Toggle::make('feature_capital_shares')->label('Enable Capital & Shares')->default(true),
-                        Toggle::make('feature_capital_share_transactions')->label('Enable Capital Share Transactions')->default(true),
-                        Toggle::make('feature_dividends')->label('Enable Dividends')->default(true),
-                        Toggle::make('feature_investors')->label('Enable Investors')->default(true),
+                        Toggle::make('borrowings')->label('Enable Borrowings')->default(true),
+                        Toggle::make('borrowing_repayments')->label('Enable Borrowing Repayments')->default(true),
+                        Toggle::make('capital_shares')->label('Enable Capital & Shares')->default(true),
+                        Toggle::make('capital_share_transactions')->label('Enable Capital Share Transactions')->default(true),
+                        Toggle::make('dividends')->label('Enable Dividends')->default(true),
+                        Toggle::make('investors')->label('Enable Investors')->default(true),
                     ])->columns(3),
 
                 Section::make('Client Management')
                     ->description('Toggle borrower and guarantor records.')
                     ->schema([
-                        Toggle::make('feature_borrowers')->label('Enable Borrowers')->default(true),
-                        Toggle::make('feature_co_borrowers')->label('Enable Co Borrowers')->default(true),
-                        Toggle::make('feature_guarantors')->label('Enable Guarantors')->default(true),
-                        Toggle::make('feature_loan_officers')->label('Enable Loan Officers')->default(true),
+                        Toggle::make('borrowers')->label('Enable Borrowers')->default(true),
+                        Toggle::make('co_borrowers')->label('Enable Co Borrowers')->default(true),
+                        Toggle::make('guarantors')->label('Enable Guarantors')->default(true),
+                        Toggle::make('loan_officers')->label('Enable Loan Officers')->default(true),
                     ])->columns(2),
 
                 Section::make('HR & Payroll')
                     ->description('Toggle human resources features.')
                     ->schema([
-                        Toggle::make('feature_employees')->label('Enable Employees')->default(true),
-                        Toggle::make('feature_payrolls')->label('Enable Payrolls')->default(true),
-                        Toggle::make('feature_positions')->label('Enable Positions')->default(true),
+                        Toggle::make('employees')->label('Enable Employees')->default(true),
+                        Toggle::make('payrolls')->label('Enable Payrolls')->default(true),
+                        Toggle::make('positions')->label('Enable Positions')->default(true),
                     ])->columns(3),
 
                 Section::make('Reports')
                     ->description('Toggle report dashboards.')
                     ->schema([
-                        Toggle::make('feature_reports')->label('Enable Reports')->default(true),
-                        Toggle::make('feature_par_analysis')->label('Enable PAR Analysis')->default(true),
+                        Toggle::make('reports')->label('Enable Reports')->default(true),
+                        Toggle::make('par_analysis')->label('Enable PAR Analysis')->default(true),
                     ])->columns(2),
             ])
             ->statePath('data');
@@ -158,16 +153,37 @@ class AdminControl extends Page implements HasForms
         $data = $this->form->getState();
 
         $keys = [
-            'feature_custom_fonts', 'feature_loan_products', 'feature_translations', 
-            'feature_activity_logs', 'feature_payment_qrs', 'feature_expense_categories', 
-            'feature_revenue_categories', 'feature_expenses', 'feature_revenues', 
-            'feature_misc_transactions', 'feature_loans', 'feature_repayment_transactions', 
-            'feature_overdue_payments', 'feature_loan_modifications', 'feature_collaterals', 
-            'feature_borrowings', 'feature_borrowing_repayments', 'feature_capital_shares', 
-            'feature_capital_share_transactions', 'feature_dividends', 'feature_investors', 
-            'feature_borrowers', 'feature_co_borrowers', 'feature_guarantors', 
-            'feature_loan_officers', 'feature_employees', 'feature_payrolls', 
-            'feature_positions', 'feature_reports', 'feature_par_analysis'
+            'custom_fonts',
+            'loan_products',
+            'relationships',
+            'translations',
+            'activity_logs',
+            'payment_qrs',
+            'expense_categories',
+            'revenue_categories',
+            'expenses',
+            'revenues',
+            'misc_transactions',
+            'loans',
+            'repayment_transactions',
+            'overdue_payments',
+            'loan_modifications',
+            'collaterals',
+            'borrowings',
+            'borrowing_repayments',
+            'capital_shares',
+            'capital_share_transactions',
+            'dividends',
+            'investors',
+            'borrowers',
+            'co_borrowers',
+            'guarantors',
+            'loan_officers',
+            'employees',
+            'payrolls',
+            'positions',
+            'reports',
+            'par_analysis'
         ];
 
         foreach ($keys as $key) {

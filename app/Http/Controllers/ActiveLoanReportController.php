@@ -246,10 +246,10 @@ class ActiveLoanReportController extends Controller
         $normalized = strtolower(trim((string) $paymentFrequency));
 
         return match ($normalized) {
-            'monthly' => 'Months',
-            'biweekly' => 'Biweeks',
-            'weekly' => 'Weeks',
-            'daily' => 'Days',
+            'monthly' => 'Monthly',
+            'biweekly' => 'Bi-weekly',
+            'weekly' => 'Weekly',
+            'daily' => 'Daily',
             'term' => 'Installments',
             'bi-monthly', 'bimonthly', 'semi-monthly' => 'Semi-Monthly',
             default => $normalized !== '' ? ucwords(str_replace(['_', '-'], ' ', $normalized)) : '',

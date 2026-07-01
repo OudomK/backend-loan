@@ -153,7 +153,7 @@ class TranslationSeeder extends Seeder
             ['key' => 'interestRate', 'kh' => 'អត្រាការប្រាក់ (%)', 'en' => 'Interest Rate (%)'],
             ['key' => 'dateDisbursement', 'kh' => 'កាលបរិច្ឆេទផ្តល់កម្ចី', 'en' => 'Date Disburst.'],
             ['key' => 'termMonths', 'kh' => 'រយៈពេល (ខែ)', 'en' => 'Term (Months)'],
-            ['key' => 'termBiweeks', 'kh' => 'រយៈពេល (ពីរសប្ដាហ៍)', 'en' => 'Term (Biweeks)'],
+            ['key' => 'termBiweeks', 'kh' => 'រយៈពេល (ពីរសប្ដាហ៍)', 'en' => 'Term (Bi-weekly)'],
             ['key' => 'termWeeks', 'kh' => 'រយៈពេល (សប្ដាហ៍)', 'en' => 'Term (Weeks)'],
             ['key' => 'termDays', 'kh' => 'រយៈពេល (ថ្ងៃ)', 'en' => 'Term (Days)'],
             ['key' => 'termInstallments', 'kh' => 'រយៈពេល (វគ្គ)', 'en' => 'Term (Installments)'],

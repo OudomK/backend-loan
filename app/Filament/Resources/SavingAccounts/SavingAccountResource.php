@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\SavingAccounts;
 
+use App\Filament\Concerns\ChecksFeatureToggle;
 use App\Filament\Resources\SavingAccounts\Pages\CreateSavingAccount;
 use App\Filament\Resources\SavingAccounts\Pages\EditSavingAccount;
 use App\Filament\Resources\SavingAccounts\Pages\ListSavingAccounts;
@@ -20,6 +21,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class SavingAccountResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'borrowings';
     protected static ?string $model = Borrowing::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-rectangle-stack';
