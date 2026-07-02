@@ -50,3 +50,13 @@ Route::get('/admin/sso/{token}', function ($token) {
     
     return redirect('/admin');
 })->name('admin.sso');
+
+// Public Schedule Calculator Component
+Route::get('/calculator', \App\Livewire\ScheduleCalculator::class)->name('calculator');
+
+// Print Schedule Route
+Route::get('/calculator/print', function () {
+    $schedule = session('print_schedule', []);
+    $customer_info = session('print_customer_info', null);
+    return view('schedule-print', compact('schedule', 'customer_info'));
+})->name('calculator.print');
