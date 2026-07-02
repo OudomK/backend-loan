@@ -15,7 +15,11 @@ class CheckCalculatorSecret
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->query('key') !== env('CALCULATOR_SECRET_KEY', 'qf-secret-2026')) {
+        if ($request->has('key') && $request->query('key') === env('CALCULATOR_SECRET_KEY', 'qf-secret-2026')) {
+            session(['calculator_unlocked' => true]);
+        }
+
+        if (!session('calculator_unlocked')) {
             abort(404);
         }
 
