@@ -509,7 +509,7 @@ class LoanCalculator
 
             for ($i = 1; $i <= $duration; $i++) {
                 if ($i == 1) {
-                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days;
+                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days + 1; // Inclusive days
                     $monthlyInterest = $remainingBalance * ($monthlyInterestRate / 30) * $daysFromStart;
                 } else {
                     $monthlyInterest = $remainingBalance * $monthlyInterestRate;
@@ -598,7 +598,7 @@ class LoanCalculator
 
             for ($i = 1; $i <= $duration; $i++) {
                 if ($i == 1) {
-                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days;
+                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days + 1; // Inclusive days
                     $monthlyInterest = $remainingBalance * ($monthlyInterestRate / 30) * $daysFromStart;
                 } else {
                     $monthlyInterest = $remainingBalance * $monthlyInterestRate;
@@ -662,7 +662,7 @@ class LoanCalculator
                 $currentPrincipal = $monthlyPrincipal;
                 
                 if ($i == 1) {
-                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days;
+                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days + 1; // Inclusive days
                     $rawInterest = $principal * (($rate / 100) / 30) * $daysFromStart;
                     $currentInterest = $applyRounding($rawInterest, $currency);
                 } else {
@@ -723,7 +723,7 @@ class LoanCalculator
 
             for ($i = 1; $i <= $duration; $i++) {
                 if ($i == 1) {
-                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days;
+                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days + 1; // Inclusive days
                     $rawInterest = $principal * (($rate / 100) / 30) * $daysFromStart;
                     $currentInterest = $applyRounding($rawInterest, $currency);
                 } else {

@@ -205,7 +205,7 @@ class LoanForm
                                                 Select::make('payment_frequency')
                                                     ->options([
                                                         'monthly' => 'Monthly',
-                                                        'biweekly' => 'Biweekly',
+                                                        'biweekly' => 'Bi-weekly',
                                                         'weekly' => 'Weekly',
                                                         'daily' => 'Daily',
                                                         '15days' => 'Semi-monthly',
@@ -217,7 +217,7 @@ class LoanForm
                                                 Select::make('repayment_method')
                                                     ->options([
                                                         'fixed_daily' => 'Fixed Daily (1x per day)',
-                                                        'fixed_biweekly' => 'Fixed Biweekly (1x per 2 weeks)',
+                                                        'fixed_biweekly' => 'Fixed Bi-weekly (1x per 2 weeks)',
                                                         'fixed_weekly' => 'Fixed Weekly (1x per week)',
                                                         'fixed_monthly' => 'Fixed Monthly (Flat)',
                                                         'linear_monthly' => 'Linear Monthly (Declining)',

@@ -44,7 +44,7 @@ class LoanReportResource extends JsonResource
             'monthly_interest_rate' => (float) $loan->monthly_interest,
             'term' => $loan->duration_months,
             'tenor' => $this->tenorLabel($loan->payment_frequency),
-            'payment_frequency' => ucfirst((string) $loan->payment_frequency),
+            'payment_frequency' => str_replace('Biweekly', 'Bi-weekly', ucfirst((string) $loan->payment_frequency)),
             'payment_method' => $this->formatPaymentMethod($loan->repayment_method),
             'loan_cycle' => $loan->loan_cycle,
             're_finance' => $loan->refinanced_amount,

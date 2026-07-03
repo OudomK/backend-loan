@@ -40,7 +40,7 @@ class BalloonPaymentCalculator
             $paymentDate->day = min($resolvedPaymentDay, $paymentDate->daysInMonth);
 
             if ($month === 1) {
-                $daysFromStart = $startDateObj->diffInDays($paymentDate);
+                $daysFromStart = $startDateObj->diffInDays($paymentDate) + 1;
                 $currentInterest = round($principal * ($monthlyInterestRate / 30) * $daysFromStart, 2);
             } else {
                 $currentInterest = $monthlyInterest;
@@ -113,7 +113,7 @@ class BalloonPaymentCalculator
 
             // Recalculate interest on remaining principal (pro-rated for first month)
             if ($month === 1) {
-                $daysFromStart = $startDateObj->diffInDays($paymentDate);
+                $daysFromStart = $startDateObj->diffInDays($paymentDate) + 1;
                 $interest = round($remainingPrincipal * ($monthlyInterestRate / 30) * $daysFromStart, 2);
             } else {
                 $interest = round($remainingPrincipal * $monthlyInterestRate, 2);
