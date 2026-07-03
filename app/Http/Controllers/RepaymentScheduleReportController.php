@@ -110,6 +110,9 @@ class RepaymentScheduleReportController extends Controller
             if ($item->loan_code) {
                 $item->loan_code = \App\Support\FormatHelper::formatLoanCode((string) $item->loan_code);
             }
+            if ($item->phone) {
+                $item->phone = \App\Support\FormatHelper::formatPhoneNumber((string) $item->phone);
+            }
             
             // Also need to determine the status to match what flutter had "active", "refinanced", etc.
             // But Flutter frontend did this? No, Flutter had a _buildStatusCell which evaluated it. Let's provide "payment_status" as "Active" for schedule since it's unpaid upcoming.

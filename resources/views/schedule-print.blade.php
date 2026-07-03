@@ -47,8 +47,8 @@
         </a>
     </div>
 
-    <div class="hide-on-print" style="position: absolute; top: 16px; right: 16px;">
-        <button onclick="window.print()"
+    <div class="hide-on-print" style="position: absolute; top: 16px; right: 16px;" id="save-pdf-btn-container">
+        <button onclick="generatePDF()"
             style="background-color: #2563eb; color: white; padding: 8px 16px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 8px; border: none; cursor: pointer; font-family: inherit; font-size: 15px;">
             <svg xmlns="http://www.w3.org/2000/svg" style="height: 18px; width: 18px;" fill="none" viewBox="0 0 24 24"
                 stroke="currentColor">
@@ -508,5 +508,32 @@
     </div>
 
 </body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script>
+    function generatePDF() {
+        const element = document.querySelector('.page');
+        
+        // Hide the action buttons temporarily
+        const hideElements = document.querySelectorAll('.hide-on-print');
+        hideElements.forEach(el => el.style.display = 'none');
 
+        // Apply a white background explicitly to the element for PDF capture
+        const originalBg = element.style.backgroundColor;
+        element.style.backgroundColor = 'white';
+
+        const opt = {
+            margin:       [0, 0, 0, 0],
+            filename:     'Schedule_Repay.pdf',
+            image:        { type: 'jpeg', quality: 1 },
+            html2canvas:  { scale: 2, useCORS: true, logging: false },
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        html2pdf().set(opt).from(element).save().then(() => {
+            // Restore visibility
+            hideElements.forEach(el => el.style.display = '');
+            element.style.backgroundColor = originalBg;
+        });
+    }
+</script>
 </html>

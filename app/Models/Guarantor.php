@@ -54,6 +54,11 @@ class Guarantor extends Model
         return empty($this->gender) ? '' : strtoupper(substr($this->gender, 0, 1));
     }
 
+    public function getPhoneAttribute(mixed $value): ?string
+    {
+        return \App\Support\FormatHelper::formatPhoneNumber((string)$value);
+    }
+
     public function setDobAttribute(mixed $value)
     {
         $this->attributes['dob'] = $this->normalizeDateInput($value);

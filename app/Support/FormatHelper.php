@@ -55,4 +55,28 @@ class FormatHelper
         $loanCode = str_replace(['Refinanced', 'Refinance'], 'RF', $loanCode);
         return $loanCode;
     }
+
+    /**
+     * Format the phone number with spaces.
+     *
+     * @param string|null $phone
+     * @return string|null
+     */
+    public static function formatPhoneNumber(?string $phone): ?string
+    {
+        if (!$phone) {
+            return $phone;
+        }
+
+        // Remove any existing spaces
+        $cleaned = str_replace(' ', '', $phone);
+        
+        if (strlen($cleaned) === 9) {
+            return substr($cleaned, 0, 3) . ' ' . substr($cleaned, 3, 3) . ' ' . substr($cleaned, 6);
+        } elseif (strlen($cleaned) === 10) {
+            return substr($cleaned, 0, 3) . ' ' . substr($cleaned, 3, 3) . ' ' . substr($cleaned, 6);
+        }
+
+        return $phone;
+    }
 }
