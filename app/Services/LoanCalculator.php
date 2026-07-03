@@ -172,23 +172,13 @@ class LoanCalculator
         $monthlyRepaymentDay = max(1, min(31, $payDay1 ?? 11));
 
         $initializeMonthlyPaymentDate = function (DateTime $loanStartDate) use ($monthlyRepaymentDay): DateTime {
-            $paymentDate = new DateTime($loanStartDate->format('Y-m-01'));
+            $paymentDate = clone $loanStartDate;
+            $paymentDate->modify('first day of next month');
             $year = (int) $paymentDate->format('Y');
             $month = (int) $paymentDate->format('m');
             $lastDayOfMonth = (int) $paymentDate->format('t');
             $paymentDate->setDate($year, $month, min($monthlyRepaymentDay, $lastDayOfMonth));
-
-            $interval = $loanStartDate->diff($paymentDate);
-            $daysDiff = (int) $interval->format('%r%a');
-
-            if ($daysDiff < 5) {
-                $paymentDate->modify('first day of next month');
-                $year = (int) $paymentDate->format('Y');
-                $month = (int) $paymentDate->format('m');
-                $lastDayOfMonth = (int) $paymentDate->format('t');
-                $paymentDate->setDate($year, $month, min($monthlyRepaymentDay, $lastDayOfMonth));
-            }
-
+            
             return $paymentDate;
         };
 
@@ -520,21 +510,16 @@ class LoanCalculator
             for ($i = 1; $i <= $duration; $i++) {
                 if ($i == 1) {
                     $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days;
-                    if ($daysFromStart > 30) {
-                        $baseInterest = $remainingBalance * $monthlyInterestRate;
-                        $extraDaysInterest = $remainingBalance * ($monthlyInterestRate / 30) * ($daysFromStart - 30);
-                        $monthlyInterest = $baseInterest + $extraDaysInterest;
-                    } else {
-                        $monthlyInterest = $remainingBalance * $monthlyInterestRate;
-                    }
+                    $monthlyInterest = $remainingBalance * ($monthlyInterestRate / 30) * $daysFromStart;
                 } else {
                     $monthlyInterest = $remainingBalance * $monthlyInterestRate;
                 }
 
                 $monthlyInterest = $applyAnnuityRounding($monthlyInterest, $currency);
 
-                if ($i == 1 && isset($daysFromStart) && $daysFromStart > 30) {
-                    $monthlyPrincipal = $monthlyPayment - ($remainingBalance * $monthlyInterestRate);
+                if ($i == 1 && isset($daysFromStart)) {
+                    $standardInterest = $remainingBalance * $monthlyInterestRate;
+                    $monthlyPrincipal = $monthlyPayment - $standardInterest;
                     $totalPayment = $monthlyPrincipal + $monthlyInterest;
                 } else {
                     $monthlyPrincipal = $monthlyPayment - $monthlyInterest;
@@ -614,13 +599,7 @@ class LoanCalculator
             for ($i = 1; $i <= $duration; $i++) {
                 if ($i == 1) {
                     $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days;
-                    if ($daysFromStart > 30) {
-                        $baseInterest = $remainingBalance * $monthlyInterestRate;
-                        $extraDaysInterest = $remainingBalance * ($monthlyInterestRate / 30) * ($daysFromStart - 30);
-                        $monthlyInterest = $baseInterest + $extraDaysInterest;
-                    } else {
-                        $monthlyInterest = $remainingBalance * $monthlyInterestRate;
-                    }
+                    $monthlyInterest = $remainingBalance * ($monthlyInterestRate / 30) * $daysFromStart;
                 } else {
                     $monthlyInterest = $remainingBalance * $monthlyInterestRate;
                 }
@@ -681,26 +660,37 @@ class LoanCalculator
 
             for ($i = 1; $i <= $duration; $i++) {
                 $currentPrincipal = $monthlyPrincipal;
-                // Flat method: same interest every period, no pro-rate on first payment
-                $currentInterest = $monthlyInterest;
+                
+                if ($i == 1) {
+                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days;
+                    $rawInterest = $principal * (($rate / 100) / 30) * $daysFromStart;
+                    $currentInterest = $applyRounding($rawInterest, $currency);
+                } else {
+                    $currentInterest = $monthlyInterest;
+                }
 
                 if ($i == $duration) {
                     $currentPrincipal = $remainingBalance;
-                    // Smart Check: Adjust interest to keep final payment flat
-                    if ($currentPrincipal != $monthlyPrincipal) {
-                        $diff = $currentPrincipal - $monthlyPrincipal;
-                        if ($diff > 0) {
-                            // Principal is higher: waive interest
-                            $adjustedInterest = $monthlyInterest - $diff;
-                            $currentInterest = max(0, $adjustedInterest);
+                    
+                    if ($duration > 1) {
+                        // Smart Check: Adjust interest to keep final payment flat
+                        if ($currentPrincipal != $monthlyPrincipal) {
+                            $diff = $currentPrincipal - $monthlyPrincipal;
+                            if ($diff > 0) {
+                                // Principal is higher: waive interest
+                                $adjustedInterest = $monthlyInterest - $diff;
+                                $currentInterest = max(0, $adjustedInterest);
+                            } else {
+                                // Principal is lower: pad interest
+                                $currentInterest = $monthlyInterest + abs($diff);
+                            }
                         } else {
-                            // Principal is lower: pad interest
-                            $currentInterest = $monthlyInterest + abs($diff);
+                            $currentInterest = $monthlyInterest;
                         }
-                    } else {
-                        $currentInterest = $monthlyInterest;
                     }
+                    
                     $remainingBalance = 0;
+
                 } else {
                     $currentPrincipal = min($currentPrincipal, $remainingBalance);
                     $remainingBalance = max(0, $remainingBalance - $currentPrincipal);
@@ -732,8 +722,13 @@ class LoanCalculator
             $currentPaymentDate = $initializeMonthlyPaymentDate($loanStartDate);
 
             for ($i = 1; $i <= $duration; $i++) {
-                // Balloon flat: same interest every period, no pro-rate
-                $currentInterest = $applyRounding($monthlyInterest, $currency);
+                if ($i == 1) {
+                    $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days;
+                    $rawInterest = $principal * (($rate / 100) / 30) * $daysFromStart;
+                    $currentInterest = $applyRounding($rawInterest, $currency);
+                } else {
+                    $currentInterest = $applyRounding($monthlyInterest, $currency);
+                }
 
                 if ($i == $duration) {
                     $currentPrincipal = $remainingBalance;

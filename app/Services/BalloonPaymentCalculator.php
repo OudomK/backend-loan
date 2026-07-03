@@ -39,6 +39,13 @@ class BalloonPaymentCalculator
             $paymentDate = $startDateObj->copy()->addMonthsNoOverflow($month);
             $paymentDate->day = min($resolvedPaymentDay, $paymentDate->daysInMonth);
 
+            if ($month === 1) {
+                $daysFromStart = $startDateObj->diffInDays($paymentDate);
+                $currentInterest = round($principal * ($monthlyInterestRate / 30) * $daysFromStart, 2);
+            } else {
+                $currentInterest = $monthlyInterest;
+            }
+
             $isFinalPayment = ($month === $durationMonths);
 
             $totalFeeAmount = $principal * ($adminFee / 100);
@@ -53,10 +60,10 @@ class BalloonPaymentCalculator
                 'payment_number' => $month,
                 'payment_date' => $paymentDate->format('Y-m-d'),
                 'principal_amount' => $isFinalPayment ? $principal : 0,
-                'interest_amount' => $monthlyInterest,
+                'interest_amount' => $currentInterest,
                 'fee_amount' => $feeAmount,
                 'penalty_amount' => 0,
-                'total_paid' => $isFinalPayment ? ($principal + $monthlyInterest + $feeAmount) : ($monthlyInterest + $feeAmount),
+                'total_paid' => $isFinalPayment ? ($principal + $currentInterest + $feeAmount) : ($currentInterest + $feeAmount),
                 'is_balloon' => $isFinalPayment,
                 'remaining_balance' => $isFinalPayment ? 0 : $principal,
             ];
@@ -104,8 +111,13 @@ class BalloonPaymentCalculator
             $paymentDate = $startDateObj->copy()->addMonthsNoOverflow($month);
             $paymentDate->day = min($resolvedPaymentDay, $paymentDate->daysInMonth);
 
-            // Recalculate interest on remaining principal
-            $interest = round($remainingPrincipal * $monthlyInterestRate, 2);
+            // Recalculate interest on remaining principal (pro-rated for first month)
+            if ($month === 1) {
+                $daysFromStart = $startDateObj->diffInDays($paymentDate);
+                $interest = round($remainingPrincipal * ($monthlyInterestRate / 30) * $daysFromStart, 2);
+            } else {
+                $interest = round($remainingPrincipal * $monthlyInterestRate, 2);
+            }
 
             $isFinalPayment = ($month === $durationMonths);
 
