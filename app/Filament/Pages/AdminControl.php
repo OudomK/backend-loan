@@ -42,6 +42,7 @@ class AdminControl extends Page implements HasForms
             'translations' => FeatureToggle::isEnabled('translations'),
             'activity_logs' => FeatureToggle::isEnabled('activity_logs'),
             'payment_qrs' => FeatureToggle::isEnabled('payment_qrs'),
+            'payment_methods' => FeatureToggle::isEnabled('payment_methods'),
             'expense_categories' => FeatureToggle::isEnabled('expense_categories'),
             'revenue_categories' => FeatureToggle::isEnabled('revenue_categories'),
             'expenses' => FeatureToggle::isEnabled('expenses'),
@@ -88,7 +89,8 @@ class AdminControl extends Page implements HasForms
                         Toggle::make('translations')->label('Enable Translations')->default(true),
                         Toggle::make('activity_logs')->label('Enable Audit Logs')->default(true),
                         Toggle::make('payment_qrs')->label('Enable Payment QR Codes')->default(true),
-                    ])->columns(3),
+                        Toggle::make('payment_methods')->label('Enable Payment Methods')->default(true),
+                    ])->columns(4),
 
                 Section::make('Financial Management')
                     ->description('Toggle financial categories and transactions.')
@@ -159,6 +161,7 @@ class AdminControl extends Page implements HasForms
             'translations',
             'activity_logs',
             'payment_qrs',
+            'payment_methods',
             'expense_categories',
             'revenue_categories',
             'expenses',

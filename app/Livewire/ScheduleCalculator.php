@@ -16,6 +16,7 @@ class ScheduleCalculator extends Component
     public string $gender = '';
     public string $address = '';
     public string $loan_date = '';
+    public string $first_repayment_date = '';
     public string $id_number = '';
     public string $credit_officer_id = '';
     public string $cycle = '';
@@ -39,12 +40,13 @@ class ScheduleCalculator extends Component
         'loan_date' => 'required|date',
         'repayment_method' => 'required|string',
         'currency' => 'required|string',
+        'first_repayment_date' => 'nullable|date',
     ];
 
     public function mount()
     {
         $this->loan_date = Carbon::now()->toDateString();
-
+        
         $customerInfo = session()->get('print_customer_info');
         if ($customerInfo) {
             $this->customer_name = $customerInfo['customer_name'] ?? '';
@@ -55,6 +57,7 @@ class ScheduleCalculator extends Component
             }
             $this->gender = $customerInfo['gender'] ?? '';
             $this->address = $customerInfo['address'] ?? '';
+            $this->first_repayment_date = $customerInfo['first_repayment_date'] ?? '';
             $this->id_number = $customerInfo['id_number'] ?? '';
             $this->credit_officer_id = $customerInfo['credit_officer_id'] ?? '';
             $this->cycle = $customerInfo['cycle'] ?? '';
@@ -65,6 +68,10 @@ class ScheduleCalculator extends Component
             $this->duration_type = explode(' ', $customerInfo['duration'] ?? ' Months')[1] ?? 'Months';
             $this->currency = $customerInfo['currency'] ?? 'USD';
             $this->repayment_method = $customerInfo['repayment_method'] ?? '';
+        }
+
+        if (empty($this->first_repayment_date)) {
+            $this->first_repayment_date = Carbon::now()->addMonth()->toDateString();
         }
     }
 
@@ -92,12 +99,21 @@ class ScheduleCalculator extends Component
             'interest_rate' => (float) $this->interest_rate,
             'duration_months' => (int) $this->duration_months,
             'start_date' => $this->loan_date,
+            'currency' => $this->currency,
         ];
 
         $calculator = new LoanCalculator();
 
         if ($this->repayment_method === 'Balloon' || $this->repayment_method === 'negotiable') {
-            $scheduleRaw = BalloonPaymentCalculator::generateSchedule($loanData, 'interest_only');
+            $scheduleRaw = BalloonPaymentCalculator::generateSchedule(
+                $loanData, 
+                'interest_only',
+                null,
+                null,
+                0,
+                'one_time',
+                $this->first_repayment_date ?: null
+            );
 
             // Map keys from Balloon format to Standard format
             $this->schedule = array_map(function ($item) {
@@ -119,7 +135,12 @@ class ScheduleCalculator extends Component
                 (int) $loanData['duration_months'],
                 (string) $this->repayment_method,
                 (string) $loanData['start_date'],
-                (string) $this->currency
+                (string) $this->currency,
+                0,
+                'one_time',
+                null,
+                null,
+                $this->first_repayment_date ?: null
             );
         }
 
@@ -154,6 +175,7 @@ class ScheduleCalculator extends Component
             'gender' => $this->gender,
             'address' => $this->address,
             'loan_date' => $this->loan_date,
+            'first_repayment_date' => $this->first_repayment_date,
             'id_number' => $this->id_number,
             'credit_officer_id' => $this->credit_officer_id,
             'phone_number' => $actual_phone_number,

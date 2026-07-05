@@ -191,6 +191,7 @@ class LoanController extends Controller
                         'interest_rate' => $validated['interest_rate'],
                         'duration_months' => $validated['duration_months'],
                         'start_date' => $validated['start_date'],
+                        'currency' => $validated['currency'] ?? 'USD',
                     ];
 
                     // Generate interest-only balloon schedule by default
@@ -296,6 +297,7 @@ class LoanController extends Controller
                     'interest_rate' => $validated['interest_rate'],
                     'duration_months' => $validated['duration_months'],
                     'start_date' => $validated['start_date'],
+                    'currency' => $validated['currency'] ?? 'USD',
                 ];
                 // Generate interest-only balloon schedule by default
                 $scheduleRaw = BalloonPaymentCalculator::generateSchedule(

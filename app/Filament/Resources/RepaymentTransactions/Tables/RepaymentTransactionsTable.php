@@ -24,41 +24,41 @@ class RepaymentTransactionsTable
                     ->label('Loan')
                     ->searchable()
                     ->sortable()
-                    ->description(fn ($record): ?string => collect([
+                    ->description(fn($record): ?string => collect([
                         filled($record->collector?->name) ? 'Credit Officer ' . $record->collector->name : null,
                     ])->filter()->implode(' • ')),
                 TextColumn::make('loan.borrower.id')
                     ->label('Borrower')
-                    ->getStateUsing(fn ($record) => trim("{$record->loan?->borrower?->first_name} {$record->loan?->borrower?->last_name}"))
+                    ->getStateUsing(fn($record) => trim("{$record->loan?->borrower?->first_name} {$record->loan?->borrower?->last_name}"))
                     ->searchable(['loan.borrower.first_name', 'loan.borrower.last_name'])
                     ->sortable()
-                    ->description(fn ($record): ?string => collect([
+                    ->description(fn($record): ?string => collect([
                         filled($record->payment_method) ? $record->payment_method : null,
                         filled($record->transaction_date) ? self::formatDate($record->transaction_date) : null,
                     ])->filter()->implode(' • ')),
                 TextColumn::make('amount_paid')
                     ->label('Total Paid')
-                    ->getStateUsing(fn ($record): float => round(
+                    ->getStateUsing(fn($record): float => round(
                         ((string) $record->repayment_type === 'Withdraw' ? -(float) $record->amount_paid : (float) $record->amount_paid)
                         + (float) $record->penalty_paid
                         + (float) $record->fee_paid,
                         2
                     ))
-                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                    ->formatStateUsing(fn($state, $record) => CurrencyHelper::display(
                         (float) $state,
                         $record->loan?->currency ?? CurrencyHelper::USD,
                     ))
                     ->alignEnd()
                     ->sortable(),
                 TextColumn::make('principal_paid')
-                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                    ->formatStateUsing(fn($state, $record) => CurrencyHelper::display(
                         (float) $state,
                         $record->loan?->currency ?? CurrencyHelper::USD,
                     ))
                     ->alignEnd()
                     ->sortable(),
                 TextColumn::make('interest_paid')
-                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                    ->formatStateUsing(fn($state, $record) => CurrencyHelper::display(
                         (float) $state,
                         $record->loan?->currency ?? CurrencyHelper::USD,
                     ))
@@ -66,7 +66,7 @@ class RepaymentTransactionsTable
                     ->sortable(),
                 TextColumn::make('penalty_paid')
                     ->label('Penalty')
-                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                    ->formatStateUsing(fn($state, $record) => CurrencyHelper::display(
                         (float) $state,
                         $record->loan?->currency ?? CurrencyHelper::USD,
                     ))
@@ -74,7 +74,7 @@ class RepaymentTransactionsTable
                     ->sortable(),
                 TextColumn::make('waived_amount')
                     ->label('Waived')
-                    ->formatStateUsing(fn ($state, $record) => CurrencyHelper::display(
+                    ->formatStateUsing(fn($state, $record) => CurrencyHelper::display(
                         (float) $state,
                         $record->loan?->currency ?? CurrencyHelper::USD,
                     ))
@@ -83,7 +83,7 @@ class RepaymentTransactionsTable
                     ->toggleable(isToggledHiddenByDefault: false),
                 TextColumn::make('repayment_type')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn(string $state): string => match ($state) {
                         'Normal' => 'gray',
                         'Partial' => 'warning',
                         'Prepayment' => 'info',

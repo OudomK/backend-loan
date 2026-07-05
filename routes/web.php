@@ -12,6 +12,11 @@ Route::get('/login', function () {
 
 // Helper route to logout via GET when stuck in 403 page
 Route::get('/logout', function () {
+    /** @var \App\Models\User|null $user */
+    $user = \Illuminate\Support\Facades\Auth::guard('web')->user();
+    if ($user) {
+        $user->forceFill(['current_session_id' => null])->saveQuietly();
+    }
     \Illuminate\Support\Facades\Auth::guard('web')->logout();
     request()->session()->invalidate();
     request()->session()->regenerateToken();
@@ -46,6 +51,9 @@ Route::get('/admin/sso/{token}', function ($token) {
         \Illuminate\Support\Facades\Auth::guard('web')->logout();
         \Illuminate\Support\Facades\Auth::guard('web')->login($user);
         request()->session()->regenerate();
+
+        // Enforce single-session: bind new session to this user
+        $user->forceFill(['current_session_id' => session()->getId()])->saveQuietly();
     }
     
     return redirect('/admin');

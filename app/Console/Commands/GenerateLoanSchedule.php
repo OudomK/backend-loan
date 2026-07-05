@@ -50,10 +50,10 @@ class GenerateLoanSchedule extends Command
 
         if ($loans->isEmpty()) {
             $this->info('No loans found that need schedules.');
-            return Command::SUCCESS;
+            return self::SUCCESS;
         }
 
-        /** @var \App\Models\Loan $loan */
+        /** @var Loan $loan */
         foreach ($loans as $loan) {
             $this->info("Generating schedule for Loan ID {$loan->id} ({$loan->loan_code})");
 
@@ -65,10 +65,11 @@ class GenerateLoanSchedule extends Command
 
                 if ($loan->repayment_method === 'Balloon') {
                     $loanData = [
-                        'amount' => $loan->amount,
-                        'interest_rate' => $loan->interest_rate,
-                        'duration_months' => $loan->duration_months,
-                        'start_date' => $loan->start_date,
+                        'amount' => (float) $loan->amount,
+                        'interest_rate' => (float) $loan->interest_rate,
+                        'duration_months' => (int) $loan->duration_months,
+                        'start_date' => (string) $loan->start_date,
+                        'currency' => (string) ($loan->currency ?? 'USD'),
                     ];
 
                     $schedule = BalloonPaymentCalculator::generateSchedule(
@@ -149,7 +150,7 @@ class GenerateLoanSchedule extends Command
         }
 
         $this->info('Done generating schedules.');
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 
     /**

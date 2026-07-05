@@ -23,7 +23,7 @@
 
             .page {
                 box-shadow: none;
-                margin: 0;
+                margin: 0 auto;
             }
 
             .hide-on-print {
@@ -38,7 +38,7 @@
     <div class="absolute top-4 left-4 hide-on-print">
         <a href="javascript:history.back()"
             class="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg shadow hover:bg-gray-50 flex items-center gap-2"
-            style="display: flex; align-items: center; gap: 8px; font-family: 'Battambang', 'Khmer OS Battambang', sans-serif;">
+            style="display: flex; align-items: center; gap: 8px; font-family: 'Krasar', 'Battambang', 'Khmer OS Battambang', sans-serif;">
             <svg xmlns="http://www.w3.org/2000/svg" style="height: 16px; width: 16px;" fill="none" viewBox="0 0 24 24"
                 stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -60,14 +60,14 @@
     </div>
 
     <div class="page bg-white shadow-lg print:shadow-none"
-        style="width: 794px; max-width: 190mm; margin: 0 auto; padding: 10mm 10mm 15mm;">
+        style="width: 794px; margin: 0 auto; padding: 5mm 15mm 15mm; box-sizing: border-box;">
 
         <!-- PRINTABLE A4 CONTENT -->
         <div class="w-full text-black"
-            style="font-family: 'Battambang', 'Khmer OS Battambang', sans-serif; font-size: 11px;">
+            style="font-family: 'Krasar', 'Battambang', 'Khmer OS Battambang', sans-serif; font-size: 11px;">
 
             <!-- Header -->
-            <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center justify-between mb-2">
                 <div style="width: 120px;">
                     <img src="{{ asset('images/logo.jpg') }}" alt="LOGO"
                         style="width: 65px; height: auto; object-fit: contain;"
@@ -83,7 +83,7 @@
                 <div style="width: 120px;"></div>
             </div>
 
-            <div style="border-bottom: 2px solid #000; margin-top: 8px; margin-bottom: 12px;"></div>
+            <div style="border-bottom: 2px solid #000; margin-top: 4px; margin-bottom: 8px;"></div>
 
             <!-- Customer Info Grid -->
             @if($customer_info)
@@ -91,11 +91,11 @@
                     $khmerNums = ['0' => '០', '1' => '១', '2' => '២', '3' => '៣', '4' => '៤', '5' => '៥', '6' => '៦', '7' => '៧', '8' => '៨', '9' => '៩'];
                     $khmerMonths = ['Jan' => 'មករា', 'Feb' => 'កុម្ភៈ', 'Mar' => 'មិនា', 'Apr' => 'មេសា', 'May' => 'ឧសភា', 'Jun' => 'មិថុនា', 'Jul' => 'កក្កដា', 'Aug' => 'សីហា', 'Sep' => 'កញ្ញា', 'Oct' => 'តុលា', 'Nov' => 'វិច្ឆិកា', 'Dec' => 'ធ្នូ'];
                 @endphp
-                <table class="w-full mb-[16px] border-collapse" style="width: 100%; table-layout: fixed;">
+                <table class="w-full mb-[8px] border-collapse" style="width: 100%; table-layout: fixed;">
                     <tbody>
                         <tr>
                             <!-- Row 1 -->
-                            <td class="align-middle border-none" style="padding-bottom: 6px; width: 36%;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px; width: 36%;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 110px; display: inline-block;">លេខកិច្ចសន្យា៖</span>
@@ -103,7 +103,7 @@
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ $customer_info['customer_id'] ?: 'QF-001' }}</span>
                                 </div>
                             </td>
-                            <td class="align-middle border-none" style="padding-bottom: 6px; width: 36%;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px; width: 36%;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 110px; display: inline-block;">កាលបរិច្ឆេទខ្ចី៖</span>
@@ -120,7 +120,7 @@
                                     </span>
                                 </div>
                             </td>
-                            <td class="align-middle border-none" style="padding-bottom: 6px; width: 28%;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px; width: 28%;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 80px; display: inline-block;">រយៈពេល៖</span>
@@ -132,7 +132,7 @@
                         </tr>
                         <tr>
                             <!-- Row 2 -->
-                            <td class="align-middle border-none" style="padding-bottom: 6px;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 110px; display: inline-block;">ឈ្មោះអតិថិជន៖</span>
@@ -140,7 +140,7 @@
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ $customer_info['customer_name'] ?: '-' }}</span>
                                 </div>
                             </td>
-                            <td class="align-middle border-none" style="padding-bottom: 6px;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 110px; display: inline-block;">ចំនួនទឹកប្រាក់៖</span>
@@ -148,19 +148,19 @@
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ str_replace('.00', '', number_format((float) $customer_info['amount'], 2)) }}</span>
                                 </div>
                             </td>
-                            <td class="align-middle border-none" style="padding-bottom: 6px;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 80px; display: inline-block;">រូបិយប័ណ្ណ៖</span>
                                     <span class="text-[11px] font-bold whitespace-nowrap leading-tight">
-                                        {{ $customer_info['currency'] === 'KHR' ? 'ប្រាក់រៀល' : ($customer_info['currency'] === 'THB' ? 'ប្រាក់បាត' : ($customer_info['currency'] === 'USD' ? 'ប្រាក់ដុល្លារ' : $customer_info['currency'])) }}
+                                        {{ $customer_info['currency'] === 'KHR' ? 'ប្រាក់រៀល' : ($customer_info['currency'] === 'USD' ? 'ប្រាក់ដុល្លារ' : $customer_info['currency']) }}
                                     </span>
                                 </div>
                             </td>
                         </tr>
                         <tr>
                             <!-- Row 3 -->
-                            <td class="align-middle border-none" style="padding-bottom: 6px;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 110px; display: inline-block;">ភេទ៖</span>
@@ -168,7 +168,7 @@
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ $customer_info['gender'] === 'Male' ? 'ប្រុស' : ($customer_info['gender'] === 'Female' ? 'ស្រី' : '-') }}</span>
                                 </div>
                             </td>
-                            <td class="align-middle border-none" style="padding-bottom: 6px;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 110px; display: inline-block;">លេខអត្តសញ្ញាណ៖</span>
@@ -176,7 +176,7 @@
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ strtr($customer_info['id_number'] ?: '-', $khmerNums) }}</span>
                                 </div>
                             </td>
-                            <td class="align-middle border-none" style="padding-bottom: 6px;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 80px; display: inline-block;">វគ្គទី៖</span>
@@ -187,7 +187,7 @@
                         </tr>
                         <tr>
                             <!-- Row 4 -->
-                            <td colspan="2" class="align-top border-none" style="padding-bottom: 6px;">
+                            <td class="align-top border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-start">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 110px; display: inline-block; flex-shrink: 0;">អាសយដ្ឋាន៖</span>
@@ -195,7 +195,27 @@
                                         class="text-[11px] font-bold leading-tight flex-1">{{ $customer_info['address'] ?: '-' }}</span>
                                 </div>
                             </td>
-                            <td class="align-middle border-none" style="padding-bottom: 6px;">
+                            <td class="align-middle border-none" style="padding-bottom: 10px;">
+                                <div class="flex items-baseline">
+                                    <span class="text-[11px] leading-tight"
+                                        style="width: 110px; display: inline-block;">សងលើកដំបូង៖</span>
+                                    <span class="text-[11px] font-bold whitespace-nowrap leading-tight">
+                                        @php
+                                            if (!empty($customer_info['first_repayment_date'])) {
+                                                try {
+                                                    $dDate2 = \Carbon\Carbon::parse(str_replace('/', '-', $customer_info['first_repayment_date']));
+                                                    echo strtr($dDate2->format('d'), $khmerNums) . '-' . ($khmerMonths[$dDate2->format('M')] ?? $dDate2->format('M')) . '-' . strtr($dDate2->format('Y'), $khmerNums);
+                                                } catch (\Exception $e) {
+                                                    echo $customer_info['first_repayment_date'];
+                                                }
+                                            } else {
+                                                echo '-';
+                                            }
+                                        @endphp
+                                    </span>
+                                </div>
+                            </td>
+                            <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
                                         style="width: 80px; display: inline-block;">លេខទូរស័ព្ទ៖</span>
@@ -250,10 +270,6 @@
                     $currSymbol = '៛';
                     $isNoDecimal = true;
                     $symbolInFront = false;
-                } elseif ($currencyCode === 'THB') {
-                    $currSymbol = '฿';
-                    $isNoDecimal = true;
-                    $symbolInFront = false; // Put Baht at the back like KHR
                 } else {
                     $currSymbol = '$';
                     $isNoDecimal = false;
@@ -269,38 +285,38 @@
             @endphp
 
             @if($isSplitMethod)
-                <table class="w-full border-collapse mt-[10px] table-fixed" style="width: 100%; table-layout: fixed;">
+                <table class="w-full border-collapse mt-[4px] table-fixed" style="width: 100%; table-layout: fixed;">
                     <thead class="bg-[#d7ffff] text-black"
                         style="-webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: #d7ffff;">
                         <tr>
                             <th rowspan="2" scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 6%; height: 56px; border: 1.4px solid #111; text-align: center;">ល.រ</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 6%; height: 56px; border: 1px solid #111; text-align: center;">ល.រ</th>
                             <th rowspan="2" scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 22%; border: 1.4px solid #111; text-align: center;">ថ្ងៃសងប្រាក់</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 22%; border: 1px solid #111; text-align: center;">ថ្ងៃសងប្រាក់</th>
                             <th rowspan="2" scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 17.5%; border: 1.4px solid #111; text-align: center;">ប្រាក់ដើម</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 17.5%; border: 1px solid #111; text-align: center;">ប្រាក់ដើម</th>
                             <th colspan="2" scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 24.5%; border: 1.4px solid #111; text-align: center;">សរុបទឹកប្រាក់បង់</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 24.5%; border: 1px solid #111; text-align: center;">សរុបទឹកប្រាក់បង់</th>
                             <th rowspan="2" scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 17.5%; border: 1.4px solid #111; text-align: center;">សមតុល្យប្រាក់ដើម</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 17.5%; border: 1px solid #111; text-align: center;">សមតុល្យប្រាក់ដើម</th>
                             <th rowspan="2" scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 12.5%; border: 1.4px solid #111; text-align: center;">ផ្សេងៗ</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 12.5%; border: 1px solid #111; text-align: center;">ផ្សេងៗ</th>
                         </tr>
                         <tr>
                             <th scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 12.25%; border: 1.4px solid #111; text-align: center;">បង់ថ្ងៃទី <span
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 12.25%; border: 1px solid #111; text-align: center;">បង់ថ្ងៃទី <span
                                     class="text-red-600"
                                     style="color: red; text-decoration: underline;">{{ $day1Kh }}</span></th>
                             <th scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 12.25%; border: 1.4px solid #111; text-align: center;">បង់ថ្ងៃទី <span
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 12.25%; border: 1px solid #111; text-align: center;">បង់ថ្ងៃទី <span
                                     class="text-red-600"
                                     style="color: red; text-decoration: underline;">{{ $day2Kh }}</span></th>
                         </tr>
@@ -334,35 +350,35 @@
                                     $balance = $payment2 ? $payment2['balance'] : ($payment1 ? $payment1['balance'] : 0);
                                 @endphp
                                 <tr>
-                                    <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                        style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                    <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                        style="border: 1px solid #111; text-align: center; height: 24px;">
                                         {{ $index + 1 }}
                                     </td>
-                                    <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                        style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                    <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                        style="border: 1px solid #111; text-align: center; height: 24px;">
                                         <div style="display: flex; justify-content: center; gap: 8px;">
                                             <span style="width: 65px; text-align: right;">{{ $formattedDate }}</span>
                                             <span style="width: 45px; text-align: left;">{{ $dayOfWeekKh }}</span>
                                         </div>
                                     </td>
-                                    <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                        style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                    <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                        style="border: 1px solid #111; text-align: center; height: 24px;">
                                         {{ $formatMoney($monthPrincipal) }}
                                     </td>
-                                    <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                        style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                    <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                        style="border: 1px solid #111; text-align: center; height: 24px;">
                                         {{ $formatMoney($payment1 ? $payment1['payment'] : 0) }}
                                     </td>
-                                    <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                        style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                    <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                        style="border: 1px solid #111; text-align: center; height: 24px;">
                                         {{ $formatMoney($payment2 ? $payment2['payment'] : 0) }}
                                     </td>
-                                    <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                        style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                    <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                        style="border: 1px solid #111; text-align: center; height: 24px;">
                                         {{ $formatMoney($balance) }}
                                     </td>
-                                    <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                        style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                    <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                        style="border: 1px solid #111; text-align: center; height: 24px;">
 
                                     </td>
                                 </tr>
@@ -375,8 +391,8 @@
                             <td class="border-none" style="border: none;"></td>
                             <td class="border-none text-right pr-[8px] text-[11px]"
                                 style="border: none; padding-right: 8px; text-align: right;">សរុប:</td>
-                            <td class="border-[1.4px] border-[#111] bg-white p-[5px_4px] text-center text-[10px]"
-                                style="border: 1.4px solid #111; background-color: white; text-align: center;">
+                            <td class="border border-[#111] bg-white p-[5px_4px] text-center text-[10px]"
+                                style="border: 1px solid #111; background-color: white; text-align: center;">
                                 {{ $formatMoney(collect($schedule)->sum('principal')) }}
                             </td>
                             <td class="border-none" style="border: none;"></td>
@@ -387,39 +403,39 @@
                     </tbody>
                 </table>
             @else
-                <table class="w-full border-collapse mt-[10px] table-fixed" style="width: 100%; table-layout: fixed;">
+                <table class="w-full border-collapse mt-[4px] table-fixed" style="width: 100%; table-layout: fixed;">
                     <thead class="bg-[#d7ffff] text-black h-[56px]"
                         style="-webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: #d7ffff;">
                         <tr>
                             <th scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 8%; height: 56px; border: 1.4px solid #111; text-align: center;">ល.រ</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 8%; height: 56px; border: 1px solid #111; text-align: center;">ល.រ</th>
                             <th scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 22%; border: 1.4px solid #111; text-align: center;">ថ្ងៃសងប្រាក់</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 22%; border: 1px solid #111; text-align: center;">ថ្ងៃសងប្រាក់</th>
                             <th scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 17.5%; border: 1.4px solid #111; text-align: center;">ប្រាក់ដើម</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 17.5%; border: 1px solid #111; text-align: center;">ប្រាក់ដើម</th>
                             <th scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 17.5%; border: 1.4px solid #111; text-align: center;">សរុបទឹកប្រាក់បង់</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 17.5%; border: 1px solid #111; text-align: center;">សរុបទឹកប្រាក់បង់</th>
                             <th scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 20%; border: 1.4px solid #111; text-align: center;">សមតុល្យប្រាក់ដើម</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 20%; border: 1px solid #111; text-align: center;">សមតុល្យប្រាក់ដើម</th>
                             <th scope="col"
-                                class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 15%; border: 1.4px solid #111; text-align: center;">ផ្សេងៗ</th>
+                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 15%; border: 1px solid #111; text-align: center;">ផ្សេងៗ</th>
                         </tr>
                     </thead>
                     <tbody>
                         @foreach($schedule as $item)
                             <tr>
-                                <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                    style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                    style="border: 1px solid #111; text-align: center; height: 24px;">
                                     {{ $item['installment_no'] ?? $loop->iteration }}
                                 </td>
-                                <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                    style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                    style="border: 1px solid #111; text-align: center; height: 24px;">
                                     <div style="display: flex; justify-content: center; gap: 8px;">
                                         @php
                                             $dayOfWeekKh = '';
@@ -441,20 +457,20 @@
                                         <span style="width: 45px; text-align: left;">{{ $dayOfWeekKh }}</span>
                                     </div>
                                 </td>
-                                <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                    style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                    style="border: 1px solid #111; text-align: center; height: 24px;">
                                     {{ $formatMoney($item['principal']) }}
                                 </td>
-                                <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                    style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                    style="border: 1px solid #111; text-align: center; height: 24px;">
                                     {{ $formatMoney($item['payment']) }}
                                 </td>
-                                <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                    style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                    style="border: 1px solid #111; text-align: center; height: 24px;">
                                     {{ $formatMoney($item['balance']) }}
                                 </td>
-                                <td class="border-[1.4px] border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
-                                    style="border: 1.4px solid #111; text-align: center; height: 24px;">
+                                <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
+                                    style="border: 1px solid #111; text-align: center; height: 24px;">
 
                                 </td>
                             </tr>
@@ -465,8 +481,8 @@
                             <td class="border-none" style="border: none;"></td>
                             <td class="border-none text-right pr-[8px] text-[11px]"
                                 style="border: none; padding-right: 8px; text-align: right;">សរុប:</td>
-                            <td class="border-[1.4px] border-[#111] bg-white p-[5px_4px] text-center text-[11px]"
-                                style="border: 1.4px solid #111; background-color: white; text-align: center;">
+                            <td class="border border-[#111] bg-white p-[5px_4px] text-center text-[11px]"
+                                style="border: 1px solid #111; background-color: white; text-align: center;">
                                 {{ $formatMoney(collect($schedule)->sum('principal')) }}
                             </td>
                             <td class="border-none" style="border: none;"></td>
@@ -502,38 +518,38 @@
                     <div style="border-bottom: 1px solid #000;"></div>
                 </div>
             </div>
+
+            <!-- Terms and Conditions Text -->
+            <div style="margin-top: 28px; font-family: 'Krasar', 'Battambang', 'Khmer OS Battambang', sans-serif;">
+                <p style="font-size: 11px; line-height: 2; text-align: justify; margin: 0; text-indent: 40px;">បន្ទាប់ពីបានអាន និងស្តាប់នូវរាល់ខ្លឹមសារនៃកិច្ចសន្យាខ្ចីប្រាក់ថ្ងៃទី@php
+                    $loanDate = $customer_info['loan_date'] ?? null;
+                    if ($loanDate) {
+                        try {
+                            $parsedDate = \Carbon\Carbon::parse(str_replace('/', '-', $loanDate));
+                            $day = strtr($parsedDate->format('d'), $khmerNums);
+                            $month = $khmerMonths[$parsedDate->format('M')] ?? strtr($parsedDate->format('m'), $khmerNums);
+                            $year = strtr($parsedDate->format('Y'), $khmerNums);
+                            echo "<span style='font-weight:bold;'>$day</span> ខែ<span style='font-weight:bold;'>$month</span> ឆ្នាំ<span style='font-weight:bold;'>$year</span>";
+                        } catch (\Exception $e) {
+                            echo "......... ខែ ............ ឆ្នាំ ..............";
+                        }
+                    } else {
+                        echo "......... ខែ ............ ឆ្នាំ ..............";
+                    }
+                @endphp
+                ខ្ញុំបាទ/នាងខ្ញុំឯកភាពសងប្រាក់ទៅតាមចំនួនដែលបានកំណត់តាមតារាងកាលវិភាគសងប្រាក់នេះរហូតគ្រប់ចំនួន ដែលការសងនេះអាចធ្វើឡើងនៅតាមរយៈភ្នាក់ងារឥណទានដោយមានវិក័យបត្រទទួលប្រាក់ ឬលោកអ្នកអាចទូទាត់ការបង់ប្រាក់តាម KHQR ឬភ្នាក់ងារវីង ហើយរាល់ការចំណាយប្រតិបត្តិការជាបន្ទុករបស់អតិថិជន។ ករណីអតិថិជនបានបង់យឺត ឬស្នើសុំបង់លើផែនការ គឺតម្រូវឲ្យទំនាក់ទំនង និងពិភាក្សាជាមួយភ្នាក់ងារឥណទានជាមុនសិន។</p>
+
+                <p style="font-size: 11px; line-height: 2; text-align: justify; margin: 8px 0 0 0;"><span style="font-weight: bold;">ចំណាំ៖</span> ក្នុងករណីមានប្រធានស័ក្កណាមួយកើតឡើង អតិថិជនអាចទំនាក់ទំនង និងពិភាក្សាជាមួយភ្នាក់ងារឥណទាន ដើម្បីស្វែងរកដំណោះស្រាយសមរម្យណាមួយ។</p>
+            </div>
         </div>
         <!-- END PRINTABLE A4 CONTENT -->
 
     </div>
 
 </body>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
     function generatePDF() {
-        const element = document.querySelector('.page');
-        
-        // Hide the action buttons temporarily
-        const hideElements = document.querySelectorAll('.hide-on-print');
-        hideElements.forEach(el => el.style.display = 'none');
-
-        // Apply a white background explicitly to the element for PDF capture
-        const originalBg = element.style.backgroundColor;
-        element.style.backgroundColor = 'white';
-
-        const opt = {
-            margin:       [0, 0, 0, 0],
-            filename:     'Schedule_Repay.pdf',
-            image:        { type: 'jpeg', quality: 1 },
-            html2canvas:  { scale: 2, useCORS: true, logging: false },
-            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        html2pdf().set(opt).from(element).save().then(() => {
-            // Restore visibility
-            hideElements.forEach(el => el.style.display = '');
-            element.style.backgroundColor = originalBg;
-        });
+        window.print();
     }
 </script>
 </html>

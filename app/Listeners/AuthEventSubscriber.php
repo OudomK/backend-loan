@@ -2,8 +2,10 @@
 
 namespace App\Listeners;
 
+use App\Models\User;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Logout;
+use Illuminate\Events\Dispatcher;
 use Spatie\Activitylog\Models\Activity;
 use Illuminate\Support\Facades\Log;
 
@@ -19,7 +21,7 @@ class AuthEventSubscriber
         }
         static::$processedEvents[$eventId] = true;
 
-        /** @var \Illuminate\Database\Eloquent\Model $user */
+        /** @var User $user */
         $user = $event->user;
 
         activity('auth')
@@ -42,8 +44,14 @@ class AuthEventSubscriber
             }
             static::$processedEvents[$eventId] = true;
 
-            /** @var \Illuminate\Database\Eloquent\Model $user */
+            /** @var User $user */
             $user = $event->user;
+
+            // Only clear session binding if this is the active session logging out
+            // (not when SingleSession middleware kicks out an old/stale session)
+            if ($user->current_session_id === session()->getId()) {
+                $user->forceFill(['current_session_id' => null])->saveQuietly();
+            }
 
             activity('auth')
                 ->performedOn($user)
@@ -57,7 +65,7 @@ class AuthEventSubscriber
         }
     }
 
-    public function subscribe($events): void
+    public function subscribe(Dispatcher $events): void
     {
         $events->listen(
             Login::class,

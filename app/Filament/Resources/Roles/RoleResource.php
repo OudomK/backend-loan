@@ -111,6 +111,7 @@ class RoleResource extends Resource
             'edit' => 'Edit',
             'delete' => 'Delete',
             'export' => 'Export',
+            'import' => 'Import',
         ];
     }
 
@@ -196,6 +197,7 @@ class RoleResource extends Resource
             \App\Filament\Resources\Translations\TranslationResource::class => 'translations',
             \App\Filament\Resources\ActivityLogs\ActivityLogResource::class => 'activity_logs',
             \App\Filament\Resources\PaymentQrs\PaymentQrResource::class => 'payment_qrs',
+            \App\Filament\Resources\PaymentMethods\PaymentMethodResource::class => 'payment_methods',
 
             \App\Filament\Resources\ExpenseCategories\ExpenseCategoryResource::class => 'expense_categories',
             \App\Filament\Resources\RevenueCategories\RevenueCategoryResource::class => 'revenue_categories',

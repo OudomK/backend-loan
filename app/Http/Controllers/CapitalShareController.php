@@ -597,7 +597,7 @@ class CapitalShareController extends Controller
         $transactions = CapitalShareTransaction::where('capital_share_id', $id)
             ->orderBy('transaction_date', 'desc')
             ->get()
-            ->map(function ($t) {
+            ->map(function (CapitalShareTransaction $t) {
                 $arr = $t->toArray();
                 $arr['share_qty_formatted'] = (float) $t->share_qty > 0 ? (float) $t->share_qty . '%' : '-';
                 return $arr;
@@ -817,6 +817,7 @@ class CapitalShareController extends Controller
                     'interest_rate' => $validated['interest_rate'],
                     'duration_months' => $validated['term_months'],
                     'start_date' => $validated['borrowing_date'],
+                    'currency' => $validated['currency'] ?? 'USD',
                 ];
                 $scheduleRaw = BalloonPaymentCalculator::generateSchedule($loanData, 'interest_only');
 

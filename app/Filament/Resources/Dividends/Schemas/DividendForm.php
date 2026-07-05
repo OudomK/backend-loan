@@ -24,7 +24,6 @@ class DividendForm
                             ->options([
                                 'USD' => 'USD',
                                 'KHR' => 'KHR',
-                                'THB' => 'THB',
                             ])
                             ->required()
                             ->reactive()

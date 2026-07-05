@@ -113,7 +113,8 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ]);
+                \App\Http\Middleware\SingleSession::class,
+            ], isPersistent: true);
     }
 
     private function renderAdminFontStyle(): string

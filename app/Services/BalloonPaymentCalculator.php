@@ -8,6 +8,22 @@ use Illuminate\Support\Facades\Log;
 
 class BalloonPaymentCalculator
 {
+    private static function applyRounding(float $amount, string $currency = 'USD'): float
+    {
+        if (strpos($currency, 'KHR') !== false) {
+            $amountInt = (int) round($amount);
+            $remainder = $amountInt % 1000;
+
+            if ($remainder > 0 && $remainder < 500) {
+                return floor($amountInt / 1000) * 1000 + 500;
+            } elseif ($remainder >= 500) {
+                return ceil($amountInt / 1000) * 1000;
+            }
+
+            return (float) $amountInt;
+        }
+        return ceil($amount);
+    }
     /**
      * Calculate Interest-Only Balloon Payment Schedule
      * Monthly payments = Interest only
@@ -26,22 +42,33 @@ class BalloonPaymentCalculator
         string $startDate,
         ?int $paymentDay = null,
         float $adminFee = 0,
-        string $adminFeeType = 'one_time'
+        string $adminFeeType = 'one_time',
+        string $currency = 'USD',
+        ?string $firstRepaymentDate = null
     ): array {
         $schedule = [];
         $monthlyInterestRate = $annualRate / 100; // Treat as Monthly Rate (standard for this app)
-        $monthlyInterest = round($principal * $monthlyInterestRate, 2);
+        $monthlyInterest = self::applyRounding($principal * $monthlyInterestRate, $currency);
 
         $startDateObj = Carbon::parse($startDate);
         $resolvedPaymentDay = max(1, min(31, $paymentDay ?? (int) $startDateObj->day));
 
         for ($month = 1; $month <= $durationMonths; $month++) {
-            $paymentDate = $startDateObj->copy()->addMonthsNoOverflow($month);
-            $paymentDate->day = min($resolvedPaymentDay, $paymentDate->daysInMonth);
+            if ($month === 1 && $firstRepaymentDate) {
+                $paymentDate = Carbon::parse($firstRepaymentDate);
+            } else {
+                $paymentDate = $startDateObj->copy()->addMonthsNoOverflow($month);
+                if ($firstRepaymentDate && $month > 1) {
+                    $dayToUse = Carbon::parse($firstRepaymentDate)->day;
+                    $paymentDate->day = min($dayToUse, $paymentDate->daysInMonth);
+                } else {
+                    $paymentDate->day = min($resolvedPaymentDay, $paymentDate->daysInMonth);
+                }
+            }
 
             if ($month === 1) {
                 $daysFromStart = $startDateObj->diffInDays($paymentDate) + 1;
-                $currentInterest = round($principal * ($monthlyInterestRate / 30) * $daysFromStart, 2);
+                $currentInterest = self::applyRounding($principal * ($monthlyInterestRate / 30) * $daysFromStart, $currency);
             } else {
                 $currentInterest = $monthlyInterest;
             }
@@ -52,7 +79,7 @@ class BalloonPaymentCalculator
             $feeAmount = 0;
             if ($adminFee > 0) {
                 if ($adminFeeType === 'monthly') {
-                    $feeAmount = round($totalFeeAmount / $durationMonths, 2);
+                    $feeAmount = self::applyRounding($totalFeeAmount / $durationMonths, $currency);
                 }
             }
 
@@ -92,15 +119,17 @@ class BalloonPaymentCalculator
         ?float $monthlyPayment = null,
         ?int $paymentDay = null,
         float $adminFee = 0,
-        string $adminFeeType = 'one_time'
+        string $adminFeeType = 'one_time',
+        string $currency = 'USD',
+        ?string $firstRepaymentDate = null
     ): array {
         $schedule = [];
         $monthlyInterestRate = $annualRate / 100; // Treat as Monthly Rate
-        $monthlyInterest = round($principal * $monthlyInterestRate, 2);
+        $monthlyInterest = self::applyRounding($principal * $monthlyInterestRate, $currency);
 
         // Default monthly payment = 110% of interest (covers interest + small principal)
         if ($monthlyPayment === null) {
-            $monthlyPayment = round($monthlyInterest * 1.1, 2);
+            $monthlyPayment = self::applyRounding($monthlyInterest * 1.1, $currency);
         }
 
         $remainingPrincipal = $principal;
@@ -108,15 +137,24 @@ class BalloonPaymentCalculator
         $resolvedPaymentDay = max(1, min(31, $paymentDay ?? (int) $startDateObj->day));
 
         for ($month = 1; $month <= $durationMonths; $month++) {
-            $paymentDate = $startDateObj->copy()->addMonthsNoOverflow($month);
-            $paymentDate->day = min($resolvedPaymentDay, $paymentDate->daysInMonth);
+            if ($month === 1 && $firstRepaymentDate) {
+                $paymentDate = Carbon::parse($firstRepaymentDate);
+            } else {
+                $paymentDate = $startDateObj->copy()->addMonthsNoOverflow($month);
+                if ($firstRepaymentDate && $month > 1) {
+                    $dayToUse = Carbon::parse($firstRepaymentDate)->day;
+                    $paymentDate->day = min($dayToUse, $paymentDate->daysInMonth);
+                } else {
+                    $paymentDate->day = min($resolvedPaymentDay, $paymentDate->daysInMonth);
+                }
+            }
 
             // Recalculate interest on remaining principal (pro-rated for first month)
             if ($month === 1) {
                 $daysFromStart = $startDateObj->diffInDays($paymentDate) + 1;
-                $interest = round($remainingPrincipal * ($monthlyInterestRate / 30) * $daysFromStart, 2);
+                $interest = self::applyRounding($remainingPrincipal * ($monthlyInterestRate / 30) * $daysFromStart, $currency);
             } else {
-                $interest = round($remainingPrincipal * $monthlyInterestRate, 2);
+                $interest = self::applyRounding($remainingPrincipal * $monthlyInterestRate, $currency);
             }
 
             $isFinalPayment = ($month === $durationMonths);
@@ -136,20 +174,20 @@ class BalloonPaymentCalculator
             $feeAmount = 0;
             if ($adminFee > 0) {
                 if ($adminFeeType === 'monthly') {
-                    $feeAmount = round($totalFeeAmount / $durationMonths, 2);
+                    $feeAmount = self::applyRounding($totalFeeAmount / $durationMonths, $currency);
                 }
             }
 
             $schedule[] = [
                 'payment_number' => $month,
                 'payment_date' => $paymentDate->format('Y-m-d'),
-                'principal_amount' => round($principalPortion, 2),
+                'principal_amount' => self::applyRounding($principalPortion, $currency),
                 'interest_amount' => $interest,
                 'fee_amount' => $feeAmount,
                 'penalty_amount' => 0,
-                'total_paid' => round($totalPayment + $feeAmount, 2),
+                'total_paid' => self::applyRounding($totalPayment + $feeAmount, $currency),
                 'is_balloon' => $isFinalPayment,
-                'remaining_balance' => $isFinalPayment ? 0 : round($remainingPrincipal, 2),
+                'remaining_balance' => $isFinalPayment ? 0 : self::applyRounding($remainingPrincipal, $currency),
             ];
         }
 
@@ -171,12 +209,14 @@ class BalloonPaymentCalculator
         ?float $customMonthlyPayment = null,
         ?int $paymentDay = null,
         float $adminFee = 0,
-        string $adminFeeType = 'one_time'
+        string $adminFeeType = 'one_time',
+        ?string $firstRepaymentDate = null
     ): array {
         $principal = $loanData['amount'];
         $annualRate = $loanData['interest_rate'];
         $durationMonths = $loanData['duration_months'];
         $startDate = $loanData['start_date'];
+        $currency = $loanData['currency'] ?? 'USD';
 
         if ($balloonType === 'minimal_payment') {
             return self::calculateMinimalPaymentSchedule(
@@ -187,7 +227,9 @@ class BalloonPaymentCalculator
                 $customMonthlyPayment,
                 $paymentDay,
                 $adminFee,
-                $adminFeeType
+                $adminFeeType,
+                $currency,
+                $firstRepaymentDate
             );
         }
 
@@ -199,7 +241,9 @@ class BalloonPaymentCalculator
             $startDate,
             $paymentDay,
             $adminFee,
-            $adminFeeType
+            $adminFeeType,
+            $currency,
+            $firstRepaymentDate
         );
     }
 

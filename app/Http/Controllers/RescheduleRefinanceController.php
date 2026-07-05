@@ -38,7 +38,9 @@ class RescheduleRefinanceController extends Controller
                             ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', $like);
                     });
             })
-            ->limit(10)
+            ->whereHas('payments', function ($query) {
+                $query->whereRaw("total_paid < (principal_amount + interest_amount + CASE WHEN COALESCE(loans.admin_fee_type, 'one_time') = 'monthly' THEN COALESCE(fee_amount, 0) ELSE 0 END - 0.01)");
+            })
             ->get();
 
         return response()->json($loans->map(function (Loan $loan) {

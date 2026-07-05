@@ -21,8 +21,7 @@
 
         <!-- Header -->
         <div class="text-center pt-2 sm:pt-0">
-            <h1
-                class="text-xl font-bold text-slate-900 tracking-tight sm:text-2xl bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400"
+            <h1 class="text-xl font-bold text-slate-900 tracking-tight sm:text-2xl bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-400 dark:to-indigo-400"
                 style="font-family: 'Krasar', 'Kantumruy Pro', sans-serif;">
                 តារាងគណនាប្រាក់កម្ចី
             </h1>
@@ -62,7 +61,8 @@
                         </div>
                         <div>
                             <label for="customer_id"
-                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">លេខសម្គាល់អតិថិជន (QF)</label>
+                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">លេខសម្គាល់អតិថិជន
+                                (QF)</label>
                             <div class="flex rounded-lg shadow-sm">
                                 <span
                                     class="inline-flex items-center px-3 rounded-l-lg border border-r-0 border-slate-300 bg-slate-100 text-slate-600 sm:text-sm dark:bg-slate-800 dark:border-slate-600 dark:text-slate-400 font-semibold">
@@ -128,7 +128,8 @@
                         <!-- Row 3 -->
                         <div>
                             <label for="qr_type"
-                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ប្រភេទ QR</label>
+                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ប្រភេទ
+                                QR</label>
                             <select wire:model.defer="qr_type" id="qr_type"
                                 class="block w-full py-2.5 px-3 text-base border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-white dark:bg-slate-900 dark:text-white">
                                 <option value="">ជ្រើសរើសប្រភេទ QR</option>
@@ -164,7 +165,8 @@
                         </div>
                         <div>
                             <label for="interest_rate"
-                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">អត្រាការប្រាក់ (%)</label>
+                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">អត្រាការប្រាក់
+                                (%)</label>
                             <input type="number" wire:model.defer="interest_rate" id="interest_rate"
                                 class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3"
                                 step="0.01" required>
@@ -216,6 +218,12 @@
                                     <option value="negotiable">អាចចរចាបាន</option>
                                 </optgroup>
                             </select>
+                        </div>
+                        <div>
+                            <label for="first_repayment_date"
+                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">កាលបរិច្ឆេទសងលើកដំបូង</label>
+                            <input type="date" wire:model.defer="first_repayment_date" id="first_repayment_date"
+                                class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3">
                         </div>
                     </div>
 

@@ -7,7 +7,7 @@ use DateInterval;
 
 class LoanCalculator
 {
-    public function calculateLoanWithDates(float $principal, float $rate, int $duration, string $option, string $startDate, string $currency, float $adminFee = 0, string $adminFeeType = 'one_time', ?int $payDay1 = null, ?int $payDay2 = null)
+    public function calculateLoanWithDates(float $principal, float $rate, int $duration, string $option, string $startDate, string $currency, float $adminFee = 0, string $adminFeeType = 'one_time', ?int $payDay1 = null, ?int $payDay2 = null, ?string $firstRepaymentDate = null)
     {
         $results = [];
         $startDateObj = new DateTime($startDate);
@@ -51,7 +51,7 @@ class LoanCalculator
             return $applyRounding($totalFeeAmount / $totalPayments, $currency);
         };
 
-        $buildFixedIntervalSchedule = function (int $intervalDays, ?int $totalPaymentsOverride = null) use ($principal, $rate, $duration, $startDateObj, $applyRounding, $calculatePeriodFee, $currency) {
+        $buildFixedIntervalSchedule = function (int $intervalDays, ?int $totalPaymentsOverride = null) use ($principal, $rate, $duration, $startDateObj, $applyRounding, $calculatePeriodFee, $currency, $firstRepaymentDate) {
             if ($principal <= 0 || $duration <= 0 || $intervalDays <= 0) {
                 return [];
             }
@@ -65,8 +65,15 @@ class LoanCalculator
             $rows = [];
 
             for ($i = 1; $i <= $totalPayments; $i++) {
-                $currentPaymentDate = clone $startDateObj;
-                $currentPaymentDate->add(new DateInterval('P' . ($intervalDays * $i) . 'D'));
+                if ($firstRepaymentDate) {
+                    $currentPaymentDate = new DateTime($firstRepaymentDate);
+                    if ($i > 1) {
+                        $currentPaymentDate->add(new DateInterval('P' . ($intervalDays * ($i - 1)) . 'D'));
+                    }
+                } else {
+                    $currentPaymentDate = clone $startDateObj;
+                    $currentPaymentDate->add(new DateInterval('P' . ($intervalDays * $i) . 'D'));
+                }
 
                 if ($i === $totalPayments) {
                     $principalPay = $remainingBalanceLocal;
@@ -171,18 +178,30 @@ class LoanCalculator
 
         $monthlyRepaymentDay = max(1, min(31, $payDay1 ?? 11));
 
-        $initializeMonthlyPaymentDate = function (DateTime $loanStartDate) use ($monthlyRepaymentDay): DateTime {
+        $initializeMonthlyPaymentDate = function (DateTime $loanStartDate) use ($monthlyRepaymentDay, $firstRepaymentDate): DateTime {
+            if ($firstRepaymentDate) {
+                return new DateTime($firstRepaymentDate);
+            }
             $paymentDate = clone $loanStartDate;
             $paymentDate->modify('first day of next month');
             $year = (int) $paymentDate->format('Y');
             $month = (int) $paymentDate->format('m');
             $lastDayOfMonth = (int) $paymentDate->format('t');
             $paymentDate->setDate($year, $month, min($monthlyRepaymentDay, $lastDayOfMonth));
-            
+
             return $paymentDate;
         };
 
-        $advanceMonthlyPaymentDate = function (DateTime $paymentDate) use ($monthlyRepaymentDay): void {
+        $advanceMonthlyPaymentDate = function (DateTime $paymentDate) use ($monthlyRepaymentDay, $firstRepaymentDate): void {
+            if ($firstRepaymentDate) {
+                $dayToUse = (int) (new DateTime($firstRepaymentDate))->format('d');
+                $paymentDate->modify('first day of next month');
+                $year = (int) $paymentDate->format('Y');
+                $month = (int) $paymentDate->format('m');
+                $lastDayOfMonth = (int) $paymentDate->format('t');
+                $paymentDate->setDate($year, $month, min($dayToUse, $lastDayOfMonth));
+                return;
+            }
             $paymentDate->modify('first day of next month');
             $year = (int) $paymentDate->format('Y');
             $month = (int) $paymentDate->format('m');
@@ -221,7 +240,7 @@ class LoanCalculator
 
                 if ($i == 1) {
                     $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days + 1; // +1 for inclusive days
-                    
+
                     if ($daysFromStart < 15) {
                         // Shortage day: DO NOT pro-rate. Charge normal flat amount.
                         $firstPaymentInterest = $applyRounding($monthlyInterest * ($firstPayPercent / 100), $currency);
@@ -231,7 +250,7 @@ class LoanCalculator
                         $firstPaymentInterest = $applyRounding($monthlyInterest * ($daysFromStart / 30), $currency);
                         $principalPay = $applyRounding($monthlyPrincipal * ($daysFromStart / 30), $currency);
                     }
-                    
+
                     $principalPay = min($principalPay, $remainingBalance);
 
                     $feePay = $calculatePeriodFee($i, $totalPayments);
@@ -474,10 +493,14 @@ class LoanCalculator
             $applyAnnuityRounding = function ($amount, $currency) {
                 if (strpos($currency, 'KHR') !== false) {
                     $remainder = $amount % 1000;
-                    if ($remainder == 0) return $amount;
-                    elseif ($remainder < 250) return floor($amount / 1000) * 1000;
-                    elseif ($remainder < 750) return floor($amount / 1000) * 1000 + 500;
-                    else return ceil($amount / 1000) * 1000;
+                    if ($remainder == 0)
+                        return $amount;
+                    elseif ($remainder < 250)
+                        return floor($amount / 1000) * 1000;
+                    elseif ($remainder < 750)
+                        return floor($amount / 1000) * 1000 + 500;
+                    else
+                        return ceil($amount / 1000) * 1000;
                 }
                 return round($amount, 0);
             };
@@ -660,7 +683,7 @@ class LoanCalculator
 
             for ($i = 1; $i <= $duration; $i++) {
                 $currentPrincipal = $monthlyPrincipal;
-                
+
                 if ($i == 1) {
                     $daysFromStart = $currentPaymentDate->diff($loanStartDate)->days + 1; // Inclusive days
                     $rawInterest = $principal * (($rate / 100) / 30) * $daysFromStart;
@@ -671,7 +694,7 @@ class LoanCalculator
 
                 if ($i == $duration) {
                     $currentPrincipal = $remainingBalance;
-                    
+
                     if ($duration > 1) {
                         // Smart Check: Adjust interest to keep final payment flat
                         if ($currentPrincipal != $monthlyPrincipal) {
@@ -688,7 +711,7 @@ class LoanCalculator
                             $currentInterest = $monthlyInterest;
                         }
                     }
-                    
+
                     $remainingBalance = 0;
 
                 } else {

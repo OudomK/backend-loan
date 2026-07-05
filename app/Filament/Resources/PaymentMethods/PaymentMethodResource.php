@@ -13,12 +13,19 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use App\Filament\Concerns\ChecksFeatureToggle;
 
 class PaymentMethodResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'payment_methods';
+
     protected static ?string $model = PaymentMethod::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::Banknotes;
+
+    protected static string|\UnitEnum|null $navigationGroup = 'Administration';
 
     protected static ?string $recordTitleAttribute = 'name';
 

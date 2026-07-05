@@ -14,9 +14,16 @@ class LoanProductForm
         return $schema
             ->components([
                 TextInput::make('name')
-                    ->required(),
+                    ->required()
+                    ->live(onBlur: true)
+                    ->afterStateUpdated(function (callable $set, $state) {
+                        if ($state) {
+                            $set('code', strtoupper(\Illuminate\Support\Str::slug($state, '-')));
+                        }
+                    }),
                 TextInput::make('code')
-                    ->required(),
+                    ->required()
+                    ->unique(ignoreRecord: true),
                 Textarea::make('description')
                     ->default(null)
                     ->columnSpanFull(),

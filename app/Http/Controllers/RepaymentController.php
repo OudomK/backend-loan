@@ -208,7 +208,9 @@ class RepaymentController extends Controller
                             ->orWhereRaw("CONCAT(COALESCE(last_name, ''), ' ', COALESCE(first_name, '')) LIKE ?", [$like]);
                     });
             })
-            ->limit(10)
+            ->whereHas('payments', function ($query) {
+                $query->whereRaw($this->unpaidInstallmentExpression());
+            })
             ->get();
 
         return response()->json($loans->map(function ($loan) {

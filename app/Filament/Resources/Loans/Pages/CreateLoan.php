@@ -113,6 +113,7 @@ class CreateLoan extends CreateRecord
                 'interest_rate' => (float) $loan->interest_rate,
                 'duration_months' => (int) $loan->duration_months,
                 'start_date' => (string) $loan->start_date,
+                'currency' => (string) $loan->currency,
             ];
 
             $schedule = BalloonPaymentCalculator::generateSchedule(
