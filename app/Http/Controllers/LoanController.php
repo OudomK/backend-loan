@@ -394,4 +394,36 @@ class LoanController extends Controller
         $loan->delete();
         return response()->json(null, 204);
     }
+
+    public function writeOff(Request $request, int $id)
+    {
+        $loan = Loan::findOrFail($id);
+
+        $validated = $request->validate([
+            'written_off_at' => 'required|date',
+            'write_off_balance' => 'required|numeric',
+            'write_off_reason' => 'nullable|string',
+            'recovery_amount' => 'nullable|numeric',
+            'maturity_date' => 'nullable|date',
+            'classify_wo' => 'nullable|string',
+        ]);
+
+        $loan->written_off_at = $validated['written_off_at'];
+        $loan->write_off_balance = $validated['write_off_balance'];
+        $loan->write_off_reason = $validated['write_off_reason'] ?? null;
+        $loan->recovery_amount = $validated['recovery_amount'] ?? 0;
+        
+        if (array_key_exists('maturity_date', $validated)) {
+            $loan->maturity_date = $validated['maturity_date'];
+        }
+        if (array_key_exists('classify_wo', $validated)) {
+            $loan->classify_wo = $validated['classify_wo'];
+        }
+        
+        $loan->status = 'written_off';
+        
+        $loan->save();
+
+        return response()->json(['message' => 'Loan successfully written off.', 'loan' => $loan]);
+    }
 }

@@ -25,7 +25,7 @@ class ScheduleCalculator extends Component
     // Existing fields updated
     public $amount = '';
     public $duration_months = '';
-    public string $duration_type = 'Months'; // e.g. Months, Days, Years
+    public string $payment_frequency = 'Monthly'; // e.g. Monthly, Bi-weekly, Weekly, Daily, Term
     public $interest_rate = '';
     public string $currency = 'USD';
     public string $repayment_method = '';
@@ -46,7 +46,7 @@ class ScheduleCalculator extends Component
     public function mount()
     {
         $this->loan_date = Carbon::now()->toDateString();
-        
+
         $customerInfo = session()->get('print_customer_info');
         if ($customerInfo) {
             $this->customer_name = $customerInfo['customer_name'] ?? '';
@@ -65,7 +65,7 @@ class ScheduleCalculator extends Component
             $this->amount = $customerInfo['amount'] ?? '';
             $this->interest_rate = $customerInfo['interest_rate'] ?? '';
             $this->duration_months = explode(' ', $customerInfo['duration'] ?? '')[0] ?? '';
-            $this->duration_type = explode(' ', $customerInfo['duration'] ?? ' Months')[1] ?? 'Months';
+            $this->payment_frequency = $customerInfo['payment_frequency'] ?? 'Monthly';
             $this->currency = $customerInfo['currency'] ?? 'USD';
             $this->repayment_method = $customerInfo['repayment_method'] ?? '';
         }
@@ -75,14 +75,33 @@ class ScheduleCalculator extends Component
         }
     }
 
+    public function updatedLoanDate(string $value)
+    {
+        if ($this->repayment_method) {
+            $this->updatedRepaymentMethod($this->repayment_method);
+        }
+    }
+
     public function updatedRepaymentMethod(string $value)
     {
         if (in_array($value, ['fixed_daily', 'fixed_15days_70_30', 'fixed_15days_50_50'])) {
-            $this->duration_type = 'Days';
-        } elseif (in_array($value, ['fixed_weekly', 'fixed_biweekly'])) {
-            $this->duration_type = 'Weeks';
+            $this->payment_frequency = 'Daily';
+        } elseif (in_array($value, ['fixed_weekly'])) {
+            $this->payment_frequency = 'Weekly';
         } else {
-            $this->duration_type = 'Months';
+            $this->payment_frequency = 'Monthly';
+        }
+
+        $loanDate = Carbon::parse($this->loan_date ?: Carbon::now()->toDateString());
+        
+        if ($value === 'fixed_daily') {
+            $this->first_repayment_date = $loanDate->addDay()->toDateString();
+        } elseif ($value === 'fixed_weekly') {
+            $this->first_repayment_date = $loanDate->addWeek()->toDateString();
+        } elseif (in_array($value, ['fixed_15days_70_30', 'fixed_15days_50_50'])) {
+            $this->first_repayment_date = $loanDate->addDays(15)->toDateString();
+        } else {
+            $this->first_repayment_date = $loanDate->addMonth()->toDateString();
         }
     }
 
@@ -106,7 +125,7 @@ class ScheduleCalculator extends Component
 
         if ($this->repayment_method === 'Balloon' || $this->repayment_method === 'negotiable') {
             $scheduleRaw = BalloonPaymentCalculator::generateSchedule(
-                $loanData, 
+                $loanData,
                 'interest_only',
                 null,
                 null,
@@ -183,7 +202,8 @@ class ScheduleCalculator extends Component
             'qr_type' => $this->qr_type,
             'qr_image_url' => $qrImagePath,
             'amount' => $this->amount,
-            'duration' => $this->duration_months . ' ' . $this->duration_type,
+            'duration' => $this->duration_months . ' Months',
+            'payment_frequency' => $this->payment_frequency,
             'interest_rate' => $this->interest_rate,
             'currency' => $this->currency,
             'repayment_method' => $this->repayment_method,

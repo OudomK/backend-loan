@@ -14,7 +14,7 @@ class InactiveLoanReportController extends Controller
         $fromDate = $request->query('from_date');
         $toDate = $request->query('to_date');
 
-        $statuses = ['completed', 'paid_off'];
+        $statuses = ['completed', 'paid_off', 'written_off'];
 
         $query = Loan::with([
             'borrower' => function ($q) {

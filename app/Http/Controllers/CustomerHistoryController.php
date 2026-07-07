@@ -200,22 +200,17 @@ class CustomerHistoryController extends Controller
         $scheduleOnTimeLabel = "0";
         $paymentOnTimeLabel = "0";
 
-        if ($isPayoffTrigger) {
-            $scheduleOnTimeLabel = "Payoff";
-            $paymentOnTimeLabel = "Payoff";
-        } else {
-            if (!$isFullyPaid && $isOverdue && $dDate) {
-                $diff = (int) $dDate->diffInDays($nDate, false);
-                $scheduleOnTimeLabel = "-$diff";
-            } elseif ($isFullyPaid && $uDate && $dDate) {
-                $diff = (int) $dDate->diffInDays($uDate, false);
-                $scheduleOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
-            }
+        if (!$isFullyPaid && $isOverdue && $dDate) {
+            $diff = (int) $dDate->diffInDays($nDate, false);
+            $scheduleOnTimeLabel = "-$diff";
+        } elseif ($isFullyPaid && $uDate && $dDate) {
+            $diff = (int) $dDate->diffInDays($uDate, false);
+            $scheduleOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
+        }
 
-            if ($p->total_paid > 0 && $uDate && $dDate) {
-                $diff = (int) $dDate->diffInDays($uDate, false);
-                $paymentOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
-            }
+        if ($p->total_paid > 0 && $uDate && $dDate) {
+            $diff = (int) $dDate->diffInDays($uDate, false);
+            $paymentOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
         }
 
         return [
@@ -251,9 +246,7 @@ class CustomerHistoryController extends Controller
                 $allocRepaymentType = isset($allocationTxMap[$a->repayment_transaction_id]) ? $allocationTxMap[$a->repayment_transaction_id]->repayment_type : null;
                 
                 $allocOnTimeLabel = "0";
-                if ($isPayoffTrigger || $allocRepaymentType === 'Pay Off') {
-                    $allocOnTimeLabel = "Payoff";
-                } elseif ($dDate) {
+                if ($dDate) {
                     $allocDateStr = $a->transaction_date ?: $a->created_at;
                     $aDate = $allocDateStr ? \Carbon\Carbon::parse($allocDateStr)->startOfDay() : null;
                     if ($aDate) {

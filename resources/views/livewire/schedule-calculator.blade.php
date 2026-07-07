@@ -1,5 +1,7 @@
 <div
     class="min-h-screen bg-slate-50 dark:bg-slate-900 py-6 px-4 sm:px-6 lg:px-8 font-sans transition-colors duration-300">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <div class="max-w-7xl mx-auto space-y-6 relative">
 
         <!-- Dark Mode Toggle -->
@@ -95,9 +97,34 @@
                         <div>
                             <label for="loan_date"
                                 class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">កាលបរិច្ឆេទខ្ចី</label>
-                            <input type="date" wire:model.defer="loan_date" id="loan_date"
-                                class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3"
-                                required>
+                            <div wire:ignore>
+                                <input type="text" wire:model.defer="loan_date" id="loan_date" x-data x-init="
+                                    flatpickr($el, {
+                                        dateFormat: 'Y-m-d',
+                                        altInput: true,
+                                        altFormat: 'd/m/Y',
+                                        defaultDate: '{{ $loan_date }}',
+                                        onChange: function(selectedDates, dateStr, instance) {
+                                            $el.dispatchEvent(new Event('input', { bubbles: true }));
+                                            let v = document.getElementById('repayment_method') ? document.getElementById('repayment_method').value : '';
+                                            if (!v || !dateStr) return;
+                                            let d = new Date(dateStr);
+                                            if (v === 'fixed_daily') d.setDate(d.getDate() + 1);
+                                            else if (v === 'fixed_weekly') d.setDate(d.getDate() + 7);
+                                            else if (v.includes('15days')) d.setDate(d.getDate() + 15);
+                                            else d.setMonth(d.getMonth() + 1);
+                                            let formatted = d.toISOString().split('T')[0];
+                                            @this.set('first_repayment_date', formatted);
+                                            let firstRepaymentEl = document.getElementById('first_repayment_date');
+                                            if (firstRepaymentEl && firstRepaymentEl._flatpickr) {
+                                                firstRepaymentEl._flatpickr.setDate(formatted);
+                                            }
+                                        }
+                                    })
+                                "
+                                    class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3"
+                                    required>
+                            </div>
                         </div>
                         <div>
                             <label for="id_number"
@@ -149,19 +176,23 @@
                         </div>
                         <div>
                             <label
-                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">រយៈពេល</label>
-                            <div class="flex space-x-2">
-                                <input type="number" wire:model.defer="duration_months" id="duration_months"
-                                    class="block w-2/3 sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3"
-                                    required>
-                                <select wire:model.defer="duration_type"
-                                    class="block w-1/3 py-2.5 px-2 text-base border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-slate-50 dark:bg-slate-800 dark:text-white">
-                                    <option value="Months">ខែ</option>
-                                    <option value="Weeks">សប្តាហ៍</option>
-                                    <option value="Days">ថ្ងៃ</option>
-                                    <option value="Years">ឆ្នាំ</option>
-                                </select>
-                            </div>
+                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">រយៈពេល (ខែ)</label>
+                            <input type="number" wire:model.defer="duration_months" id="duration_months"
+                                class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3"
+                                required>
+                        </div>
+                        <div>
+                            <label
+                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ប្រេកង់បង់ប្រាក់ (Payment Freq.)</label>
+                            <select wire:model.defer="payment_frequency"
+                                class="block w-full py-2.5 px-3 text-base border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-slate-50 dark:bg-slate-800 dark:text-white"
+                                required>
+                                <option value="Monthly">Monthly</option>
+                                <option value="Bi-weekly">Bi-weekly</option>
+                                <option value="Weekly">Weekly</option>
+                                <option value="Daily">Daily</option>
+                                <option value="Term">Term</option>
+                            </select>
                         </div>
                         <div>
                             <label for="interest_rate"
@@ -189,41 +220,67 @@
                             <select wire:model.defer="repayment_method" id="repayment_method" x-on:change="
                                     let v = $event.target.value;
                                     if (v === 'fixed_daily' || v.includes('15days')) {
-                                        $wire.set('duration_type', 'Days');
+                                        $wire.set('payment_frequency', 'Daily');
                                     } else if (v.includes('weekly')) {
-                                        $wire.set('duration_type', 'Weeks');
+                                        $wire.set('payment_frequency', 'Weekly');
                                     } else {
-                                        $wire.set('duration_type', 'Months');
+                                        $wire.set('payment_frequency', 'Monthly');
+                                    }
+                                    
+                                    let loanDateStr = document.getElementById('loan_date') ? document.getElementById('loan_date').value : '';
+                                    if (!loanDateStr) {
+                                        loanDateStr = new Date().toISOString().split('T')[0];
+                                    }
+                                    let d = new Date(loanDateStr);
+                                    if (v === 'fixed_daily') {
+                                        d.setDate(d.getDate() + 1);
+                                    } else if (v === 'fixed_weekly') {
+                                        d.setDate(d.getDate() + 7);
+                                    } else if (v.includes('15days')) {
+                                        d.setDate(d.getDate() + 15);
+                                    } else {
+                                        d.setMonth(d.getMonth() + 1);
+                                    }
+                                    let formatted = d.toISOString().split('T')[0];
+                                    $wire.set('first_repayment_date', formatted);
+                                    
+                                    let firstRepaymentEl = document.getElementById('first_repayment_date');
+                                    if (firstRepaymentEl && firstRepaymentEl._flatpickr) {
+                                        firstRepaymentEl._flatpickr.setDate(formatted);
                                     }
                                 "
                                 class="block w-full py-2.5 px-3 text-base border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-white dark:bg-slate-900 dark:text-white"
                                 required>
                                 <option value="">ជ្រើសរើសវិធីសាស្ត្របង់ប្រាក់</option>
-                                <optgroup label="រយៈពេលខ្លី">
-                                    <option value="fixed_daily">បង់ថេរប្រចាំថ្ងៃ</option>
-                                    <option value="fixed_weekly">បង់ថេរប្រចាំសប្តាហ៍</option>
-                                    <option value="fixed_biweekly">បង់ថេរ២សប្តាហ៍ម្តង</option>
+                                <optgroup label="Flat">
+                                    <option value="fixed_daily">Daily (ថ្ងៃ)</option>
+                                    <option value="fixed_weekly">Weekly (សប្តាហ៍)</option>
+                                    <option value="fixed_15days_70_30">Bi-weekly 70-30 (កន្លះខែ)</option>
+                                    <option value="fixed_15days_50_50">Bi-weekly 50-50 (កន្លះខែ)</option>
+                                    <option value="fixed_monthly">Monthly (បង់ខែ)</option>
                                 </optgroup>
-                                <optgroup label="ប្រចាំខែ">
-                                    <option value="fixed_monthly">បង់ថេរប្រចាំខែ (Flat)</option>
-                                    <option value="linear_monthly">បង់ថយប្រចាំខែ (Declining)</option>
-                                    <option value="annuity_monthly">បង់ថេរប្រចាំខែ (Annuity)</option>
-                                </optgroup>
-                                <optgroup label="វដ្ត ១៥ថ្ងៃ">
-                                    <option value="fixed_15days_70_30">បង់ថេរ ១៥ថ្ងៃ (70/30)</option>
-                                    <option value="fixed_15days_50_50">បង់ថេរ ១៥ថ្ងៃ (50/50)</option>
-                                </optgroup>
-                                <optgroup label="ពិសេស">
-                                    <option value="Balloon">Balloon</option>
-                                    <option value="negotiable">អាចចរចាបាន</option>
+                                <optgroup label="&nbsp;">
+                                    <option value="annuity_monthly">Annuity (បង់ថេរ)</option>
+                                    <option value="linear_monthly">Linear (បង់ថយ)</option>
+                                    <option value="Balloon">Balloon (បង់តែការប្រាក់ ប្រាក់ដើមសងចុងវគ្គ)</option>
+                                    <option value="negotiable">Negotiable (អាចចរចាបាន)</option>
                                 </optgroup>
                             </select>
                         </div>
                         <div>
                             <label for="first_repayment_date"
                                 class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">កាលបរិច្ឆេទសងលើកដំបូង</label>
-                            <input type="date" wire:model.defer="first_repayment_date" id="first_repayment_date"
-                                class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3">
+                            <div wire:ignore>
+                                <input type="text" wire:model.defer="first_repayment_date" id="first_repayment_date" x-data x-init="
+                                    flatpickr($el, {
+                                        dateFormat: 'Y-m-d',
+                                        altInput: true,
+                                        altFormat: 'd/m/Y',
+                                        defaultDate: '{{ $first_repayment_date }}'
+                                    })
+                                "
+                                    class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3">
+                            </div>
                         </div>
                     </div>
 

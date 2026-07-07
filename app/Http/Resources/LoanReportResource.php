@@ -77,6 +77,10 @@ class LoanReportResource extends JsonResource
             'withd_prepayment_usd' => $this->calculateUsdValue($loan, $this->withdrawn_prepayment),
             'paid_off_paid_usd' => $this->calculateUsdValue($loan, $this->paid_off_amount),
             'fee_paid_usd' => $this->calculateUsdValue($loan, (float) $this->fee_paid),
+            'disb_amount_usd' => $this->calculateUsdValue($loan, $loan->amount),
+            're_finance_usd' => $this->calculateUsdValue($loan, $loan->refinanced_amount),
+            'admin_fee_usd' => $this->calculateUsdValue($loan, $loan->admin_fee),
+            're_finance_fee_usd' => $this->calculateUsdValue($loan, $loan->refinance_fee),
         ];
     }
 

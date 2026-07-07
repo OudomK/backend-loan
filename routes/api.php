@@ -170,6 +170,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('payment-qrs', [LoanController::class, 'getPaymentQrs']);
     Route::post('loans/preview-schedule', [LoanController::class, 'previewSchedule']);
     Route::get('loans/suggest-code', [LoanController::class, 'suggestCode']);
+    Route::post('loans/{id}/write-off', [LoanController::class, 'writeOff']);
     Route::apiResource('loans', LoanController::class);
 
     Route::get('/repayments/due-list', [RepaymentController::class, 'getDueList'])->middleware('permission:ui:repayment:view');

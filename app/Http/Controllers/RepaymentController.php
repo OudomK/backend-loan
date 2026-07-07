@@ -195,7 +195,7 @@ class RepaymentController extends Controller
                 $q->withTrashed();
             }
         ])
-            ->where('status', 'active')
+            ->whereIn('status', ['active', 'written_off'])
             ->where(function ($q) use ($query) {
                 $like = '%' . $query . '%';
                 $q->where('loan_code', 'LIKE', $like)
@@ -229,6 +229,7 @@ class RepaymentController extends Controller
                 'village' => (string) optional($loan->borrower)->village,
                 'commune' => (string) optional($loan->borrower)->commune,
                 'province' => (string) optional($loan->borrower)->province,
+                'status' => (string) $loan->status,
             ];
         }));
     }
