@@ -98,7 +98,7 @@
                             <td class="align-middle border-none" style="padding-bottom: 10px; width: 36%;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 110px; display: inline-block;">លេខកិច្ចសន្យា៖</span>
+                                        style="width: 110px; display: inline-block;">លេខកិច្ចសន្យា:</span>
                                     <span
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ $customer_info['customer_id'] ?: 'QF-001' }}</span>
                                 </div>
@@ -106,7 +106,7 @@
                             <td class="align-middle border-none" style="padding-bottom: 10px; width: 36%;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 110px; display: inline-block;">កាលបរិច្ឆេទខ្ចី៖</span>
+                                        style="width: 110px; display: inline-block;">កាលបរិច្ឆេទខ្ចី:</span>
                                     <span class="text-[11px] font-bold whitespace-nowrap leading-tight">
                                         @php
                                             try {
@@ -123,7 +123,7 @@
                             <td class="align-middle border-none" style="padding-bottom: 10px; width: 28%;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 80px; display: inline-block;">រយៈពេល៖</span>
+                                        style="width: 80px; display: inline-block;">រយៈពេល:</span>
                                     <span class="text-[11px] font-bold whitespace-nowrap leading-tight">
                                         {{ strtr(str_replace(['Months', 'Days', 'Years'], [' ខែ', ' ថ្ងៃ', ' ឆ្នាំ'], $customer_info['duration']), $khmerNums) }}
                                     </span>
@@ -135,7 +135,7 @@
                             <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 110px; display: inline-block;">ឈ្មោះអតិថិជន៖</span>
+                                        style="width: 110px; display: inline-block;">ឈ្មោះអតិថិជន:</span>
                                     <span
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ $customer_info['customer_name'] ?: '-' }}</span>
                                 </div>
@@ -143,7 +143,7 @@
                             <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 110px; display: inline-block;">ចំនួនទឹកប្រាក់៖</span>
+                                        style="width: 110px; display: inline-block;">ចំនួនទឹកប្រាក់:</span>
                                     <span
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ str_replace('.00', '', number_format((float) $customer_info['amount'], 2)) }}</span>
                                 </div>
@@ -151,7 +151,7 @@
                             <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 80px; display: inline-block;">រូបិយប័ណ្ណ៖</span>
+                                        style="width: 80px; display: inline-block;">រូបិយប័ណ្ណ:</span>
                                     <span class="text-[11px] font-bold whitespace-nowrap leading-tight">
                                         {{ $customer_info['currency'] === 'KHR' ? 'ប្រាក់រៀល' : ($customer_info['currency'] === 'USD' ? 'ប្រាក់ដុល្លារ' : $customer_info['currency']) }}
                                     </span>
@@ -163,7 +163,7 @@
                             <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 110px; display: inline-block;">ភេទ៖</span>
+                                        style="width: 110px; display: inline-block;">ភេទ:</span>
                                     <span
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ $customer_info['gender'] === 'Male' ? 'ប្រុស' : ($customer_info['gender'] === 'Female' ? 'ស្រី' : '-') }}</span>
                                 </div>
@@ -171,7 +171,7 @@
                             <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 110px; display: inline-block;">លេខអត្តសញ្ញាណ៖</span>
+                                        style="width: 110px; display: inline-block;">លេខអត្តសញ្ញាណ:</span>
                                     <span
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ strtr($customer_info['id_number'] ?: '-', $khmerNums) }}</span>
                                 </div>
@@ -179,7 +179,7 @@
                             <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 80px; display: inline-block;">វគ្គទី៖</span>
+                                        style="width: 80px; display: inline-block;">វគ្គទី:</span>
                                     <span
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ strtr($customer_info['cycle'] ?: '-', $khmerNums) }}</span>
                                 </div>
@@ -187,38 +187,18 @@
                         </tr>
                         <tr>
                             <!-- Row 4 -->
-                            <td class="align-top border-none" style="padding-bottom: 10px;">
-                                <div class="flex items-start">
+                            <td class="align-top border-none" style="padding-bottom: 10px;" colspan="2">
+                                <div class="flex items-start w-full">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 110px; display: inline-block; flex-shrink: 0;">អាសយដ្ឋាន៖</span>
+                                        style="width: 110px; display: inline-block; flex-shrink: 0;">អាសយដ្ឋាន:</span>
                                     <span
-                                        class="text-[11px] font-bold leading-tight flex-1">{{ $customer_info['address'] ?: '-' }}</span>
+                                        class="text-[11px] font-bold leading-loose py-1 flex-1 min-w-0 whitespace-nowrap overflow-hidden text-ellipsis">{{ $customer_info['address'] ?: '-' }}</span>
                                 </div>
                             </td>
                             <td class="align-middle border-none" style="padding-bottom: 10px;">
                                 <div class="flex items-baseline">
                                     <span class="text-[11px] leading-tight"
-                                        style="width: 110px; display: inline-block;">សងលើកដំបូង៖</span>
-                                    <span class="text-[11px] font-bold whitespace-nowrap leading-tight">
-                                        @php
-                                            if (!empty($customer_info['first_repayment_date'])) {
-                                                try {
-                                                    $dDate2 = \Carbon\Carbon::parse(str_replace('/', '-', $customer_info['first_repayment_date']));
-                                                    echo strtr($dDate2->format('d'), $khmerNums) . '-' . ($khmerMonths[$dDate2->format('M')] ?? $dDate2->format('M')) . '-' . strtr($dDate2->format('Y'), $khmerNums);
-                                                } catch (\Exception $e) {
-                                                    echo $customer_info['first_repayment_date'];
-                                                }
-                                            } else {
-                                                echo '-';
-                                            }
-                                        @endphp
-                                    </span>
-                                </div>
-                            </td>
-                            <td class="align-middle border-none" style="padding-bottom: 10px;">
-                                <div class="flex items-baseline">
-                                    <span class="text-[11px] leading-tight"
-                                        style="width: 80px; display: inline-block;">លេខទូរស័ព្ទ៖</span>
+                                        style="width: 80px; display: inline-block;">លេខទូរស័ព្ទ:</span>
                                     <span
                                         class="text-[11px] font-bold whitespace-nowrap leading-tight">{{ $customer_info['phone_number'] ?: '-' }}</span>
                                 </div>
@@ -294,29 +274,27 @@
                                 style="width: 6%; height: 56px; border: 1px solid #111; text-align: center;">ល.រ</th>
                             <th rowspan="2" scope="col"
                                 class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 22%; border: 1px solid #111; text-align: center;">ថ្ងៃសងប្រាក់</th>
+                                style="width: 30%; border: 1px solid #111; text-align: center;">ថ្ងៃសងប្រាក់</th>
                             <th rowspan="2" scope="col"
                                 class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 17.5%; border: 1px solid #111; text-align: center;">ប្រាក់ដើម</th>
+                                style="width: 16%; border: 1px solid #111; text-align: center;">ប្រាក់ដើម</th>
                             <th colspan="2" scope="col"
                                 class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 24.5%; border: 1px solid #111; text-align: center;">សរុបទឹកប្រាក់បង់</th>
+                                style="width: 22%; border: 1px solid #111; text-align: center;">សរុបទឹកប្រាក់បង់</th>
                             <th rowspan="2" scope="col"
                                 class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 17.5%; border: 1px solid #111; text-align: center;">សមតុល្យប្រាក់ដើម</th>
+                                style="width: 16%; border: 1px solid #111; text-align: center;">សមតុល្យប្រាក់ដើម</th>
                             <th rowspan="2" scope="col"
                                 class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 12.5%; border: 1px solid #111; text-align: center;">ផ្សេងៗ</th>
+                                style="width: 10%; border: 1px solid #111; text-align: center;">ផ្សេងៗ</th>
                         </tr>
                         <tr>
-                            <th scope="col"
-                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 12.25%; border: 1px solid #111; text-align: center;">បង់ថ្ងៃទី <span
+                            <th scope="col" class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 11%; border: 1px solid #111; text-align: center;">បង់ថ្ងៃទី <span
                                     class="text-red-600"
                                     style="color: red; text-decoration: underline;">{{ $day1Kh }}</span></th>
-                            <th scope="col"
-                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 12.25%; border: 1px solid #111; text-align: center;">បង់ថ្ងៃទី <span
+                            <th scope="col" class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 11%; border: 1px solid #111; text-align: center;">បង់ថ្ងៃទី <span
                                     class="text-red-600"
                                     style="color: red; text-decoration: underline;">{{ $day2Kh }}</span></th>
                         </tr>
@@ -356,9 +334,9 @@
                                     </td>
                                     <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
                                         style="border: 1px solid #111; text-align: center; height: 24px;">
-                                        <div style="display: flex; justify-content: center; gap: 8px;">
-                                            <span style="width: 65px; text-align: right;">{{ $formattedDate }}</span>
-                                            <span style="width: 45px; text-align: left;">{{ $dayOfWeekKh }}</span>
+                                        <div style="display: flex; justify-content: flex-start; padding-left: 15px; gap: 25px;">
+                                            <span style="width: 65px; text-align: left;">{{ $formattedDate }}</span>
+                                            <span style="text-align: left;">{{ $dayOfWeekKh }}</span>
                                         </div>
                                     </td>
                                     <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
@@ -375,7 +353,7 @@
                                     </td>
                                     <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
                                         style="border: 1px solid #111; text-align: center; height: 24px;">
-                                        {{ $formatMoney($balance) }}
+                                        {{ (float) $balance > 0 ? '-' . $formatMoney($balance) : $formatMoney($balance) }}
                                     </td>
                                     <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
                                         style="border: 1px solid #111; text-align: center; height: 24px;">
@@ -407,24 +385,18 @@
                     <thead class="bg-[#d7ffff] text-black h-[56px]"
                         style="-webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: #d7ffff;">
                         <tr>
-                            <th scope="col"
-                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 8%; height: 56px; border: 1px solid #111; text-align: center;">ល.រ</th>
-                            <th scope="col"
-                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 22%; border: 1px solid #111; text-align: center;">ថ្ងៃសងប្រាក់</th>
-                            <th scope="col"
-                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 17.5%; border: 1px solid #111; text-align: center;">ប្រាក់ដើម</th>
-                            <th scope="col"
-                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 17.5%; border: 1px solid #111; text-align: center;">សរុបទឹកប្រាក់បង់</th>
-                            <th scope="col"
-                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 20%; border: 1px solid #111; text-align: center;">សមតុល្យប្រាក់ដើម</th>
-                            <th scope="col"
-                                class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
-                                style="width: 15%; border: 1px solid #111; text-align: center;">ផ្សេងៗ</th>
+                            <th scope="col" class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 6%; height: 56px; border: 1px solid #111; text-align: center;">ល.រ</th>
+                            <th scope="col" class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 30%; border: 1px solid #111; text-align: center;">ថ្ងៃសងប្រាក់</th>
+                            <th scope="col" class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 16%; border: 1px solid #111; text-align: center;">ប្រាក់ដើម</th>
+                            <th scope="col" class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 17%; border: 1px solid #111; text-align: center;">សរុបទឹកប្រាក់បង់</th>
+                            <th scope="col" class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 19%; border: 1px solid #111; text-align: center;">សមតុល្យប្រាក់ដើម</th>
+                            <th scope="col" class="border border-[#111] p-[5px_4px] text-center text-[11px] font-bold"
+                                style="width: 12%; border: 1px solid #111; text-align: center;">ផ្សេងៗ</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -436,7 +408,6 @@
                                 </td>
                                 <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
                                     style="border: 1px solid #111; text-align: center; height: 24px;">
-                                    <div style="display: flex; justify-content: center; gap: 8px;">
                                         @php
                                             $dayOfWeekKh = '';
                                             try {
@@ -453,8 +424,9 @@
                                                 }
                                             }
                                         @endphp
-                                        <span style="width: 65px; text-align: right;">{{ $formattedDate }}</span>
-                                        <span style="width: 45px; text-align: left;">{{ $dayOfWeekKh }}</span>
+                                    <div style="display: flex; justify-content: flex-start; padding-left: 15px; gap: 25px;">
+                                        <span style="width: 65px; text-align: left;">{{ $formattedDate }}</span>
+                                        <span style="text-align: left;">{{ $dayOfWeekKh }}</span>
                                     </div>
                                 </td>
                                 <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
@@ -467,7 +439,7 @@
                                 </td>
                                 <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
                                     style="border: 1px solid #111; text-align: center; height: 24px;">
-                                    {{ $formatMoney($item['balance']) }}
+                                    {{ (float) $item['balance'] > 0 ? '-' . $formatMoney($item['balance']) : $formatMoney($item['balance']) }}
                                 </td>
                                 <td class="border border-[#111] p-[5px_4px] text-center text-[11px] whitespace-nowrap"
                                     style="border: 1px solid #111; text-align: center; height: 24px;">
@@ -521,25 +493,32 @@
 
             <!-- Terms and Conditions Text -->
             <div style="margin-top: 28px; font-family: 'Krasar', 'Battambang', 'Khmer OS Battambang', sans-serif;">
-                <p style="font-size: 11px; line-height: 2; text-align: justify; margin: 0; text-indent: 40px;">បន្ទាប់ពីបានអាន និងស្តាប់នូវរាល់ខ្លឹមសារនៃកិច្ចសន្យាខ្ចីប្រាក់ថ្ងៃទី@php
-                    $loanDate = $customer_info['loan_date'] ?? null;
-                    if ($loanDate) {
-                        try {
-                            $parsedDate = \Carbon\Carbon::parse(str_replace('/', '-', $loanDate));
-                            $day = strtr($parsedDate->format('d'), $khmerNums);
-                            $month = $khmerMonths[$parsedDate->format('M')] ?? strtr($parsedDate->format('m'), $khmerNums);
-                            $year = strtr($parsedDate->format('Y'), $khmerNums);
-                            echo "<span style='font-weight:bold;'>$day</span> ខែ<span style='font-weight:bold;'>$month</span> ឆ្នាំ<span style='font-weight:bold;'>$year</span>";
-                        } catch (\Exception $e) {
+                <p style="font-size: 11px; line-height: 2; text-align: justify; margin: 0; text-indent: 40px;">
+                    បន្ទាប់ពីបានអាន និងស្តាប់នូវរាល់ខ្លឹមសារនៃកិច្ចសន្យាខ្ចីប្រាក់ថ្ងៃទី@php
+                        $loanDate = $customer_info['loan_date'] ?? null;
+                        if ($loanDate) {
+                            try {
+                                $parsedDate = \Carbon\Carbon::parse(str_replace('/', '-', $loanDate));
+                                $day = strtr($parsedDate->format('d'), $khmerNums);
+                                $month = $khmerMonths[$parsedDate->format('M')] ?? strtr($parsedDate->format('m'), $khmerNums);
+                                $year = strtr($parsedDate->format('Y'), $khmerNums);
+                                echo "<span style='font-weight:bold;'>$day</span> ខែ<span style='font-weight:bold;'>$month</span> ឆ្នាំ<span style='font-weight:bold;'>$year</span>";
+                            } catch (\Exception $e) {
+                                echo "......... ខែ ............ ឆ្នាំ ..............";
+                            }
+                        } else {
                             echo "......... ខែ ............ ឆ្នាំ ..............";
                         }
-                    } else {
-                        echo "......... ខែ ............ ឆ្នាំ ..............";
-                    }
-                @endphp
-                ខ្ញុំបាទ/នាងខ្ញុំឯកភាពសងប្រាក់ទៅតាមចំនួនដែលបានកំណត់តាមតារាងកាលវិភាគសងប្រាក់នេះរហូតគ្រប់ចំនួន ដែលការសងនេះអាចធ្វើឡើងនៅតាមរយៈភ្នាក់ងារឥណទានដោយមានវិក័យបត្រទទួលប្រាក់ ឬលោកអ្នកអាចទូទាត់ការបង់ប្រាក់តាម KHQR ឬភ្នាក់ងារវីង ហើយរាល់ការចំណាយប្រតិបត្តិការជាបន្ទុករបស់អតិថិជន។ ករណីអតិថិជនបានបង់យឺត ឬស្នើសុំបង់លើផែនការ គឺតម្រូវឲ្យទំនាក់ទំនង និងពិភាក្សាជាមួយភ្នាក់ងារឥណទានជាមុនសិន។</p>
+                    @endphp
+                    ខ្ញុំបាទ/នាងខ្ញុំឯកភាពសងប្រាក់ទៅតាមចំនួនដែលបានកំណត់តាមតារាងកាលវិភាគសងប្រាក់នេះរហូតគ្រប់ចំនួន
+                    ដែលការសងនេះអាចធ្វើឡើងនៅតាមរយៈភ្នាក់ងារឥណទានដោយមានវិក័យបត្រទទួលប្រាក់
+                    ឬលោកអ្នកអាចទូទាត់ការបង់ប្រាក់តាម KHQR ឬភ្នាក់ងារវីង ហើយរាល់ការចំណាយប្រតិបត្តិការជាបន្ទុករបស់អតិថិជន។
+                    ករណីអតិថិជនបានបង់យឺត ឬស្នើសុំបង់លើផែនការ គឺតម្រូវឲ្យទំនាក់ទំនង
+                    និងពិភាក្សាជាមួយភ្នាក់ងារឥណទានជាមុនសិន។</p>
 
-                <p style="font-size: 11px; line-height: 2; text-align: justify; margin: 8px 0 0 0;"><span style="font-weight: bold;">ចំណាំ៖</span> ក្នុងករណីមានប្រធានស័ក្កណាមួយកើតឡើង អតិថិជនអាចទំនាក់ទំនង និងពិភាក្សាជាមួយភ្នាក់ងារឥណទាន ដើម្បីស្វែងរកដំណោះស្រាយសមរម្យណាមួយ។</p>
+                <p style="font-size: 11px; line-height: 2; text-align: justify; margin: 8px 0 0 0;"><span
+                        style="font-weight: bold;">ចំណាំ៖</span> ក្នុងករណីមានប្រធានស័ក្កណាមួយកើតឡើង អតិថិជនអាចទំនាក់ទំនង
+                    និងពិភាក្សាជាមួយភ្នាក់ងារឥណទាន ដើម្បីស្វែងរកដំណោះស្រាយសមរម្យណាមួយ។</p>
             </div>
         </div>
         <!-- END PRINTABLE A4 CONTENT -->
@@ -552,4 +531,5 @@
         window.print();
     }
 </script>
+
 </html>
