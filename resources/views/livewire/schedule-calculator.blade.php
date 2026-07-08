@@ -19,12 +19,12 @@
                     }
                 }" x-on:click="toggle()"
                 class="text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus:ring-4 focus:ring-slate-200 dark:focus:ring-slate-700 rounded-lg text-sm p-2.5 transition-colors">
-                <svg x-show="theme !== 'dark'" style="display: none;" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
-                    xmlns="http://www.w3.org/2000/svg">
+                <svg x-show="theme !== 'dark'" style="display: none;" class="w-5 h-5" fill="currentColor"
+                    viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                     <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
                 </svg>
-                <svg x-show="theme === 'dark'" style="display: none;" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"
-                    xmlns="http://www.w3.org/2000/svg">
+                <svg x-show="theme === 'dark'" style="display: none;" class="w-5 h-5" fill="currentColor"
+                    viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                     <path
                         d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z"
                         fill-rule="evenodd" clip-rule="evenodd"></path>
@@ -132,8 +132,7 @@
                                             }
                                         }
                                     })
-                                "
-                                    class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3"
+                                " class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3"
                                     required>
                             </div>
                         </div>
@@ -151,7 +150,7 @@
                                 class="block w-full py-2.5 px-3 text-base border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-white dark:bg-slate-900 dark:text-white">
                                 <option value="">ជ្រើសរើសមន្ត្រីឥណទាន</option>
                                 @foreach($creditOfficers as $co)
-                                    <option value="{{ $co->id }}">{{ $co->name }} ({{ $co->phone }})</option>
+                                    <option value="{{ $co->id }}">{{ $co->name }} ({{ $co->phone ? implode(' ', str_split(preg_replace('/[^0-9]/', '', $co->phone), 3)) : '-' }})</option>
                                 @endforeach
                             </select>
                         </div>
@@ -164,6 +163,17 @@
                         </div>
 
                         <!-- Row 3 -->
+                        <div>
+                            <label for="loan_product_id"
+                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ប្រភេទកម្ចី (Loan Product)</label>
+                            <select wire:model.defer="loan_product_id" id="loan_product_id"
+                                class="block w-full py-2.5 px-3 text-base border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-white dark:bg-slate-900 dark:text-white">
+                                <option value="">ជ្រើសរើសប្រភេទកម្ចី</option>
+                                @foreach($loanProducts as $product)
+                                    <option value="{{ $product->id }}">{{ $product->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div>
                             <label for="qr_type"
                                 class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ប្រភេទ
@@ -186,15 +196,16 @@
                                 required>
                         </div>
                         <div>
-                            <label
-                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">រយៈពេល (ខែ)</label>
+                            <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">រយៈពេល
+                                (ខែ)</label>
                             <input type="number" wire:model.defer="duration_months" id="duration_months"
                                 class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3"
                                 required>
                         </div>
                         <div>
                             <label
-                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ប្រេកង់បង់ប្រាក់ (Payment Freq.)</label>
+                                class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ប្រេកង់បង់ប្រាក់
+                                (Payment Freq.)</label>
                             <select wire:model.defer="payment_frequency"
                                 class="block w-full py-2.5 px-3 text-base border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-slate-50 dark:bg-slate-800 dark:text-white"
                                 required>
@@ -230,7 +241,7 @@
                                 class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">វិធីសាស្ត្របង់ប្រាក់</label>
                             <select wire:model.defer="repayment_method" id="repayment_method" x-on:change="
                                     let v = $event.target.value;
-                                    if (v === 'fixed_daily' || v.includes('15days')) {
+                                    if (v === 'fixed_daily') {
                                         $wire.set('payment_frequency', 'Daily');
                                     } else if (v.includes('weekly')) {
                                         $wire.set('payment_frequency', 'Weekly');
@@ -282,7 +293,8 @@
                             <label for="first_repayment_date"
                                 class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">កាលបរិច្ឆេទសងលើកដំបូង</label>
                             <div wire:ignore>
-                                <input type="text" wire:model.defer="first_repayment_date" id="first_repayment_date" x-data x-init="
+                                <input type="text" wire:model.defer="first_repayment_date" id="first_repayment_date"
+                                    x-data x-init="
                                     flatpickr($el, {
                                         dateFormat: 'Y-m-d',
                                         altInput: true,

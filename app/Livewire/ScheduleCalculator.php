@@ -21,6 +21,7 @@ class ScheduleCalculator extends Component
     public string $credit_officer_id = '';
     public string $cycle = '';
     public string $qr_type = '';
+    public string $loan_product_id = '';
 
     // Existing fields updated
     public $amount = '';
@@ -62,6 +63,7 @@ class ScheduleCalculator extends Component
             $this->credit_officer_id = $customerInfo['credit_officer_id'] ?? '';
             $this->cycle = $customerInfo['cycle'] ?? '';
             $this->qr_type = $customerInfo['qr_type'] ?? '';
+            $this->loan_product_id = $customerInfo['loan_product_id'] ?? '';
             $this->amount = $customerInfo['amount'] ?? '';
             $this->interest_rate = $customerInfo['interest_rate'] ?? '';
             $this->duration_months = explode(' ', $customerInfo['duration'] ?? '')[0] ?? '';
@@ -75,6 +77,12 @@ class ScheduleCalculator extends Component
         }
     }
 
+    public function updatedLoanProductId(string $value)
+    {
+        // When loan product changes, we might want to update interest rate or something, 
+        // but for now we just keep the selected product.
+    }
+
     public function updatedLoanDate(string $value)
     {
         if ($this->repayment_method) {
@@ -84,7 +92,7 @@ class ScheduleCalculator extends Component
 
     public function updatedRepaymentMethod(string $value)
     {
-        if (in_array($value, ['fixed_daily', 'fixed_15days_70_30', 'fixed_15days_50_50'])) {
+        if (in_array($value, ['fixed_daily'])) {
             $this->payment_frequency = 'Daily';
         } elseif (in_array($value, ['fixed_weekly'])) {
             $this->payment_frequency = 'Weekly';
@@ -188,6 +196,31 @@ class ScheduleCalculator extends Component
         }
 
         // Save current input to display on schedule sheet
+        $durationSuffix = ' ខែ';
+        switch (strtolower($this->payment_frequency)) {
+            case 'daily':
+                $durationSuffix = ' ថ្ងៃ';
+                break;
+            case 'weekly':
+                $durationSuffix = ' សប្តាហ៍';
+                break;
+            case 'bi-weekly':
+            case 'biweekly':
+                $durationSuffix = ' កន្លះខែ';
+                break;
+            case 'monthly':
+                $durationSuffix = ' ខែ';
+                break;
+        }
+
+        $productName = 'Personal Loan';
+        if ($this->loan_product_id) {
+            $product = \App\Models\LoanProduct::find($this->loan_product_id);
+            if ($product) {
+                $productName = $product->name;
+            }
+        }
+
         $this->customer_info = [
             'customer_name' => $this->customer_name,
             'customer_id' => $final_customer_id,
@@ -200,9 +233,11 @@ class ScheduleCalculator extends Component
             'phone_number' => $actual_phone_number,
             'cycle' => $this->cycle,
             'qr_type' => $this->qr_type,
+            'loan_product_id' => $this->loan_product_id,
+            'product_name' => $productName,
             'qr_image_url' => $qrImagePath,
             'amount' => $this->amount,
-            'duration' => $this->duration_months . ' Months',
+            'duration' => $this->duration_months . $durationSuffix,
             'payment_frequency' => $this->payment_frequency,
             'interest_rate' => $this->interest_rate,
             'currency' => $this->currency,
@@ -223,6 +258,7 @@ class ScheduleCalculator extends Component
             ->whereNotNull('phone')
             ->where('phone', '!=', '')
             ->get(['id', 'name', 'phone']);
-        return view('livewire.schedule-calculator', compact('paymentQrs', 'creditOfficers'));
+        $loanProducts = \App\Models\LoanProduct::where('is_active', true)->get(['id', 'name']);
+        return view('livewire.schedule-calculator', compact('paymentQrs', 'creditOfficers', 'loanProducts'));
     }
 }
