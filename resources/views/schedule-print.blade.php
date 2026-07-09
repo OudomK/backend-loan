@@ -9,7 +9,7 @@
     <style>
         @page {
             size: A4 portrait;
-            margin: 0;
+            margin: 0mm !important; /* Set to 0mm to hide browser headers/footers (URL, date) */
         }
 
         body {
@@ -23,11 +23,13 @@
         }
 
         .page {
-            width: 794px;
+            width: 210mm;
+            min-height: 297mm;
             margin: 0 auto;
             background: #fff;
-            padding: 5mm 15mm 15mm;
+            padding: 10mm 15mm 15mm;
             box-sizing: border-box;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
 
         @media print {
@@ -38,9 +40,11 @@
             }
 
             .page {
-                width: 794px !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-height: auto !important;
                 margin: 0 !important;
-                padding: 5mm 15mm 15mm !important;
+                padding: 10mm 15mm 15mm !important;
                 box-shadow: none !important;
                 border: none !important;
             }
