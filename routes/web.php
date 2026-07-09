@@ -3,7 +3,7 @@
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
-    return redirect('/admin');
+    abort(404);
 });
 
 Route::get('/login', function () {
@@ -51,6 +51,9 @@ Route::get('/admin/sso/{token}', function ($token) {
         \Illuminate\Support\Facades\Auth::guard('web')->logout();
         \Illuminate\Support\Facades\Auth::guard('web')->login($user);
         request()->session()->regenerate();
+
+        // Auto-unlock admin panel for SSO users
+        session(['admin_unlocked' => true]);
 
         // Enforce single-session: bind new session to this user
         $user->forceFill(['current_session_id' => session()->getId()])->saveQuietly();
