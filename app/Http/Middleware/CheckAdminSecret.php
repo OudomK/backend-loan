@@ -17,6 +17,11 @@ class CheckAdminSecret
      */
     public function handle(Request $request, Closure $next): Response
     {
+        \Illuminate\Support\Facades\Log::info('CheckAdminSecret Debug', [
+            'provided_key' => $request->query('key'),
+            'config_key' => config('app.admin_secret_key'),
+        ]);
+
         // If the request contains the correct secret key, unlock the session
         if ($request->has('key') && $request->query('key') === config('app.admin_secret_key')) {
             session(['admin_unlocked' => true]);
