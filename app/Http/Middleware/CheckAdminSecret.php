@@ -18,7 +18,7 @@ class CheckAdminSecret
     public function handle(Request $request, Closure $next): Response
     {
         // If the request contains the correct secret key, unlock the session
-        if ($request->has('key') && $request->query('key') === env('ADMIN_SECRET_KEY', 'qf-admin-secret-2026')) {
+        if ($request->has('key') && $request->query('key') === config('app.admin_secret_key')) {
             session(['admin_unlocked' => true]);
             \Illuminate\Support\Facades\Cookie::queue('admin_unlocked', true, 0);
         }

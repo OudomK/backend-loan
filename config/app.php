@@ -140,4 +140,11 @@ return [
     */
     'company_name' => env('APP_COMPANY_NAME', 'Company Name'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin Panel Secret Key
+    |--------------------------------------------------------------------------
+    */
+    'admin_secret_key' => env('ADMIN_SECRET_KEY', 'qf-admin-secret-2026'),
+
 ];
