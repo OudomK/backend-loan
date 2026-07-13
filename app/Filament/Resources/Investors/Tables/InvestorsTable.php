@@ -26,7 +26,7 @@ class InvestorsTable
             ->columns([
                 ImageColumn::make('photo')
                     ->circular()
-                    ->height(32)
+                    ->imageHeight(32)
                     ->width(32)
                     ->defaultImageUrl(function ($record) {
                         $colors = ['0d9488', '4f46e5', 'e11d48', 'd97706', '059669', '7c3aed', '0891b2', '2563eb', 'db2777', '7c2d12'];
@@ -43,6 +43,11 @@ class InvestorsTable
                         filled($record->phone) ? $record->phone : null,
                         filled($record->id_number) ? 'ID ' . $record->id_number : null,
                     ])->filter()->implode(' • ')),
+                TextColumn::make('row_no')
+                    ->label('No.')
+                    ->sortable()
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('customer_code')
                     ->label('Code')
                     ->searchable()

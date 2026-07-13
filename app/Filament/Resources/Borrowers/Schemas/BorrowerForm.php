@@ -30,6 +30,9 @@ class BorrowerForm
                             'md' => 2,
                         ])
                             ->schema([
+                                TextInput::make('row_no')
+                                    ->label('No.')
+                                    ->numeric(),
                                 TextInput::make('customer_code')
                                     ->label('Customer Code')
                                     ->helperText('Auto-generated if empty.')

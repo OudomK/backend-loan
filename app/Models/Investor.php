@@ -26,6 +26,7 @@ class Investor extends Model
     }
 
     protected $fillable = [
+        'row_no',
         'customer_code',
         'first_name',
         'last_name',

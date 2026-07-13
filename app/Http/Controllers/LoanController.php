@@ -412,16 +412,16 @@ class LoanController extends Controller
         $loan->write_off_balance = $validated['write_off_balance'];
         $loan->write_off_reason = $validated['write_off_reason'] ?? null;
         $loan->recovery_amount = $validated['recovery_amount'] ?? 0;
-        
+
         if (array_key_exists('maturity_date', $validated)) {
             $loan->maturity_date = $validated['maturity_date'];
         }
         if (array_key_exists('classify_wo', $validated)) {
             $loan->classify_wo = $validated['classify_wo'];
         }
-        
+
         $loan->status = 'written_off';
-        
+
         $loan->save();
 
         return response()->json(['message' => 'Loan successfully written off.', 'loan' => $loan]);

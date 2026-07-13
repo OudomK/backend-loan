@@ -14,6 +14,7 @@ class CoBorrower extends Model
 
     protected $appends = ['formatted_gender'];
     protected $fillable = [
+        'row_no',
         'customer_code',
         'first_name',
         'last_name',

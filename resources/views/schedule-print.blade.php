@@ -27,7 +27,7 @@
             min-height: 297mm;
             margin: 0 auto;
             background: #fff;
-            padding: 10mm 15mm 15mm;
+            padding: 2mm 15mm 15mm;
             box-sizing: border-box;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
@@ -37,6 +37,8 @@
                 background: #fff;
                 padding: 0;
                 margin: 0;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
             }
 
             .page {
@@ -44,7 +46,7 @@
                 max-width: 100% !important;
                 min-height: auto !important;
                 margin: 0 !important;
-                padding: 10mm 15mm 15mm !important;
+                padding: 2mm 15mm 15mm !important;
                 box-shadow: none !important;
                 border: none !important;
             }
@@ -55,6 +57,7 @@
 
             .schedule-table th {
                 background-color: #d7ffff !important;
+                box-shadow: inset 0 0 0 1000px #d7ffff !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
             }
@@ -107,7 +110,7 @@
 
         .line {
             border-bottom: 2px solid #111;
-            margin: 8px 0 7px;
+            margin: 8px 0 16px;
         }
 
         .info-table {
@@ -161,7 +164,7 @@
         .schedule-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 10px;
+            margin-top: 6px;
             table-layout: fixed;
         }
 
@@ -175,11 +178,12 @@
         }
 
         .schedule-table th {
-            background: #d7ffff;
-            color: #000;
+            background: #d7ffff !important;
+            box-shadow: inset 0 0 0 1000px #d7ffff !important;
+            color: #000 !important;
             height: 56px;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
             font-weight: 700;
             padding: 5px 4px;
         }
@@ -290,7 +294,7 @@
     </div>
 
     <div class="page bg-white shadow-lg print:shadow-none"
-        style="width: 794px; margin: 0 auto; padding: 5mm 15mm 15mm; box-sizing: border-box;">
+        style="width: 794px; margin: 0 auto; padding: 2mm 15mm 15mm; box-sizing: border-box;">
 
         <!-- PRINTABLE A4 CONTENT -->
         <div class="w-full text-black"
@@ -411,7 +415,7 @@
                             </td>
                             <td>
                                 <div class="info-cell">
-                                    <span class="info-label">លេខទូរស័ព្ទ:</span>
+                                    <span class="info-label">លេខទូរសព្ទ:</span>
                                     <span class="info-value">{{ $customer_info['phone_number'] ? implode(' ', str_split(preg_replace('/[^0-9]/', '', $customer_info['phone_number']), 3)) : '-' }}</span>
                                 </div>
                             </td>
@@ -479,7 +483,7 @@
             @if($isSplitMethod)
                 <table class="schedule-table">
                     <thead class="bg-[#d7ffff] text-black"
-                        style="-webkit-print-color-adjust: exact; print-color-adjust: exact; background-color: #d7ffff;">
+                        style="-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background-color: #d7ffff !important; box-shadow: inset 0 0 0 1000px #d7ffff !important;">
                         {{-- Hidden row to define column widths for table-layout:fixed --}}
                         <tr style="visibility: collapse; height: 0; line-height: 0; padding: 0; border: none;">
                             <th style="width: 5%;"></th>
@@ -685,7 +689,7 @@
                                 $day = strtr($parsedDate->format('d'), $khmerNums);
                                 $month = $khmerMonths[$parsedDate->format('M')] ?? strtr($parsedDate->format('m'), $khmerNums);
                                 $year = strtr($parsedDate->format('Y'), $khmerNums);
-                                echo "<span style='font-weight:bold;'>$day</span> ខែ<span style='font-weight:bold;'>$month</span> ឆ្នាំ<span style='font-weight:bold;'>$year</span>";
+                                echo "$day ខែ$month ឆ្នាំ$year ";
                             } catch (\Exception $e) {
                                 echo "......... ខែ ............ ឆ្នាំ ..............";
                             }

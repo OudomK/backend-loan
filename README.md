@@ -65,3 +65,5 @@ The Laravel framework is open-sourced software licensed under the [MIT license](
 
 
 http://127.0.0.1:8000/calculator?key=qf-secret-2026
+
+http://127.0.0.1:8000/admin?key=qf-admin-8x7k2m9pL4wZ

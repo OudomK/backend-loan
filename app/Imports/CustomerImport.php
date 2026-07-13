@@ -40,9 +40,51 @@ class CustomerImport
             $worksheet = $spreadsheet->getActiveSheet();
             $rows = $worksheet->toArray();
 
-            // Remove header row if exists
-            if (count($rows) > 0 && isset($rows[0][0]) && strtolower(trim($rows[0][0])) === 'first name') {
-                array_shift($rows);
+            // Extract headers and map indices
+            $headers = [];
+            if (count($rows) > 0) {
+                $headers = array_map(function($h) { return strtolower(trim((string)$h)); }, $rows[0]);
+                array_shift($rows); // Remove header row
+            }
+
+            // Fallback indices if headers are not perfectly matched
+            $colMap = [
+                'first_name' => 0, 'last_name' => 1, 'latin_name' => 2, 'gender' => 3, 'dob' => 4,
+                'phone' => 5, 'id_type' => 6, 'id_number' => 7, 'id_expiry' => 8, 'occupation' => 9,
+                'marital_status' => 10, 'village' => 11, 'commune' => 12, 'district' => 13, 'province' => 14,
+                'id_issued_date' => -1, // Optional
+            ];
+
+            // Dynamically map if headers exist
+            if (!empty($headers)) {
+                $findCol = function($names) use ($headers) {
+                    foreach ((array)$names as $name) {
+                        $search = strtolower($name);
+                        foreach ($headers as $idx => $header) {
+                            if (str_contains($header, $search)) {
+                                return $idx;
+                            }
+                        }
+                    }
+                    return -1;
+                };
+
+                $colMap['first_name'] = $findCol('first name');
+                $colMap['last_name'] = $findCol('last name');
+                $colMap['latin_name'] = $findCol(['latin name', 'latang']);
+                $colMap['gender'] = $findCol('gender');
+                $colMap['dob'] = $findCol(['dob', 'date of birth']);
+                $colMap['phone'] = $findCol(['phone', 'phone number']);
+                $colMap['id_type'] = $findCol('id type');
+                $colMap['id_number'] = $findCol(['id number', 'identity id']);
+                $colMap['id_expiry'] = $findCol(['id expiry', 'identity expiry']);
+                $colMap['occupation'] = $findCol('occupation');
+                $colMap['marital_status'] = $findCol(['marital status', 'marital_status']);
+                $colMap['village'] = $findCol('village');
+                $colMap['commune'] = $findCol('commune');
+                $colMap['district'] = $findCol('district');
+                $colMap['province'] = $findCol('province');
+                $colMap['id_issued_date'] = $findCol(['issue', 'issued', 'dated']);
             }
 
             $successCount = 0;
@@ -59,9 +101,15 @@ class CustomerImport
                     continue;
                 }
 
-                $firstName = trim($row[0] ?? '');
-                $lastName = trim($row[1] ?? '');
-                $latinName = trim($row[2] ?? '');
+                $getVal = function($key) use ($row, $colMap) {
+                    $idx = $colMap[$key] ?? -1;
+                    $val = $idx >= 0 ? trim((string)($row[$idx] ?? '')) : '';
+                    return $val === '' ? null : $val;
+                };
+
+                $firstName = $getVal('first_name');
+                $lastName = $getVal('last_name');
+                $latinName = $getVal('latin_name');
 
                 if (empty($firstName) || empty($lastName)) {
                     $errors[] = "Row " . ($index + 2) . ": First Name and Last Name are required.";
@@ -73,22 +121,28 @@ class CustomerImport
                 $customerCode = $prefix . $separator . str_pad($currentSequence, 3, '0', STR_PAD_LEFT);
 
                 $data = [
+                    'row_no' => $currentSequence,
                     'customer_code' => $customerCode,
                     'first_name' => $firstName,
                     'last_name' => $lastName,
                     'latin_name' => $latinName,
-                    'gender' => trim($row[3] ?? 'Male'),
-                    'dob' => $this->parseDate($row[4] ?? null),
-                    'phone' => trim($row[5] ?? ''),
-                    'id_type' => trim($row[6] ?? 'National ID'),
-                    'id_number' => trim($row[7] ?? ''),
-                    'id_expiry' => $this->parseDate($row[8] ?? null),
-                    'occupation' => trim($row[9] ?? ''),
-                    'marital_status' => trim($row[10] ?? ''),
-                    'village' => trim($row[11] ?? ''),
-                    'commune' => trim($row[12] ?? ''),
-                    'district' => trim($row[13] ?? ''),
-                    'province' => trim($row[14] ?? ''),
+                    'gender' => match(strtoupper($getVal('gender'))) {
+                        'F', 'FEMALE' => 'Female',
+                        'M', 'MALE' => 'Male',
+                        default => 'Other'
+                    },
+                    'dob' => $this->parseDate($getVal('dob')),
+                    'phone' => $getVal('phone'),
+                    'id_type' => $getVal('id_type') ?: 'National ID',
+                    'id_number' => $getVal('id_number'),
+                    'id_expiry' => $this->parseDate($getVal('id_expiry')),
+                    'id_issue_date' => $this->parseDate($getVal('id_issued_date')),
+                    'occupation' => $getVal('occupation'),
+                    'marital_status' => $getVal('marital_status'),
+                    'village' => $getVal('village'),
+                    'commune' => $getVal('commune'),
+                    'district' => $getVal('district'),
+                    'province' => $getVal('province'),
                     'status' => 'Active',
                 ];
 

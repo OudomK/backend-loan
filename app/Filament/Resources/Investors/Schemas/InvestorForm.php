@@ -36,7 +36,10 @@ class InvestorForm
                                     ->schema([
                                         Grid::make(3)
                                             ->schema([
-                                                TextInput::make('customer_code')
+                                                TextInput::make('row_no')
+                                                ->label('No.')
+                                                ->numeric(),
+                                            TextInput::make('customer_code')
                                                     ->label('Customer Code')
                                                     ->helperText('Auto-generated if empty.')
                                                     ->default(fn () => InvestorResource::nextInvestorCode())

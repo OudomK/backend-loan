@@ -75,7 +75,7 @@ Route::get('/app/settings', function () {
         $customFonts = $query
             ->orderBy('name')
             ->get(['key', 'name', 'file_path'])
-            ->map(fn ($font) => [
+            ->map(fn($font) => [
                 'key' => $font->key,
                 'name' => $font->name,
                 'url' => asset('storage/' . $font->file_path),
@@ -129,7 +129,7 @@ Route::get('/app/settings', function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/admin/sso', [AuthController::class, 'getSsoUrl']);
-    
+
     Route::get('/relationships', [\App\Http\Controllers\RelationshipController::class, 'index']);
     Route::get('/payment-methods', [\App\Http\Controllers\PaymentMethodController::class, 'index']);
 
@@ -198,7 +198,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('saving-accounts/post-interest', [SavingAccountController::class, 'postInterest']);
     Route::get('saving-accounts/{account}/transactions', [SavingAccountController::class, 'getTransactions']);
     Route::post('saving-accounts/{account}/close', [SavingAccountController::class, 'closeAccount']);
-    
+
     // Export Capital Share Routes
     Route::get('capital-shares/export-excel', [CapitalShareController::class, 'exportExcel']);
     Route::get('capital-shares/export-pdf', [CapitalShareController::class, 'exportPdf']);
