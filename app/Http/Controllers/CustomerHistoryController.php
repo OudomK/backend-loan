@@ -382,6 +382,7 @@ class CustomerHistoryController extends Controller
         $contractNo = trim($contractNo);
         $loan = Loan::where('loan_code', $contractNo)
             ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'borrower', 'product', 'paymentQr'])
+            ->orderBy('id', 'desc')
             ->first();
 
         if (!$loan) {
