@@ -173,6 +173,16 @@ class IncomeStatementController extends Controller
                         ->get()
                         ->sum(fn($loan) => $this->recognizedAdminFeeAmount($loan));
 
+                } elseif ($catSlug === 'recovery_income' || str_contains($lowerCatName, 'recovery')) {
+                    // Recovery Income: from repayment transactions recovery_amount
+                    $amount = (double) DB::table('repayment_transactions')
+                        ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
+                        ->whereNull('repayment_transactions.deleted_at')
+                        ->whereNull('loans.deleted_at')
+                        ->where('loans.currency', 'LIKE', $curr . '%')
+                        ->whereBetween('repayment_transactions.transaction_date', [$fromDate, $toDate])
+                        ->sum('repayment_transactions.recovery_amount');
+
                 } elseif ($catSlug === 'other_revenue' || str_contains($lowerCatName, 'other')) {
                     // Other Revenue: catch-all from miscellaneous_transactions
                     $amount = (double) DB::table('miscellaneous_transactions')

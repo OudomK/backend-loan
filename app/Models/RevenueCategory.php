@@ -35,6 +35,8 @@ class RevenueCategory extends Model
                     $category->slug = 'interest_income';
                 } elseif (str_contains($slugName, 'admin')) {
                     $category->slug = 'admin_fee';
+                } elseif (str_contains($slugName, 'recovery')) {
+                    $category->slug = 'recovery_income';
                 } elseif (str_contains($slugName, 'other')) {
                     $category->slug = 'other_revenue';
                 } else {
