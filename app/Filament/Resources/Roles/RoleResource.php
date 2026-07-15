@@ -290,7 +290,7 @@ class RoleResource extends Resource
                                     ->label('Category')
                                     ->options([
                                         'admin' => 'Admin Panel',
-                                        'system_ui' => 'System UI (Flutter)',
+                                        'system_ui' => 'App',
                                     ])
                                     ->default('admin')
                                     ->required()
@@ -302,7 +302,7 @@ class RoleResource extends Resource
                                             $set('guard_name', 'web');
                                         }
                                     })
-                                    ->helperText('Admin = for admin panel access. System UI = for Flutter app feature access.'),
+                                    ->helperText('Admin = for admin panel access. App = for Flutter app feature access.'),
 
                                 Select::make(config('permission.column_names.team_foreign_key'))
                                     ->label(__('filament-shield::filament-shield.field.team'))
@@ -326,7 +326,7 @@ class RoleResource extends Resource
                 static::getShieldFormComponents()
                     ->visible(fn($get) => ($get('category') ?? 'admin') === 'admin'),
 
-                Section::make('System UI Permissions')
+                Section::make('App Permissions')
                     ->description('Select which features to show in the Flutter app and what actions are allowed. Organized by feature groups.')
                     ->schema(function () {
                         $sections = [];
@@ -354,7 +354,8 @@ class RoleResource extends Resource
                                         CheckboxList::make("ui_feature_{$key}_actions")
                                             ->label('Actions')
                                             ->options(fn() => static::getSystemUiActionsForGroup($groupName))
-                                            ->columns(2)
+                                            ->columns(['default' => 2, 'sm' => 3])
+                                            ->bulkToggleable()
                                             ->visible(fn($get) => $get("ui_feature_{$key}_show") && $groupName !== 'Menu Visibility')
                                             ->afterStateHydrated(function (CheckboxList $component, $record) use ($key) {
                                                 if (!$record) {
@@ -369,6 +370,7 @@ class RoleResource extends Resource
                                                 $component->state($actions);
                                             }),
                                     ])
+                                    ->columns(1)
                                     ->columnSpan(1);
                             }
 
@@ -395,7 +397,7 @@ class RoleResource extends Resource
     {
         return $table
             ->heading('Roles')
-            ->description('Configure admin panel access and system UI permissions for each role.')
+            ->description('Configure admin panel access and App permissions for each role.')
             ->defaultSort('updated_at', 'desc')
             ->columns([
                 TextColumn::make('name')
@@ -412,7 +414,7 @@ class RoleResource extends Resource
                     })
                     ->formatStateUsing(fn(string $state): string => match ($state) {
                         'admin' => 'Admin',
-                        'system_ui' => 'System UI',
+                        'system_ui' => 'App',
                         default => $state,
                     })
                     ->label('Category'),
@@ -441,7 +443,7 @@ class RoleResource extends Resource
                     ->label('Category')
                     ->options([
                         'admin' => 'Admin',
-                        'system_ui' => 'System UI',
+                        'system_ui' => 'App',
                     ]),
             ])
             ->recordActions([

@@ -24,6 +24,11 @@ class AdminControl extends Page implements HasForms
     protected static ?int $navigationSort = 1;
     protected string $view = 'filament.pages.admin-control';
 
+    public function getHeading(): string
+    {
+        return '';
+    }
+
     public ?array $data = [];
 
     public static function canAccess(): bool
@@ -75,77 +80,42 @@ class AdminControl extends Page implements HasForms
     {
         return $schema
             ->schema([
-                Section::make('General Configuration')
-                    ->description('Toggle un-grouped features.')
+                Section::make('Feature Controls')
+                    ->description('Toggle system features on or off.')
                     ->schema([
                         Toggle::make('custom_fonts')->label('Enable Custom Fonts')->default(true),
                         Toggle::make('loan_products')->label('Enable Loan Products')->default(true),
                         Toggle::make('relationships')->label('Enable Relationships')->default(true),
-                    ])->columns(3),
-
-                Section::make('Administration')
-                    ->description('Toggle administrative tools.')
-                    ->schema([
                         Toggle::make('translations')->label('Enable Translations')->default(true),
                         Toggle::make('activity_logs')->label('Enable Audit Logs')->default(true),
                         Toggle::make('payment_qrs')->label('Enable Payment QR Codes')->default(true),
                         Toggle::make('payment_methods')->label('Enable Payment Methods')->default(true),
-                    ])->columns(4),
-
-                Section::make('Financial Management')
-                    ->description('Toggle financial categories and transactions.')
-                    ->schema([
                         Toggle::make('expense_categories')->label('Enable Expense Categories')->default(true),
                         Toggle::make('revenue_categories')->label('Enable Revenue Categories')->default(true),
                         Toggle::make('expenses')->label('Enable Expenses')->default(true),
                         Toggle::make('revenues')->label('Enable Revenues')->default(true),
                         Toggle::make('misc_transactions')->label('Enable Miscellaneous Transactions')->default(true),
-                    ])->columns(3),
-
-                Section::make('Credit Operations')
-                    ->description('Toggle loan and credit related features.')
-                    ->schema([
                         Toggle::make('loans')->label('Enable Loans')->default(true),
                         Toggle::make('repayment_transactions')->label('Enable Repayment Transactions')->default(true),
                         Toggle::make('overdue_payments')->label('Enable Overdue Payments')->default(true),
                         Toggle::make('loan_modifications')->label('Enable Loan Modifications')->default(true),
                         Toggle::make('collaterals')->label('Enable Collaterals')->default(true),
-                    ])->columns(3),
-
-                Section::make('Fund Management')
-                    ->description('Toggle shares, investments, and borrowing.')
-                    ->schema([
                         Toggle::make('borrowings')->label('Enable Borrowings')->default(true),
                         Toggle::make('borrowing_repayments')->label('Enable Borrowing Repayments')->default(true),
                         Toggle::make('capital_shares')->label('Enable Capital & Shares')->default(true),
                         Toggle::make('capital_share_transactions')->label('Enable Capital Share Transactions')->default(true),
                         Toggle::make('dividends')->label('Enable Dividends')->default(true),
                         Toggle::make('investors')->label('Enable Investors')->default(true),
-                    ])->columns(3),
-
-                Section::make('Client Management')
-                    ->description('Toggle borrower and guarantor records.')
-                    ->schema([
                         Toggle::make('borrowers')->label('Enable Borrowers')->default(true),
                         Toggle::make('co_borrowers')->label('Enable Co Borrowers')->default(true),
                         Toggle::make('guarantors')->label('Enable Guarantors')->default(true),
                         Toggle::make('loan_officers')->label('Enable Loan Officers')->default(true),
-                    ])->columns(2),
-
-                Section::make('HR & Payroll')
-                    ->description('Toggle human resources features.')
-                    ->schema([
                         Toggle::make('employees')->label('Enable Employees')->default(true),
                         Toggle::make('payrolls')->label('Enable Payrolls')->default(true),
                         Toggle::make('positions')->label('Enable Positions')->default(true),
-                    ])->columns(3),
-
-                Section::make('Reports')
-                    ->description('Toggle report dashboards.')
-                    ->schema([
                         Toggle::make('reports')->label('Enable Reports')->default(true),
                         Toggle::make('par_analysis')->label('Enable PAR Analysis')->default(true),
-                    ])->columns(2),
+                    ])->columns(['default' => 1, 'sm' => 2, 'lg' => 3, 'xl' => 4]),
             ])
             ->statePath('data');
     }

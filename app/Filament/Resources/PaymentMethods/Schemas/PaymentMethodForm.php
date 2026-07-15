@@ -12,10 +12,20 @@ class PaymentMethodForm
     {
         return $schema
             ->components([
-                TextInput::make('name')
-                    ->required(),
-                Toggle::make('is_active')
-                    ->required(),
+                \Filament\Schemas\Components\Section::make('Payment Method Details')
+                    ->icon('heroicon-o-banknotes')
+                    ->schema([
+                        \Filament\Schemas\Components\Grid::make([
+                            'default' => 1,
+                            'md' => 2,
+                        ])->schema([
+                            TextInput::make('name')
+                                ->required(),
+                            Toggle::make('is_active')
+                                ->required()
+                                ->default(true),
+                        ])
+                    ]),
             ]);
     }
 }

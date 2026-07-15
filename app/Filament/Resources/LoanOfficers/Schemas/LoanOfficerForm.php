@@ -68,7 +68,6 @@ class LoanOfficerForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 4,
                         ])
                             ->schema([
                                 TextInput::make('phone')
@@ -96,7 +95,6 @@ class LoanOfficerForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 3,
                         ])
                             ->schema([
                                 Select::make('gender')

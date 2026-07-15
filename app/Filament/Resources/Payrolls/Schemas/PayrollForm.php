@@ -52,7 +52,7 @@ class PayrollForm
                             ]),
                         Grid::make([
                             'default' => 1,
-                            'md' => 3,
+                            'md' => 2,
                         ])
                             ->schema([
                                 Select::make('currency')
@@ -75,7 +75,6 @@ class PayrollForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 4,
                         ])
                             ->schema([
                                 TextInput::make('salary')

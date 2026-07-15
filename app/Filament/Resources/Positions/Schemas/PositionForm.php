@@ -38,7 +38,6 @@ class PositionForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 4,
                         ])
                             ->schema([
                                 TextInput::make('department')
@@ -57,7 +56,6 @@ class PositionForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 3,
                         ])
                             ->schema([
                                 Select::make('reporting_to_id')

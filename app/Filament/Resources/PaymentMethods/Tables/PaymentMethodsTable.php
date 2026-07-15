@@ -14,6 +14,14 @@ class PaymentMethodsTable
     public static function configure(Table $table): Table
     {
         return $table
+            ->heading('Payment Methods')
+            ->description('Manage the payment methods available in the system.')
+            ->headerActions([
+                \Filament\Actions\CreateAction::make()
+                    ->label('New payment method')
+                    ->icon('heroicon-m-plus-circle')
+                    ->button(),
+            ])
             ->columns([
                 TextColumn::make('name')
                     ->searchable(),

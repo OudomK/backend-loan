@@ -23,7 +23,6 @@ class EmployeeForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 3,
                         ])
                             ->schema([
                                 TextInput::make('name')
@@ -45,7 +44,6 @@ class EmployeeForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 3,
                         ])
                             ->schema([
                                 Select::make('gender')
@@ -116,7 +114,6 @@ class EmployeeForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 3,
                         ])
                             ->schema([
                                 TextInput::make('salary')

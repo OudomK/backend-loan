@@ -34,14 +34,17 @@ class LoanOfficersTable
                 TextColumn::make('phone')
                     ->label('Phone 1')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->formatStateUsing(fn ($state) => \App\Support\FormatHelper::formatPhoneNumber($state)),
                 TextColumn::make('phone_2')
                     ->label('Phone 2')
                     ->searchable()
+                    ->formatStateUsing(fn ($state) => \App\Support\FormatHelper::formatPhoneNumber($state))
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('phone_3')
                     ->label('Phone 3')
                     ->searchable()
+                    ->formatStateUsing(fn ($state) => \App\Support\FormatHelper::formatPhoneNumber($state))
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('employee.name')
                     ->label('Linked Employee')

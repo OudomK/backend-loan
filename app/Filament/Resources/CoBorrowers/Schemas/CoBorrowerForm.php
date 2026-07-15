@@ -50,7 +50,6 @@ class CoBorrowerForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 4,
                         ])
                             ->schema([
                                 TextInput::make('first_name')
@@ -80,8 +79,7 @@ class CoBorrowerForm
                             ]),
                         Grid::make([
                             'default' => 1,
-                            'md' => 2,
-                            'xl' => 3,
+                            'md' => 3,
                         ])
                             ->schema([
                                 TextInput::make('dob')
@@ -118,7 +116,6 @@ class CoBorrowerForm
                         Grid::make([
                             'default' => 1,
                             'md' => 2,
-                            'xl' => 4,
                         ])
                             ->schema([
                                 Select::make('id_type')
