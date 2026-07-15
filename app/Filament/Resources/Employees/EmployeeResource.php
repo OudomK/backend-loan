@@ -49,6 +49,9 @@ class EmployeeResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                \Illuminate\Database\Eloquent\SoftDeletingScope::class,
+            ])
             ->with(['position']);
     }
 
@@ -68,4 +71,3 @@ class EmployeeResource extends Resource
         ];
     }
 }
-

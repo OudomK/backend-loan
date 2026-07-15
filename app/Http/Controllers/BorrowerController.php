@@ -137,6 +137,7 @@ class BorrowerController extends Controller
             'province' => 'nullable|string',
             'photo' => 'nullable|string',
             'customer_type' => 'nullable|string|in:Borrower,Saver,Investor',
+            'row_no' => 'nullable|integer',
         ]);
 
         if (empty($validated['customer_code'])) {
@@ -177,6 +178,7 @@ class BorrowerController extends Controller
             'province' => 'nullable|string',
             'photo' => 'nullable|string',
             'customer_type' => 'sometimes|nullable|string|in:Borrower,Saver,Investor',
+            'row_no' => 'nullable|integer',
         ]);
 
         $borrower->update($validated);

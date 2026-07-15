@@ -105,6 +105,10 @@ class BorrowersTable
                 EditAction::make()
                     ->iconButton()
                     ->tooltip('Manage borrower'),
+                RestoreAction::make()
+                    ->iconButton()
+                    ->tooltip('Restore borrower'),
+                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -114,7 +118,9 @@ class BorrowersTable
             ])
             ->bulkActions([
                 BulkActionGroup::make([
-                    // Deletions removed
+                    DeleteBulkAction::make(),
+                    RestoreBulkAction::make(),
+                    ForceDeleteBulkAction::make(),
                 ]),
             ]);
     }

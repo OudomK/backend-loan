@@ -49,7 +49,8 @@ class InvestorController extends Controller
             'province' => 'nullable|string',
             'photo' => 'nullable|string',
             'status' => 'nullable|string',
-            'customer_type' => 'nullable|string'
+            'customer_type' => 'nullable|string',
+            'row_no' => 'nullable|integer'
         ]);
 
         // Remove null status so MySQL uses DEFAULT 'Active'
@@ -96,7 +97,8 @@ class InvestorController extends Controller
             'district' => 'nullable|string',
             'province' => 'nullable|string',
             'photo' => 'nullable|string',
-            'status' => 'nullable|string'
+            'status' => 'nullable|string',
+            'row_no' => 'nullable|integer',
         ]);
 
         $investor->update($validated);

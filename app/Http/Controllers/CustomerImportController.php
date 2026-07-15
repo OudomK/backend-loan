@@ -17,10 +17,24 @@ class CustomerImportController extends Controller
 
         $file = $request->file('file');
         $type = $request->input('type');
+        $force = filter_var($request->input('force', false), FILTER_VALIDATE_BOOLEAN);
 
         try {
             $importer = new CustomerImport();
-            $result = $importer->import($file->getPathname(), $type);
+
+            // If not forcing, check for duplicates first
+            if (!$force) {
+                $duplicateCheck = $importer->checkDuplicates($file->getPathname(), $type);
+                if ($duplicateCheck['has_duplicates']) {
+                    return response()->json([
+                        'has_duplicates' => true,
+                        'duplicates' => $duplicateCheck['duplicates'],
+                        'message' => 'Duplicate ID Numbers found.',
+                    ], 409);
+                }
+            }
+
+            $result = $importer->import($file->getPathname(), $type, $force);
 
             if ($result['success']) {
                 return response()->json([

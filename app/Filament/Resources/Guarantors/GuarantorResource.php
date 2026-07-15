@@ -60,6 +60,14 @@ class GuarantorResource extends Resource
         return GuarantorsTable::configure($table);
     }
 
+    public static function getEloquentQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                SoftDeletingScope::class,
+            ]);
+    }
+
     public static function getRelations(): array
     {
         return [

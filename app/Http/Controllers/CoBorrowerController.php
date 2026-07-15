@@ -113,6 +113,7 @@ class CoBorrowerController extends Controller
             'district' => 'nullable|string',
             'province' => 'nullable|string',
             'photo' => 'nullable|string',
+            'row_no' => 'nullable|integer',
         ]);
 
         if (empty($validated['customer_code'])) {
@@ -152,6 +153,7 @@ class CoBorrowerController extends Controller
             'district' => 'nullable|string',
             'province' => 'nullable|string',
             'photo' => 'nullable|string',
+            'row_no' => 'nullable|integer',
         ]);
 
         $coBorrower->update($validated);

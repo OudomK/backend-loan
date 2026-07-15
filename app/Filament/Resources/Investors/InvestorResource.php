@@ -35,6 +35,19 @@ class InvestorResource extends Resource
         return ['first_name', 'last_name', 'customer_code', 'phone', 'id_number'];
     }
 
+    public static function getGlobalSearchResultTitle(\Illuminate\Database\Eloquent\Model $record): string|\Illuminate\Contracts\Support\Htmlable
+    {
+        return "{$record->first_name} {$record->last_name} ({$record->customer_code})";
+    }
+
+    public static function getGlobalSearchResultDetails(\Illuminate\Database\Eloquent\Model $record): array
+    {
+        return [
+            'Phone' => $record->phone,
+            'ID' => "{$record->id_type}: {$record->id_number}",
+        ];
+    }
+
     public static function form(Schema $schema): Schema
     {
         return InvestorForm::configure($schema);

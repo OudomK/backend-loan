@@ -51,6 +51,9 @@ class LoanOfficerResource extends Resource
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()
+            ->withoutGlobalScopes([
+                \Illuminate\Database\Eloquent\SoftDeletingScope::class,
+            ])
             ->with(['employee'])
             ->withCount([
                 'loans as active_loans_count' => fn(Builder $query) => $query->where('status', 'active'),

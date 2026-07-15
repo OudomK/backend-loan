@@ -6,6 +6,7 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
+use Filament\Actions\ForceDeleteAction;
 use Filament\Actions\RestoreAction;
 use Filament\Actions\ForceDeleteBulkAction;
 use Filament\Actions\RestoreBulkAction;
@@ -102,6 +103,7 @@ class InvestorsTable
                     ->iconButton()
                     ->tooltip('Manage investor'),
                 RestoreAction::make(),
+                ForceDeleteAction::make(),
             ])
             ->headerActions([
                 CreateAction::make()
