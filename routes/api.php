@@ -172,6 +172,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('loans/suggest-code', [LoanController::class, 'suggestCode']);
     Route::post('loans/{id}/write-off', [LoanController::class, 'writeOff']);
     Route::apiResource('loans', LoanController::class);
+    Route::put('loans/{id}/schedule', [LoanController::class, 'updateSchedule']);
 
     Route::get('/repayments/due-list', [RepaymentController::class, 'getDueList'])->middleware('permission:ui:repayment:view');
     Route::get('/repayments/search', [RepaymentController::class, 'search'])->middleware('permission:ui:repayment:view');

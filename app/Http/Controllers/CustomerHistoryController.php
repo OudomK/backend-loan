@@ -291,6 +291,7 @@ class CustomerHistoryController extends Controller
             $q->where('first_name', 'like', $like)
                 ->orWhere('last_name', 'like', $like)
                 ->orWhere('latin_name', 'like', $like)
+                    ->orWhere('nickname', 'like', $like)
                 ->orWhere('id_number', 'like', $like)
                 ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(id_number, ' ', '')"), 'like', $likeNoSpace)
                 ->orWhere('phone', 'like', $like)

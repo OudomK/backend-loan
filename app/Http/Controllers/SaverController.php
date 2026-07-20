@@ -18,6 +18,7 @@ class SaverController extends Controller
                     ->orWhere('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere('latin_name', 'like', "%{$search}%")
+                    ->orWhere('nickname', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
                     ->orWhere('id_number', 'like', "%{$search}%");
             });
@@ -33,6 +34,7 @@ class SaverController extends Controller
             'first_name' => 'required|string',
             'last_name' => 'required|string',
             'latin_name' => 'nullable|string',
+            'nickname' => 'nullable|string',
             'gender' => 'nullable|string',
             'marital_status' => 'nullable|in:Single,Married,Divorced,Widowed',
             'dob' => 'nullable|string',
@@ -76,6 +78,7 @@ class SaverController extends Controller
             'first_name' => 'sometimes|required|string',
             'last_name' => 'sometimes|required|string',
             'latin_name' => 'sometimes|nullable|string',
+            'nickname' => 'sometimes|nullable|string',
             'gender' => 'sometimes|nullable|string',
             'marital_status' => 'nullable|in:Single,Married,Divorced,Widowed',
             'dob' => 'nullable|string',

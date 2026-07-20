@@ -19,6 +19,7 @@ class GuarantorController extends Controller
                 $q->where('first_name', 'like', $like)
                     ->orWhere('last_name', 'like', $like)
                     ->orWhere('latin_name', 'like', $like)
+                    ->orWhere('nickname', 'like', $like)
                     ->orWhere('id_number', 'like', $like)
                     ->orWhere('phone', 'like', $like)
                     ->orWhere('age', 'like', $like)
@@ -34,6 +35,7 @@ class GuarantorController extends Controller
                     'first_name',
                     'last_name',
                     'latin_name',
+                    'nickname',
                     'phone',
                     'id_number',
                     'customer_code',
@@ -65,6 +67,7 @@ class GuarantorController extends Controller
                         'first_name' => (string) ($guarantor->first_name ?? ''),
                         'last_name' => (string) ($guarantor->last_name ?? ''),
                         'latin_name' => (string) ($guarantor->latin_name ?? ''),
+                        'nickname' => (string) ($guarantor->nickname ?? ''),
                         'name' => trim(($guarantor->first_name ?? '') . ' ' . ($guarantor->last_name ?? '')),
                         'phone' => (string) ($guarantor->phone ?? ''),
                         'id_number' => (string) ($guarantor->id_number ?? ''),
@@ -98,6 +101,7 @@ class GuarantorController extends Controller
             'first_name' => 'nullable|string|max:255',
             'last_name' => 'nullable|string|max:255',
             'latin_name' => 'nullable|string|max:255',
+            'nickname' => 'nullable|string|max:255',
             'gender' => 'nullable|string',
             'marital_status' => 'nullable|string',
             'age' => 'nullable|integer',
@@ -138,6 +142,7 @@ class GuarantorController extends Controller
             'first_name' => 'sometimes|nullable|string|max:255',
             'last_name' => 'sometimes|nullable|string|max:255',
             'latin_name' => 'sometimes|nullable|string|max:255',
+            'nickname' => 'sometimes|nullable|string|max:255',
             'gender' => 'nullable|string',
             'marital_status' => 'nullable|string',
             'age' => 'nullable|integer',

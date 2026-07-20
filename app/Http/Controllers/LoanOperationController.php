@@ -25,10 +25,10 @@ class LoanOperationController extends Controller
         }
 
         try {
-        // Exact same scope as getRecentActivity so stats match the table.
-        $activeLoansCount = Loan::where('status', '!=', 'completed')->count();
-        $disbursedUSD = (float) Loan::where('status', '!=', 'completed')->where('currency', 'LIKE', 'USD%')->sum('amount');
-        $disbursedKHR = (float) Loan::where('status', '!=', 'completed')->where('currency', 'LIKE', 'KHR%')->sum('amount');
+        // Use 'active' status to match Dashboard stats exactly (exclude written_off, etc from portfolio metrics)
+        $activeLoansCount = Loan::where('status', 'active')->count();
+        $disbursedUSD = (float) Loan::where('status', 'active')->where('currency', 'LIKE', 'USD%')->sum('amount');
+        $disbursedKHR = (float) Loan::where('status', 'active')->where('currency', 'LIKE', 'KHR%')->sum('amount');
 
         $portfolioLoans = Loan::with([
             'payments' => function ($query) {
@@ -38,7 +38,7 @@ class LoanOperationController extends Controller
                 $query->where('transaction_date', '<=', Carbon::today('Asia/Phnom_Penh')->toDateString());
             },
         ])
-            ->where('status', '!=', 'completed')
+            ->where('status', 'active')
             ->whereNull('deleted_at')
             ->get();
 
@@ -53,7 +53,7 @@ class LoanOperationController extends Controller
             $today = Carbon::today('Asia/Phnom_Penh');
 
             foreach ($portfolioLoans as $loan) {
-                /** @var \App\Models\Loan $loan */
+                /** @var Loan $loan */
                 $snapshot = $this->portfolioSnapshot($loan, $today);
                 $currentOS = $snapshot['outstanding'];
                 if ($currentOS <= 0.01) {
@@ -97,9 +97,9 @@ class LoanOperationController extends Controller
             \Illuminate\Support\Facades\Log::error('LoanOperation getStats failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             // Fallback: try raw count/sum so we don't return all zeros
             try {
-                $c = DB::table('loans')->whereNull('deleted_at')->where('status', '!=', 'completed')->count();
-                $usd = (float) DB::table('loans')->whereNull('deleted_at')->where('status', '!=', 'completed')->where('currency', 'LIKE', 'USD%')->sum('amount');
-                $khr = (float) DB::table('loans')->whereNull('deleted_at')->where('status', '!=', 'completed')->where('currency', 'LIKE', 'KHR%')->sum('amount');
+                $c = DB::table('loans')->whereNull('deleted_at')->where('status', 'active')->count();
+                $usd = (float) DB::table('loans')->whereNull('deleted_at')->where('status', 'active')->where('currency', 'LIKE', 'USD%')->sum('amount');
+                $khr = (float) DB::table('loans')->whereNull('deleted_at')->where('status', 'active')->where('currency', 'LIKE', 'KHR%')->sum('amount');
                 $total = $usd + ($khr / max(1, $exchangeRate));
                 return response()->json([
                     'active_loans' => $c,
@@ -164,7 +164,7 @@ class LoanOperationController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $loans->each(function ($loan) {
+        $loans->each(function (Loan $loan) {
             $loan->makeVisible(['admin_fee']);
         });
 

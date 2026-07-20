@@ -29,6 +29,7 @@ class Saver extends Model
         'first_name',
         'last_name',
         'latin_name',
+        'nickname',
         'gender',
         'marital_status',
         'age',

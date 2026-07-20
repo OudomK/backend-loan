@@ -426,4 +426,40 @@ class LoanController extends Controller
 
         return response()->json(['message' => 'Loan successfully written off.', 'loan' => $loan]);
     }
+
+    public function updateSchedule(Request $request, int $id)
+    {
+        $loan = Loan::findOrFail($id);
+
+        $validated = $request->validate([
+            'payments' => 'required|array',
+            'payments.*.id' => 'required|exists:payments,id',
+            'payments.*.payment_date' => 'required|date',
+            'payments.*.principal_amount' => 'required|numeric',
+            'payments.*.interest_amount' => 'required|numeric',
+            'payments.*.fee_amount' => 'required|numeric',
+        ]);
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($loan, $validated) {
+            foreach ($validated['payments'] as $paymentData) {
+                // Ensure the payment belongs to this loan
+                $payment = $loan->payments()->find($paymentData['id']);
+                if ($payment) {
+                    $principal = (float) $paymentData['principal_amount'];
+                    $interest = (float) $paymentData['interest_amount'];
+                    $fee = (float) $paymentData['fee_amount'];
+                    
+                    $payment->update([
+                        'payment_date' => $paymentData['payment_date'],
+                        'principal_amount' => $principal,
+                        'interest_amount' => $interest,
+                        'fee_amount' => $fee,
+                        'total_due' => $principal + $interest + $fee,
+                    ]);
+                }
+            }
+        });
+
+        return response()->json(['message' => 'Schedule successfully updated.']);
+    }
 }

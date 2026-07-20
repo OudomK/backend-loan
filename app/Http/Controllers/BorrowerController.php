@@ -24,6 +24,7 @@ class BorrowerController extends Controller
                 $q->where('first_name', 'like', $like)
                     ->orWhere('last_name', 'like', $like)
                     ->orWhere('latin_name', 'like', $like)
+                    ->orWhere('nickname', 'like', $like)
                     ->orWhere('id_number', 'like', $like)
                     ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(id_number, ' ', '')"), 'like', $likeNoSpace)
                     ->orWhere('phone', 'like', $like)
@@ -42,6 +43,7 @@ class BorrowerController extends Controller
                     'first_name',
                     'last_name',
                     'latin_name',
+                    'nickname',
                     'phone',
                     'id_number',
                     'customer_code',
@@ -78,6 +80,7 @@ class BorrowerController extends Controller
                         'first_name' => (string) ($borrower->first_name ?? ''),
                         'last_name' => (string) ($borrower->last_name ?? ''),
                         'latin_name' => (string) ($borrower->latin_name ?? ''),
+                        'nickname' => (string) ($borrower->nickname ?? ''),
                         'name' => trim(($borrower->first_name ?? '') . ' ' . ($borrower->last_name ?? '')),
                         'phone' => (string) ($borrower->phone ?? ''),
                         'id_number' => (string) ($borrower->id_number ?? ''),
@@ -121,6 +124,7 @@ class BorrowerController extends Controller
             'first_name' => 'nullable|string|max:255',
             'last_name' => 'nullable|string|max:255',
             'latin_name' => 'nullable|string|max:255',
+            'nickname' => 'nullable|string|max:255',
             'gender' => 'nullable|string',
             'marital_status' => 'nullable|string',
             'age' => 'nullable|integer',
@@ -162,6 +166,7 @@ class BorrowerController extends Controller
             'first_name' => 'sometimes|nullable|string|max:255',
             'last_name' => 'sometimes|nullable|string|max:255',
             'latin_name' => 'sometimes|nullable|string|max:255',
+            'nickname' => 'sometimes|nullable|string|max:255',
             'gender' => 'nullable|string',
             'marital_status' => 'nullable|string',
             'age' => 'nullable|integer',

@@ -203,6 +203,7 @@ class RepaymentController extends Controller
                         $bq->where('first_name', 'LIKE', $like)
                             ->orWhere('last_name', 'LIKE', $like)
                             ->orWhere('latin_name', 'LIKE', $like)
+                            ->orWhere('nickname', 'LIKE', $like)
                             ->orWhere('phone', 'LIKE', $like)
                             ->orWhereRaw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) LIKE ?", [$like])
                             ->orWhereRaw("CONCAT(COALESCE(last_name, ''), ' ', COALESCE(first_name, '')) LIKE ?", [$like]);
