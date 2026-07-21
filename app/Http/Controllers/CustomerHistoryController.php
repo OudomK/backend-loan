@@ -24,7 +24,7 @@ class CustomerHistoryController extends Controller
         // Pre-load all repayment transactions for this loan in ONE query (fix N+1)
         $txIds = $loan->payments->pluck('repayment_transaction_id')->filter()->unique();
         $txMap = \App\Models\RepaymentTransaction::whereIn('id', $txIds)
-            ->pluck('repayment_type', 'id');
+            ->get()->keyBy('id');
 
         // Pre-load all transaction types for allocations as well
         $allocationTxIds = $loan->payments->flatMap->allocations->pluck('repayment_transaction_id')->filter()->unique();
@@ -97,9 +97,17 @@ class CustomerHistoryController extends Controller
         }
         $penaltyGross = $daysOverdue * $penaltyPerDay;
 
-        // Add penalty paid so far including waivers
-        $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('penalty_paid')
-            + (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('waived_amount');
+        // Add penalty paid so far including waivers (only for current late period)
+        $penaltyPaidSoFar = 0.0;
+        if ($loan->late_since_date) {
+            $lateSince = \Carbon\Carbon::parse($loan->late_since_date)->startOfDay();
+            $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
+                ->where('transaction_date', '>=', $lateSince)
+                ->sum('penalty_paid')
+                + (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
+                ->where('transaction_date', '>=', $lateSince)
+                ->sum('waived_amount');
+        }
         $arr['penalty_paid_so_far'] = $penaltyPaidSoFar;
 
         $penaltyDue = $penaltyGross - $penaltyPaidSoFar;
@@ -179,7 +187,7 @@ class CustomerHistoryController extends Controller
             $prepaymentValue += (float)$p->total_paid;
         }
 
-        $repaymentType = $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id] ?? null) : null;
+        $repaymentType = $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id]?->repayment_type ?? null) : null;
         $isPayoffTrigger = $repaymentType === 'Pay Off';
         $groupKey = $p->repayment_transaction_id ? (string)$p->repayment_transaction_id : ($p->updated_at ? (string)$p->updated_at : '');
         if ($groupKey !== '' && isset($groups[$groupKey])) {
@@ -232,6 +240,7 @@ class CustomerHistoryController extends Controller
             'original_prepayment' => (float) ($p->prepayment ?? 0),
             'repayment_transaction_id' => $p->repayment_transaction_id,
             'repayment_type' => $repaymentType,
+            'transaction_date' => $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id]?->transaction_date ?? null) : null,
             'schedule_on_time_label' => $scheduleOnTimeLabel,
             'payment_on_time_label' => $paymentOnTimeLabel,
             'outstanding_balance' => $currentOS,

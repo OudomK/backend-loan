@@ -79,8 +79,15 @@ class RescheduleRefinanceController extends Controller
                             $penaltyDue = 0;
                         } else {
                             $penaltyGross = round($dpd * (float) $penaltyRate, 2);
-                            $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('penalty_paid')
-                                + (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)->sum('waived_amount');
+                            $penaltyPaidSoFar = 0.0;
+                            if (isset($paymentDate)) {
+                                $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
+                                    ->where('transaction_date', '>=', $paymentDate)
+                                    ->sum('penalty_paid')
+                                    + (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
+                                    ->where('transaction_date', '>=', $paymentDate)
+                                    ->sum('waived_amount');
+                            }
                             $penaltyDue = max(0, $penaltyGross - $penaltyPaidSoFar);
                         }
                     }
