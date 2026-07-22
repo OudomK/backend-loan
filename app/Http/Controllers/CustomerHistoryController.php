@@ -56,6 +56,7 @@ class CustomerHistoryController extends Controller
         $totalPaidForLoan = 0.0;
         $totalPrincipalPaid = 0.0;
         $totalOverdueAmount = 0.0;
+        $dynamicEarliestOverdue = null;
         
         foreach ($loan->payments as $p) {
             $totalPaidForLoan += (float)$p->total_paid + (float)$p->penalty_amount;
@@ -73,8 +74,11 @@ class CustomerHistoryController extends Controller
             $due = $p->payment_date ? \Carbon\Carbon::parse($p->payment_date)->startOfDay() : null;
             if ($due) {
                 $totalDue = (float)$p->principal_amount + (float)$p->interest_amount + (float)($p->fee_amount ?? 0);
-                if ($due->lt($now) && $p->total_paid < $totalDue) {
+                if ($due->lt($now) && $p->total_paid < ($totalDue - 0.01)) {
                     $totalOverdueAmount += ($totalDue - (float)$p->total_paid);
+                    if ($dynamicEarliestOverdue === null || $due->lt($dynamicEarliestOverdue)) {
+                        $dynamicEarliestOverdue = $due->copy();
+                    }
                 }
             }
         }
@@ -82,7 +86,7 @@ class CustomerHistoryController extends Controller
         $osBalance = (float)$loan->amount - $totalPrincipalPaid;
         if ($osBalance < 0.001) $osBalance = 0.0;
 
-        $earliestOverdue = $loan->late_since_date ? \Carbon\Carbon::parse($loan->late_since_date)->startOfDay() : null;
+        $earliestOverdue = $dynamicEarliestOverdue ?? ($loan->late_since_date ? \Carbon\Carbon::parse($loan->late_since_date)->startOfDay() : null);
         $daysOverdue = $earliestOverdue ? (int) $earliestOverdue->diffInDays($now, false) : 0;
         if ($daysOverdue < 0) $daysOverdue = 0;
 
@@ -99,8 +103,8 @@ class CustomerHistoryController extends Controller
 
         // Add penalty paid so far including waivers (only for current late period)
         $penaltyPaidSoFar = 0.0;
-        if ($loan->late_since_date) {
-            $lateSince = \Carbon\Carbon::parse($loan->late_since_date)->startOfDay();
+        if ($earliestOverdue) {
+            $lateSince = $earliestOverdue->copy()->startOfDay();
             $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
                 ->where('transaction_date', '>=', $lateSince)
                 ->sum('penalty_paid')
