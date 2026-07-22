@@ -259,7 +259,7 @@ class RepaymentController extends Controller
             : 0;
         $penaltyPaidSoFar = 0.0;
         if ($loan && $loan->late_since_date) {
-            $lateSince = \Carbon\Carbon::parse($loan->late_since_date)->startOfDay();
+            $lateSince = Carbon::parse($loan->late_since_date)->startOfDay();
             $penaltyPaidSoFar = (float) RepaymentTransaction::where('loan_id', $loan_id)
                 ->where('transaction_date', '>=', $lateSince)
                 ->sum('penalty_paid')
