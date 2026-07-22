@@ -23,11 +23,14 @@ class ArrearReportController extends Controller
         // 1. Build Query with SQL Subqueries for Performance
         $query = Loan::with([
             'borrower' => function ($q) {
-                $q->withTrashed()->select('id', 'customer_code', 'first_name', 'last_name', 'gender', 'phone', 'village', 'commune'); },
+                $q->withTrashed()->select('id', 'customer_code', 'first_name', 'last_name', 'gender', 'phone', 'village', 'commune');
+            },
             'coBorrower' => function ($q) {
-                $q->withTrashed()->select('id', 'first_name', 'last_name', 'phone'); },
+                $q->withTrashed()->select('id', 'first_name', 'last_name', 'phone');
+            },
             'guarantor' => function ($q) {
-                $q->withTrashed()->select('id', 'first_name', 'last_name', 'phone'); },
+                $q->withTrashed()->select('id', 'first_name', 'last_name', 'phone');
+            },
             'officer:id,name',
             'collaterals:id,loan_id,type,description'
         ])
@@ -47,9 +50,9 @@ class ArrearReportController extends Controller
                 'penalty_rate'
             ])
             ->where('status', 'active')
-            // Only get loans with overdue payments
+            // Only get loans with overdue payments or due today
             ->whereHas('payments', function ($pQuery) use ($refDateStr) {
-                $pQuery->where('payment_date', '<', $refDateStr)
+                $pQuery->where('payment_date', '<=', $refDateStr)
                     ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)');
             });
 
@@ -66,7 +69,7 @@ class ArrearReportController extends Controller
             // Earliest Arrear Date (Dynamic late_since_date)
             'calculated_late_since_date' => \App\Models\Payment::select('payment_date')
                 ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr)
+                ->where('payment_date', '<=', $refDateStr)
                 ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
                 ->orderBy('payment_date', 'asc')
                 ->limit(1),
@@ -78,18 +81,18 @@ class ArrearReportController extends Controller
             // Arrear Principal (Total unpaid principal for past due installments)
             'arrear_principal' => \App\Models\Payment::selectRaw('SUM(principal_amount - GREATEST(0, total_paid - interest_amount))')
                 ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr)
+                ->where('payment_date', '<=', $refDateStr)
                 ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)'),
 
             // Arrear Interest
             'arrear_interest' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, interest_amount - total_paid))')
                 ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr),
+                ->where('payment_date', '<=', $refDateStr),
 
             // Penalty
             'arrear_penalty' => \App\Models\Payment::selectRaw('SUM(penalty_amount)')
                 ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<', $refDateStr),
+                ->where('payment_date', '<=', $refDateStr),
 
             // Last Payment Date (from transactions)
             'last_transaction_date' => \App\Models\RepaymentTransaction::select('transaction_date')
@@ -97,9 +100,10 @@ class ArrearReportController extends Controller
                 ->orderBy('transaction_date', 'desc')
                 ->limit(1),
 
-            // Total penalty collected and waived for this loan
+            // Total penalty collected and waived for this loan for the current late period
             'penalty_paid_total' => \App\Models\RepaymentTransaction::selectRaw('COALESCE(SUM(penalty_paid + waived_amount), 0)')
-                ->whereColumn('loan_id', 'loans.id'),
+                ->whereColumn('loan_id', 'loans.id')
+                ->whereColumn('transaction_date', '>=', 'loans.late_since_date'),
         ]);
 
         $loans = $query->get();
@@ -107,16 +111,12 @@ class ArrearReportController extends Controller
         // 2. Filter by Aging in PHP (if necessary)
         $filtered = $loans->filter(function ($loan) use ($referenceDate, $reportType, $fromDate) {
             $arrearDateStr = $loan->calculated_late_since_date ?? $loan->late_since_date;
-            
+
             if (!$arrearDateStr) {
                 return false;
             }
 
             $arrearDate = Carbon::parse($arrearDateStr);
-
-            if ($fromDate && $arrearDate->lt($fromDate)) {
-                return false;
-            }
 
             if ($reportType === 'all') {
                 return true;
@@ -124,7 +124,7 @@ class ArrearReportController extends Controller
 
             $aging = abs($referenceDate->diffInDays($arrearDate));
 
-            return $aging >= 1 && $aging <= 30;
+            return $aging >= 0 && $aging <= 30;
         })->values();
 
         return ArrearReportResource::collection($filtered)->resolve();
@@ -137,7 +137,7 @@ class ArrearReportController extends Controller
         $officerId = $request->query('officer_id', 'all');
         $currency = $request->query('currency', 'all');
         $toDateStr = $request->query('to_date') ?? Carbon::today()->toDateString();
-        
+
         $officerName = 'ALL';
         if ($officerId !== 'all') {
             $officer = \App\Models\LoanOfficer::find($officerId);
@@ -158,7 +158,7 @@ class ArrearReportController extends Controller
         $officerId = $request->query('officer_id', 'all');
         $currency = $request->query('currency', 'all');
         $toDateStr = $request->query('to_date') ?? Carbon::today()->toDateString();
-        
+
         $officerName = 'ALL';
         if ($officerId !== 'all') {
             $officer = \App\Models\LoanOfficer::find($officerId);
