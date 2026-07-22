@@ -44,9 +44,6 @@ class ActiveLoanReportController extends Controller
                     ->orWhereDate('written_off_at', '>', $refDateStr);
             });
 
-        if ($fromDateStr) {
-            $query->where('start_date', '>=', $fromDateStr);
-        }
         if ($refDateStr) {
             $query->where('start_date', '<=', $refDateStr);
         }
@@ -132,10 +129,10 @@ class ActiveLoanReportController extends Controller
                 'disbursement_date' => $loan->start_date,
                 'loan_code' => \App\Support\FormatHelper::formatLoanCode((string) $loan->loan_code),
                 'client_name' => $borrower ? ($borrower->first_name . ' ' . $borrower->last_name) : '',
-                'village_name' => $borrower->village ?? '',
-                'commune_name' => $borrower->commune ?? '',
-                'district_name' => $borrower->district ?? '',
-                'province_name' => $borrower->province ?? '',
+                'village_name' => $borrower?->village ?? '',
+                'commune_name' => $borrower?->commune ?? '',
+                'district_name' => $borrower?->district ?? '',
+                'province_name' => $borrower?->province ?? '',
                 'disbursement_amount' => $loan->amount,
                 'currency_code' => $loan->currency,
                 'interest_rate' => $loan->interest_rate,
@@ -261,11 +258,13 @@ class ActiveLoanReportController extends Controller
         $date = Carbon::parse($startDate);
         $normalized = strtolower(trim((string) $paymentFrequency));
 
-        return match (strtolower($paymentFrequency)) {
+        return match ($normalized) {
             'monthly' => $date->addMonthsNoOverflow($term)->toDateString(),
             'biweekly' => $date->addWeeks($term * 2)->toDateString(),
             'weekly' => $date->addWeeks($term)->toDateString(),
             'daily' => $date->addDays($term)->toDateString(),
+            'term' => $date->addMonthsNoOverflow($term)->toDateString(),
+            default => $date->addMonthsNoOverflow($term)->toDateString(),
         };
     }
 
