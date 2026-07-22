@@ -175,10 +175,11 @@ class CustomerHistoryController extends Controller
         // Early payment logic
         $prepaymentValue = (float)($p->prepayment ?? 0);
         $isEarly = false;
-        if ($p->total_paid > 0 && $p->updated_at && $p->payment_date) {
-            $uDate = \Carbon\Carbon::parse($p->updated_at)->startOfDay();
-            $dDate = \Carbon\Carbon::parse($p->payment_date)->startOfDay();
-            if ($uDate->lt($dDate)) {
+        if ($p->total_paid > 0 && $p->payment_date) {
+            $tDateStr = $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id]?->transaction_date ?? null) : null;
+            $earlyPayDate = $tDateStr ? \Carbon\Carbon::parse($tDateStr)->startOfDay() : ($p->updated_at ? \Carbon\Carbon::parse($p->updated_at)->startOfDay() : null);
+            $dDateTemp = \Carbon\Carbon::parse($p->payment_date)->startOfDay();
+            if ($earlyPayDate && $earlyPayDate->lt($dDateTemp)) {
                 $isEarly = true;
             }
         }
@@ -200,7 +201,8 @@ class CustomerHistoryController extends Controller
         $isFullyPaid = (float)$p->total_paid >= ($requiredTotal - 0.01);
 
         $dDate = $p->payment_date ? \Carbon\Carbon::parse($p->payment_date)->startOfDay() : null;
-        $uDate = $p->updated_at ? \Carbon\Carbon::parse($p->updated_at)->startOfDay() : null;
+        $tDateStr = $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id]?->transaction_date ?? null) : null;
+        $payDate = $tDateStr ? \Carbon\Carbon::parse($tDateStr)->startOfDay() : ($p->updated_at ? \Carbon\Carbon::parse($p->updated_at)->startOfDay() : null);
         $nDate = \Carbon\Carbon::now()->startOfDay();
 
         $isOverdue = !$isFullyPaid && $dDate && $nDate->gt($dDate);
@@ -211,13 +213,13 @@ class CustomerHistoryController extends Controller
         if (!$isFullyPaid && $isOverdue && $dDate) {
             $diff = (int) $dDate->diffInDays($nDate, false);
             $scheduleOnTimeLabel = "-$diff";
-        } elseif ($isFullyPaid && $uDate && $dDate) {
-            $diff = (int) $dDate->diffInDays($uDate, false);
+        } elseif ($isFullyPaid && $payDate && $dDate) {
+            $diff = (int) $dDate->diffInDays($payDate, false);
             $scheduleOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
         }
 
-        if ($p->total_paid > 0 && $uDate && $dDate) {
-            $diff = (int) $dDate->diffInDays($uDate, false);
+        if ($p->total_paid > 0 && $payDate && $dDate) {
+            $diff = (int) $dDate->diffInDays($payDate, false);
             $paymentOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
         }
 
