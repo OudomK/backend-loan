@@ -24,7 +24,7 @@ class InvestorController extends Controller
             });
         }
 
-        return response()->json($query->get());
+        return response()->json($query->orderBy('id', 'desc')->get());
     }
 
     public function store(Request $request)

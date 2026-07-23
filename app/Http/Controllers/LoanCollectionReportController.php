@@ -53,10 +53,9 @@ class LoanCollectionReportController extends Controller
             $query->where('loans.currency', $currency);
         }
 
-        // Order by Currency then Date then Loan Code
-        $query->orderBy('loans.currency')
-              ->orderBy('repayment_transactions.transaction_date')
-              ->orderBy('loans.loan_code');
+        // Order by Borrower then Loan Cycle
+        $query->orderBy('borrowers.id', 'desc')
+              ->orderBy('loans.id', 'desc');
 
         $results = $query->get()->map(function ($row) {
             return [

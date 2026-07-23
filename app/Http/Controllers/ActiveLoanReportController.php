@@ -55,7 +55,9 @@ class ActiveLoanReportController extends Controller
             $query->where('currency', 'LIKE', $currency . '%');
         }
 
-        $loans = $query->get();
+        $loans = $query->orderBy('borrower_id', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
 
         $data = $loans->map(function ($loan) use ($refDate) {
             $borrower = $loan->borrower;

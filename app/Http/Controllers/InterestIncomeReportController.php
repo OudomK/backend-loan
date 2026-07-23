@@ -171,9 +171,8 @@ class InterestIncomeReportController extends Controller
         });
 
         $loans = $query
-            ->orderBy('loans.currency')
-            ->orderBy('loans.start_date')
-            ->orderBy('loans.loan_code')
+            ->orderBy('loans.borrower_id', 'desc')
+            ->orderBy('loans.id', 'desc')
             ->get();
 
         return $loans->map(function ($loan) use ($fromDateStr, $toDateStr) {

@@ -25,74 +25,74 @@ class LoanOperationController extends Controller
         }
 
         try {
-        // Use 'active' status to match Dashboard stats exactly (exclude written_off, etc from portfolio metrics)
-        $activeLoansCount = Loan::where('status', 'active')->count();
-        $disbursedUSD = (float) Loan::where('status', 'active')->where('currency', 'LIKE', 'USD%')->sum('amount');
-        $disbursedKHR = (float) Loan::where('status', 'active')->where('currency', 'LIKE', 'KHR%')->sum('amount');
+            // Use 'active' status to match Dashboard stats exactly (exclude written_off, etc from portfolio metrics)
+            $activeLoansCount = Loan::where('status', 'active')->count();
+            $disbursedUSD = (float) Loan::where('status', 'active')->where('currency', 'LIKE', 'USD%')->sum('amount');
+            $disbursedKHR = (float) Loan::where('status', 'active')->where('currency', 'LIKE', 'KHR%')->sum('amount');
 
-        $portfolioLoans = Loan::with([
-            'payments' => function ($query) {
-                $query->orderBy('payment_date', 'asc');
-            },
-            'transactions' => function ($query) {
-                $query->where('transaction_date', '<=', Carbon::today('Asia/Phnom_Penh')->toDateString());
-            },
-        ])
-            ->where('status', 'active')
-            ->whereNull('deleted_at')
-            ->get();
+            $portfolioLoans = Loan::with([
+                'payments' => function ($query) {
+                    $query->orderBy('payment_date', 'asc');
+                },
+                'transactions' => function ($query) {
+                    $query->where('transaction_date', '<=', Carbon::today('Asia/Phnom_Penh')->toDateString());
+                },
+            ])
+                ->where('status', 'active')
+                ->whereNull('deleted_at')
+                ->get();
 
-        $outstandingUSD = 0.0;
-        $outstandingKHR = 0.0;
-        $overdueUSD = 0.0;
-        $overdueKHR = 0.0;
-        $par30AmountUSD = 0.0;
-        $par30AmountKHR = 0.0;
+            $outstandingUSD = 0.0;
+            $outstandingKHR = 0.0;
+            $overdueUSD = 0.0;
+            $overdueKHR = 0.0;
+            $par30AmountUSD = 0.0;
+            $par30AmountKHR = 0.0;
 
-        try {
-            $today = Carbon::today('Asia/Phnom_Penh');
+            try {
+                $today = Carbon::today('Asia/Phnom_Penh');
 
-            foreach ($portfolioLoans as $loan) {
-                /** @var Loan $loan */
-                $snapshot = $this->portfolioSnapshot($loan, $today);
-                $currentOS = $snapshot['outstanding'];
-                if ($currentOS <= 0.01) {
-                    continue;
-                }
-
-                if (str_starts_with((string) $loan->currency, 'KHR')) {
-                    $outstandingKHR += $currentOS;
-                    $overdueKHR += $snapshot['overdue_amount'];
-                    if ($snapshot['aging'] >= 30) {
-                        $par30AmountKHR += $currentOS;
+                foreach ($portfolioLoans as $loan) {
+                    /** @var Loan $loan */
+                    $snapshot = $this->portfolioSnapshot($loan, $today);
+                    $currentOS = $snapshot['outstanding'];
+                    if ($currentOS <= 0.01) {
+                        continue;
                     }
-                } else {
-                    $outstandingUSD += $currentOS;
-                    $overdueUSD += $snapshot['overdue_amount'];
-                    if ($snapshot['aging'] >= 30) {
-                        $par30AmountUSD += $currentOS;
+
+                    if (str_starts_with((string) $loan->currency, 'KHR')) {
+                        $outstandingKHR += $currentOS;
+                        $overdueKHR += $snapshot['overdue_amount'];
+                        if ($snapshot['aging'] >= 30) {
+                            $par30AmountKHR += $currentOS;
+                        }
+                    } else {
+                        $outstandingUSD += $currentOS;
+                        $overdueUSD += $snapshot['overdue_amount'];
+                        if ($snapshot['aging'] >= 30) {
+                            $par30AmountUSD += $currentOS;
+                        }
                     }
                 }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('LoanOperation getStats: overdue/par30 failed', ['error' => $e->getMessage()]);
             }
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('LoanOperation getStats: overdue/par30 failed', ['error' => $e->getMessage()]);
-        }
 
-        $totalOutstanding = $outstandingUSD + ($outstandingKHR / $exchangeRate);
-        $par30PrincipalAmount = $par30AmountUSD + ($par30AmountKHR / $exchangeRate);
-        $par30 = ($totalOutstanding > 0) ? round(($par30PrincipalAmount / $totalOutstanding) * 100, 2) : 0;
-        $overdueAmount = $overdueUSD + ($overdueKHR / $exchangeRate);
+            $totalOutstanding = $outstandingUSD + ($outstandingKHR / $exchangeRate);
+            $par30PrincipalAmount = $par30AmountUSD + ($par30AmountKHR / $exchangeRate);
+            $par30 = ($totalOutstanding > 0) ? round(($par30PrincipalAmount / $totalOutstanding) * 100, 2) : 0;
+            $overdueAmount = $overdueUSD + ($overdueKHR / $exchangeRate);
 
-        return response()->json([
-            'active_loans' => $activeLoansCount,
-            'total_outstanding' => round($totalOutstanding, 2),
-            'outstanding_usd' => round($outstandingUSD, 2),
-            'outstanding_khr' => round($outstandingKHR, 2),
-            'overdue_amount' => round($overdueAmount, 2),
-            'overdue_usd' => round($overdueUSD, 2),
-            'overdue_khr' => round($overdueKHR, 2),
-            'par_30' => round($par30, 2),
-        ]);
+            return response()->json([
+                'active_loans' => $activeLoansCount,
+                'total_outstanding' => round($totalOutstanding, 2),
+                'outstanding_usd' => round($outstandingUSD, 2),
+                'outstanding_khr' => round($outstandingKHR, 2),
+                'overdue_amount' => round($overdueAmount, 2),
+                'overdue_usd' => round($overdueUSD, 2),
+                'overdue_khr' => round($overdueKHR, 2),
+                'par_30' => round($par30, 2),
+            ]);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('LoanOperation getStats failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
             // Fallback: try raw count/sum so we don't return all zeros
@@ -132,14 +132,15 @@ class LoanOperationController extends Controller
     public function getRecentActivity(Request $request)
     {
         $loans = Loan::with(['borrower'])
-            ->where('status', '!=', 'completed')
-            ->orderBy('created_at', 'desc')
-            ->paginate(15);
+            ->where('status', 'active')
+            ->orderBy('borrower_id', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
 
         // Ensure admin_fee is in the response (each loan already has it; makeVisible if ever hidden)
-        $loans->getCollection()->transform(function ($loan) {
+        $loans->transform(function (Loan $loan) {
             $loan->makeVisible(['admin_fee']);
-            
+
             // Abbreviate Refinance and Reschedule for better display
             if ($loan->loan_code) {
                 $loan->loan_code = str_ireplace(['-Refinanced', '-Rescheduled'], ['-RF', '-RS'], $loan->loan_code);
@@ -147,11 +148,11 @@ class LoanOperationController extends Controller
             if ($loan->purpose) {
                 $loan->purpose = str_ireplace(['Refinance', 'Reschedule'], ['RF', 'RS'], $loan->purpose);
             }
-            
+
             return $loan;
         });
 
-        return response()->json($loans);
+        return response()->json(['data' => $loans]);
     }
 
     /**

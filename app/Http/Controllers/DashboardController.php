@@ -20,10 +20,16 @@ class DashboardController extends Controller
 
         // Customer Stats
         $totalCustomers = Borrower::count();
+
         $activeCustomers = Borrower::whereHas('loans', function ($q) {
             $q->where('status', 'active');
         })->count();
-        $inactiveCustomers = $totalCustomers - $activeCustomers;
+
+        $inactiveCustomers = Borrower::whereHas('loans', function ($q) {
+            $q->where('status', '!=', 'pending');
+        })->whereDoesntHave('loans', function ($q) {
+            $q->where('status', 'active');
+        })->count();
 
         // Loan Amount Stats (convert KHR to USD)
         // Note: DB stores currency as 'USD ($)' and 'KHR (៛)'
