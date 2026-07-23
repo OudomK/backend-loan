@@ -78,8 +78,8 @@ class RoleResource extends Resource
                 'repayment' => 'Repayment (Operation)',
                 'loan_operation' => 'Loan Operation',
                 'reschedule_refinance' => 'Reschedule & Refinance',
-                'customer_management' => 'Customer Management',
-                'customer_history' => 'Customer History',
+                'customer_management' => 'Client Management',
+                'customer_history' => 'Client History',
             ],
             'HR & Payroll' => [
                 'hr_position' => 'Position (HR)',
@@ -353,8 +353,14 @@ class RoleResource extends Resource
                                             }),
                                         CheckboxList::make("ui_feature_{$key}_actions")
                                             ->label('Actions')
-                                            ->options(fn() => static::getSystemUiActionsForGroup($groupName))
-                                            ->columns(['default' => 2, 'sm' => 3])
+                                            ->options(function () use ($groupName, $key) {
+                                                $actions = static::getSystemUiActionsForGroup($groupName);
+                                                if ($key === 'customer_history' && isset($actions['edit'])) {
+                                                    $actions['edit'] = 'Edit Schedule Repay';
+                                                }
+                                                return $actions;
+                                            })
+                                            ->columns($key === 'customer_history' ? ['default' => 1, 'sm' => 2] : ['default' => 2, 'sm' => 3])
                                             ->bulkToggleable()
                                             ->visible(fn($get) => $get("ui_feature_{$key}_show") && $groupName !== 'Menu Visibility')
                                             ->afterStateHydrated(function (CheckboxList $component, $record) use ($key) {

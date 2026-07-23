@@ -45,7 +45,9 @@ class InactiveLoanReportController extends Controller
                 ->whereColumn('loan_id', 'loans.id'),
         ]);
 
-        $loans = $query->get();
+        $loans = $query->orderBy('borrower_id', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
 
         if ($fromDate || $toDate) {
             $loans = $loans->filter(function ($loan) use ($fromDate, $toDate) {

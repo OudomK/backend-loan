@@ -49,8 +49,8 @@ class WriteOffCollectionReportController extends Controller
         }
 
         $loans = $query
-            ->orderBy('start_date')
-            ->orderBy('loan_code')
+            ->orderBy('borrower_id', 'desc')
+            ->orderBy('id', 'desc')
             ->get()
             ->map(function ($loan) use ($toDate, $toDateStr) {
                 $borrower = $loan->borrower;

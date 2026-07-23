@@ -45,8 +45,8 @@ class WriteOffReportController extends Controller
         }
 
         $loans = $query
-            ->orderBy('written_off_at')
-            ->orderBy('loan_code')
+            ->orderBy('borrower_id', 'desc')
+            ->orderBy('id', 'desc')
             ->get();
 
         $reportData = [];

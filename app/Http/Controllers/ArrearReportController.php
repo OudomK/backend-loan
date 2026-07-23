@@ -106,7 +106,9 @@ class ArrearReportController extends Controller
                 ->whereColumn('transaction_date', '>=', 'loans.late_since_date'),
         ]);
 
-        $loans = $query->get();
+        $loans = $query->orderBy('borrower_id', 'desc')
+            ->orderBy('id', 'desc')
+            ->get();
 
         // 2. Filter by Aging in PHP (if necessary)
         $filtered = $loans->filter(function ($loan) use ($referenceDate, $reportType, $fromDate) {

@@ -114,7 +114,7 @@ class BorrowerController extends Controller
             $query->where('phone', $request->query('phone'));
         }
 
-        return response()->json($query->with('loans')->get());
+        return response()->json($query->with('loans')->orderBy('id', 'desc')->get());
     }
 
     public function store(Request $request)
