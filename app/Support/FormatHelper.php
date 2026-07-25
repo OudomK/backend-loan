@@ -70,7 +70,7 @@ class FormatHelper
 
         // Remove any existing spaces
         $cleaned = str_replace(' ', '', $phone);
-        
+
         if (strlen($cleaned) === 9) {
             return substr($cleaned, 0, 3) . ' ' . substr($cleaned, 3, 3) . ' ' . substr($cleaned, 6);
         } elseif (strlen($cleaned) === 10) {
@@ -78,5 +78,36 @@ class FormatHelper
         }
 
         return $phone;
+    }
+
+    /**
+     * Calculate monthly interest rate from per-period interest rate and payment frequency.
+     *
+     * Interest Rate stored in the system is the rate per payment period (per tenor).
+     * This method converts it to a monthly rate by multiplying by the number of
+     * payment periods in one month.
+     *
+     * Examples:
+     *   Bi-weekly (5%) → 5% × 2 = 10% monthly
+     *   Weekly    (2%) → 2% × 4 = 8%  monthly
+     *   Daily  (0.53%) → 0.53% × 30 = 15.9% monthly
+     *   Monthly   (7%) → 7% × 1 = 7%  monthly
+     *
+     * @param float $interestRate  The per-period interest rate
+     * @param string|null $paymentFrequency  The payment frequency / tenor
+     * @return float  The monthly interest rate
+     */
+    public static function calculateMonthlyRate(float $interestRate, ?string $paymentFrequency): float
+    {
+        $normalized = strtolower(trim((string) $paymentFrequency));
+
+        $multiplier = match ($normalized) {
+            'biweekly', 'bi-weekly', 'bi_weekly', 'bi-monthly', 'bimonthly', 'semi-monthly' => 2,
+            'weekly' => 4,
+            'daily' => 30,
+            default => 1, // monthly, installments, term, negotiable, balloon, etc.
+        };
+
+        return $interestRate * $multiplier;
     }
 }

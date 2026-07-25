@@ -139,7 +139,7 @@ class ActiveLoanReportController extends Controller
                 'currency_code' => $loan->currency,
                 'interest_rate' => $loan->interest_rate,
                 'processing_fee' => 0,
-                'monthly_interest_rate' => ($loan->interest_rate ?? 0) / 12,
+                'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $loan->payment_frequency),
                 'term' => $loan->duration_months,
                 'tenor' => $this->tenorLabel($loan->payment_frequency),
                 'payment_method' => \App\Support\FormatHelper::formatPaymentMethod((string) $loan->repayment_method),
