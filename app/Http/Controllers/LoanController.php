@@ -177,6 +177,7 @@ class LoanController extends Controller
                             'principal_amount' => $item['principal'],
                             'interest_amount' => $item['interest'],
                             'fee_amount' => (float) ($item['fee'] ?? 0),
+                            'outstanding_balance' => isset($item['balance']) ? (float) $item['balance'] : (isset($item['remaining_balance']) ? (float) $item['remaining_balance'] : (isset($item['outstanding_balance']) ? (float) $item['outstanding_balance'] : null)),
                             'penalty_amount' => 0,
                             'total_paid' => 0,
                             'payment_date' => $this->normalizeScheduleDate($item['date']),
@@ -215,6 +216,7 @@ class LoanController extends Controller
                                 'principal_amount' => $payment['principal_amount'],
                                 'interest_amount' => $payment['interest_amount'],
                                 'fee_amount' => (float) ($payment['fee_amount'] ?? 0),
+                                'outstanding_balance' => isset($payment['remaining_balance']) ? (float) $payment['remaining_balance'] : (isset($payment['outstanding_balance']) ? (float) $payment['outstanding_balance'] : (isset($payment['balance']) ? (float) $payment['balance'] : null)),
                                 'penalty_amount' => (float) ($payment['penalty_amount'] ?? 0),
                                 'total_paid' => 0,
                                 'payment_date' => $payment['payment_date'],
@@ -248,6 +250,7 @@ class LoanController extends Controller
                                 'principal_amount' => $item['principal'],
                                 'interest_amount' => $item['interest'],
                                 'fee_amount' => (float) ($item['fee'] ?? 0),
+                                'outstanding_balance' => isset($item['balance']) ? (float) $item['balance'] : (isset($item['remaining_balance']) ? (float) $item['remaining_balance'] : (isset($item['outstanding_balance']) ? (float) $item['outstanding_balance'] : null)),
                                 'penalty_amount' => 0,
                                 'total_paid' => 0,
                                 'payment_date' => $this->normalizeScheduleDate($item['date']),
@@ -438,6 +441,9 @@ class LoanController extends Controller
             'payments.*.principal_amount' => 'required|numeric',
             'payments.*.interest_amount' => 'required|numeric',
             'payments.*.fee_amount' => 'required|numeric',
+            'payments.*.outstanding_balance' => 'nullable|numeric',
+            'payments.*.balance' => 'nullable|numeric',
+            'payments.*.remaining_balance' => 'nullable|numeric',
         ]);
 
         \Illuminate\Support\Facades\DB::transaction(function () use ($loan, $validated) {
@@ -455,6 +461,7 @@ class LoanController extends Controller
                         'interest_amount' => $interest,
                         'fee_amount' => $fee,
                         'total_due' => $principal + $interest + $fee,
+                        'outstanding_balance' => isset($paymentData['outstanding_balance']) ? (float) $paymentData['outstanding_balance'] : (isset($paymentData['balance']) ? (float) $paymentData['balance'] : (isset($paymentData['remaining_balance']) ? (float) $paymentData['remaining_balance'] : null)),
                     ]);
                 }
             }
