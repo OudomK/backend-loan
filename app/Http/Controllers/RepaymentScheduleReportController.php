@@ -47,6 +47,7 @@ class RepaymentScheduleReportController extends Controller
                 'payments.payment_date',
                 'payments.principal_amount',
                 'payments.interest_amount',
+                'payments.outstanding_balance',
                 'payments.fee_amount',
                 'payments.total_due',
                 'payments.penalty_amount',
@@ -97,11 +98,15 @@ class RepaymentScheduleReportController extends Controller
 
         $schedules = $query->orderBy('payments.payment_date', 'asc')->get();
 
-        // Calculate outstanding balance (loan_amount - cumulative principal paid up to this installment)
+        // Calculate outstanding balance (use saved or fall back to loan_amount - cumulative principal)
         $schedules->transform(function ($item) {
-            $item->outstanding_balance = round($item->loan_amount - $item->cumulative_principal, 2);
-            if ($item->outstanding_balance < 0) {
-                $item->outstanding_balance = 0;
+            if ($item->outstanding_balance !== null && (float)$item->outstanding_balance >= 0) {
+                $item->outstanding_balance = round((float)$item->outstanding_balance, 2);
+            } else {
+                $item->outstanding_balance = round($item->loan_amount - $item->cumulative_principal, 2);
+                if ($item->outstanding_balance < 0) {
+                    $item->outstanding_balance = 0;
+                }
             }
             // Format installment as "X/Y"
             $item->installment_display = $item->payment_number . '/' . $item->duration_months . ' ' . $this->installmentUnitLabel($item->payment_frequency);

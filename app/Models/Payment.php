@@ -13,6 +13,7 @@ use Spatie\Activitylog\LogOptions;
  * @property int $payment_number
  * @property float $principal_amount
  * @property float $interest_amount
+ * @property float|null $outstanding_balance
  * @property float $penalty_amount
  * @property float $total_paid
  * @property string $payment_date
@@ -42,6 +43,7 @@ class Payment extends Model
         'payment_number',
         'principal_amount',
         'interest_amount',
+        'outstanding_balance',
         'fee_amount',
         'fee_paid',
         'total_due',

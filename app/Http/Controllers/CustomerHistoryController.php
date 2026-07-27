@@ -154,8 +154,12 @@ class CustomerHistoryController extends Controller
         ?int $lastPaymentId,
         \Carbon\Carbon $now
     ): array {
-        $currentOS -= (float) $p->principal_amount;
-        if ($currentOS < 0.001) $currentOS = 0.0;
+        if ($p->outstanding_balance !== null && (float)$p->outstanding_balance >= 0) {
+            $currentOS = (float) $p->outstanding_balance;
+        } else {
+            $currentOS -= (float) $p->principal_amount;
+            if ($currentOS < 0.001) $currentOS = 0.0;
+        }
         // Calculate balances
         $totalFeePaid = 0.0;
         $totalInterestPaid = 0.0;

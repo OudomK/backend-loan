@@ -102,10 +102,9 @@ class FormatHelper
         $normalized = strtolower(trim((string) $paymentFrequency));
 
         $multiplier = match ($normalized) {
-            'biweekly', 'bi-weekly', 'bi_weekly', 'bi-monthly', 'bimonthly', 'semi-monthly' => 2,
             'weekly' => 4,
             'daily' => 30,
-            default => 1, // monthly, installments, term, negotiable, balloon, etc.
+            default => 1, // monthly, biweekly, bi-weekly, semi-monthly, installments, term, etc.
         };
 
         return $interestRate * $multiplier;
