@@ -63,7 +63,7 @@ class WriteOffExcelExport
         'Disburse Amount',
         'Currency',
         'Rate',
-        'Monthly Rate',
+        'Monthly Interest Rate',
         'Term',
         'Tenor',
         'Payment Method',

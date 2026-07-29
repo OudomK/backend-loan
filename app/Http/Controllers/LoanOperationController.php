@@ -184,7 +184,7 @@ class LoanOperationController extends Controller
                 - (float) ($transaction->withdrawn_prepayment ?? 0);
         });
 
-        $outstanding = max(0, (float) $loan->amount - $principalPaid);
+        $outstanding = max(0, $loan->getBasePrincipalForOS() - $principalPaid);
         if ($outstanding <= 0.01) {
             return ['outstanding' => 0.0, 'overdue_amount' => 0.0, 'aging' => 0];
         }

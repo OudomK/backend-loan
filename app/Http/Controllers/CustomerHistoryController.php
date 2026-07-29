@@ -31,8 +31,7 @@ class CustomerHistoryController extends Controller
         $allocationTxMap = \App\Models\RepaymentTransaction::whereIn('id', $allocationTxIds)
             ->get()->keyBy('id');
 
-        $currentOS = $loan->amount > 0 ? (float)$loan->amount : (float)$loan->payments->sum('principal_amount');
-
+        $currentOS = $loan->getBasePrincipalForOS();
         $paymentsList = $loan->payments->sortBy('payment_number')->values();
         $lastPaymentId = $paymentsList->last() ? $paymentsList->last()->id : null;
         
@@ -87,11 +86,13 @@ class CustomerHistoryController extends Controller
             }
         }
 
-        $osBalance = (float)$loan->amount - $totalPrincipalPaid;
+        $basePrincipalForOS = $loan->getBasePrincipalForOS();
+        
+        $osBalance = $basePrincipalForOS - $totalPrincipalPaid;
         if ($osBalance < 0.001) $osBalance = 0.0;
 
-        $earliestOverdue = $dynamicEarliestOverdue ?? ($loan->late_since_date ? \Carbon\Carbon::parse($loan->late_since_date)->startOfDay() : null);
-        $daysOverdue = $earliestOverdue ? (int) $earliestOverdue->diffInDays($now, false) : 0;
+        $earliestOverdue = $dynamicEarliestOverdue;
+        $daysOverdue = (int) $loan->aging;
         if ($daysOverdue < 0) $daysOverdue = 0;
 
         $dateOverdueStr = $earliestOverdue ? $earliestOverdue->format('Y-m-d') : '';
@@ -105,17 +106,9 @@ class CustomerHistoryController extends Controller
         }
         $penaltyGross = $daysOverdue * $penaltyPerDay;
 
-        // Add penalty paid so far including waivers (only for current late period)
-        $penaltyPaidSoFar = 0.0;
-        if ($earliestOverdue) {
-            $lateSince = $earliestOverdue->copy()->startOfDay();
-            $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
-                ->where('transaction_date', '>=', $lateSince)
-                ->sum('penalty_paid')
-                + (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
-                ->where('transaction_date', '>=', $lateSince)
-                ->sum('waived_amount');
-        }
+        // Add penalty paid so far including waivers (total lifetime)
+        $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
+            ->sum(\Illuminate\Support\Facades\DB::raw('penalty_paid + waived_amount'));
         $arr['penalty_paid_so_far'] = $penaltyPaidSoFar;
 
         $penaltyDue = $penaltyGross - $penaltyPaidSoFar;
@@ -180,10 +173,27 @@ class CustomerHistoryController extends Controller
             if ($totalPrincipalPaid < 0) $totalPrincipalPaid = 0;
         }
         
+        $repaymentType = $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id]?->repayment_type ?? null) : null;
+        $isPayoffTrigger = $repaymentType === 'Pay Off';
+        $groupKey = $p->repayment_transaction_id ? (string)$p->repayment_transaction_id : ($p->updated_at ? (string)$p->updated_at : '');
+        if ($groupKey !== '' && isset($groups[$groupKey])) {
+            if (in_array($lastPaymentId, $groups[$groupKey])) {
+                $isPayoffTrigger = true;
+            }
+        }
+
         $displayInterest = max(0, (float)$p->interest_amount - $totalInterestPaid);
         $displayPrincipal = max(0, (float)$p->principal_amount - $totalPrincipalPaid);
         $displayFee = max(0, (float)($p->fee_amount ?? 0) - $totalFeePaid);
         $displayTotal = $displayPrincipal + $displayInterest + $displayFee;
+
+        // If it's a payoff transaction, all remaining balances are waived/cleared.
+        if ($isPayoffTrigger) {
+            $displayInterest = 0.0;
+            $displayPrincipal = 0.0;
+            $displayFee = 0.0;
+            $displayTotal = 0.0;
+        }
         
         // Early payment logic
         $prepaymentValue = (float)($p->prepayment ?? 0);
@@ -201,17 +211,10 @@ class CustomerHistoryController extends Controller
             $prepaymentValue += (float)$p->total_paid;
         }
 
-        $repaymentType = $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id]?->repayment_type ?? null) : null;
-        $isPayoffTrigger = $repaymentType === 'Pay Off';
-        $groupKey = $p->repayment_transaction_id ? (string)$p->repayment_transaction_id : ($p->updated_at ? (string)$p->updated_at : '');
-        if ($groupKey !== '' && isset($groups[$groupKey])) {
-            if (in_array($lastPaymentId, $groups[$groupKey])) {
-                $isPayoffTrigger = true;
-            }
-        }
+
 
         $requiredTotal = (float)($p->principal_amount + $p->interest_amount + ($p->fee_amount ?? 0));
-        $isFullyPaid = (float)$p->total_paid >= ($requiredTotal - 0.01);
+        $isFullyPaid = (float)$p->total_paid >= ($requiredTotal - 0.01) || $isPayoffTrigger;
 
         $dDate = $p->payment_date ? \Carbon\Carbon::parse($p->payment_date)->startOfDay() : null;
         $tDateStr = $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id]?->transaction_date ?? null) : null;

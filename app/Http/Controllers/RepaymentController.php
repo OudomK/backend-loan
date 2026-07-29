@@ -60,6 +60,7 @@ class RepaymentController extends Controller
                 'payment_date' => Carbon::parse($nextPayment->payment_date)->format('Y-m-d'),
                 'amount' => $symbol . number_format($dueAmount, 2),
                 'principal' => (string) number_format($nextPayment->principal_amount, 2),
+                'loan_amount' => (string) $loan->amount,
                 'interest' => (string) number_format($nextPayment->interest_amount, 2),
                 'installment_no' => (string) $nextPayment->payment_number,
                 'dpd' => '0',
@@ -122,6 +123,7 @@ class RepaymentController extends Controller
                     'payment_date' => Carbon::parse($payment->payment_date)->format('Y-m-d'),
                     'amount' => $symbol . number_format($dueAmount, 2),
                     'principal' => (string) number_format($payment->principal_amount, 2),
+                    'loan_amount' => (string) $loan->amount,
                     'interest' => (string) number_format($payment->interest_amount, 2),
                     'installment_no' => (string) $payment->payment_number,
                     'dpd' => (string) $dpd,
@@ -223,6 +225,7 @@ class RepaymentController extends Controller
                     : 'Unknown (Deleted)',
                 'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
                 'principal' => (string) $loan->amount,
+                'loan_amount' => (string) $loan->amount,
                 'interest' => (string) $loan->interest_rate,
                 'currency' => (string) $loan->currency,
                 'symbol' => $symbol,
@@ -257,16 +260,8 @@ class RepaymentController extends Controller
         $feePaidSoFar = $usesInstallmentFee
             ? (float) RepaymentTransaction::where('loan_id', $loan_id)->sum('fee_paid')
             : 0;
-        $penaltyPaidSoFar = 0.0;
-        if ($loan && $loan->late_since_date) {
-            $lateSince = Carbon::parse($loan->late_since_date)->startOfDay();
-            $penaltyPaidSoFar = (float) RepaymentTransaction::where('loan_id', $loan_id)
-                ->where('transaction_date', '>=', $lateSince)
-                ->sum('penalty_paid')
-                + (float) RepaymentTransaction::where('loan_id', $loan_id)
-                ->where('transaction_date', '>=', $lateSince)
-                ->sum('waived_amount');
-        }
+        $penaltyPaidSoFar = (float) RepaymentTransaction::where('loan_id', $loan_id)
+            ->sum(\Illuminate\Support\Facades\DB::raw('penalty_paid + waived_amount'));
 
         return response()->json([
             'installments' => $installments,
@@ -275,6 +270,7 @@ class RepaymentController extends Controller
             'fee_paid_so_far' => round($feePaidSoFar, 2),
             'penalty_paid_so_far' => round($penaltyPaidSoFar, 2),
             'late_since_date' => $loan ? $loan->late_since_date : null,
+            'locked_aging' => $loan ? (int) $loan->locked_aging : 0,
         ]);
     }
 
