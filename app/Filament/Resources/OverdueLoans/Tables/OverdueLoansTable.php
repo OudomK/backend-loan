@@ -96,7 +96,7 @@ class OverdueLoansTable
                     ->sortable(),
 
                 TextColumn::make('aging')
-                    ->label('DPD')
+                    ->label('Aging')
                     ->badge()
                     ->color(fn($state) => match (true) {
                         $state > 90 => 'danger',

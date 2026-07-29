@@ -44,7 +44,7 @@ class LoanOutstandingParReportController extends Controller
                     - (float) ($transaction->withdrawn_prepayment ?? 0);
             });
 
-            $outstanding = max(0, (float) $loan->amount - $principalPaid);
+            $outstanding = max(0, $loan->getBasePrincipalForOS() - $principalPaid);
 
             // If fully paid off by this exact date, skip
             if ($outstanding <= 0.01) {

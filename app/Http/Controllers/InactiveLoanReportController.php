@@ -122,7 +122,7 @@ class InactiveLoanReportController extends Controller
             'from_date' => $fromDate,
             'to_date' => $toDate,
         ]);
-        
+
         $response = $this->index($originalRequest);
         $data = json_decode($response->getContent(), true);
 

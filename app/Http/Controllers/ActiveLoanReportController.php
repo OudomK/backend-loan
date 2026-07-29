@@ -59,7 +59,7 @@ class ActiveLoanReportController extends Controller
             ->orderBy('id', 'desc')
             ->get();
 
-        $data = $loans->map(function ($loan) use ($refDate) {
+        $data = $loans->map(function (Loan $loan) use ($refDate) {
             $borrower = $loan->borrower;
             $officer = $loan->officer;
             $product = $loan->product;
@@ -72,7 +72,7 @@ class ActiveLoanReportController extends Controller
                     - (float) ($transaction->withdrawn_prepayment ?? 0);
             });
 
-            $outstanding = max(0, (float) $loan->amount - $principalPaid);
+            $outstanding = max(0, $loan->getBasePrincipalForOS() - $principalPaid);
             if ($outstanding <= 0.01) {
                 return null;
             }
@@ -190,7 +190,7 @@ class ActiveLoanReportController extends Controller
             'from_date' => $fromDateStr,
             'to_date' => $toDateStr,
         ]);
-        
+
         $response = $this->index($originalRequest);
         $data = json_decode($response->getContent(), true);
 
