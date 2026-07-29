@@ -73,7 +73,10 @@ class ActiveLoanReportController extends Controller
             });
 
             $outstanding = max(0, $loan->getBasePrincipalForOS() - $principalPaid);
-            if ($outstanding <= 0.01) {
+            
+            $hasPayOff = $transactionsAtDate->contains('repayment_type', 'Pay Off');
+
+            if ($outstanding <= 0.01 || $hasPayOff) {
                 return null;
             }
 
