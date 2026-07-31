@@ -55,6 +55,10 @@ class AppServiceProvider extends ServiceProvider
 
         Gate::before(function (?object $user, string $ability): ?bool {
             if ($user instanceof User) {
+                if (strtolower((string) ($user->role ?? '')) === 'admin') {
+                    return true; // Bypass all for legacy Admin role
+                }
+                
                 if ($user->hasEffectivePermission($ability)) {
                     return true;
                 }
