@@ -111,7 +111,10 @@ class StatsOverview extends BaseWidget
                 ->descriptionIcon('heroicon-m-clock')
                 ->icon('heroicon-m-document-text')
                 ->chart($pendingTrend)
-                ->color('warning'),
+                ->color('warning')
+                ->url(\App\Filament\Resources\Loans\LoanResource::getUrl('index', [
+                    'tableFilters' => ['status' => ['value' => 'pending_check']],
+                ])),
 
             Stat::make('Portfolio Balance', new \Illuminate\Support\HtmlString(CurrencyHelper::displayDual($outstandingUSD, $outstandingKHR)))
                 ->description('Active outstanding principal')

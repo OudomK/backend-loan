@@ -16,12 +16,20 @@ class GuarantorController extends Controller
             $search = trim((string) $request->query('search'));
             $query->where(function ($q) use ($search) {
                 $like = "%{$search}%";
+                $searchNoSpace = str_replace(' ', '', $search);
+                $likeNoSpace = "%{$searchNoSpace}%";
+                
                 $q->where('first_name', 'like', $like)
                     ->orWhere('last_name', 'like', $like)
                     ->orWhere('latin_name', 'like', $like)
+                    ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(latin_name, ' ', '')"), 'like', $likeNoSpace)
                     ->orWhere('nickname', 'like', $like)
                     ->orWhere('id_number', 'like', $like)
+                    ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(id_number, ' ', '')"), 'like', $likeNoSpace)
                     ->orWhere('phone', 'like', $like)
+                    ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(phone, ' ', '')"), 'like', $likeNoSpace)
+                    ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(last_name, ' ', first_name)"), 'like', $like)
+                    ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', $like)
                     ->orWhere('age', 'like', $like)
                     ->orWhere('customer_code', 'like', $like)
                     ->orWhereHas('loans', function ($q) use ($search) {

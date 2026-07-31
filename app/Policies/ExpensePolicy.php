@@ -11,16 +11,7 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class ExpensePolicy
 {
     use HandlesAuthorization;
-
-    public function before(AuthUser $user, string $ability): ?bool
-    {
-        if (!\App\Services\FeatureToggle::isAccessible('expenses', $user)) {
-            return false;
-        }
-
-        return null;
-    }
-
+    
     public function viewAny(AuthUser $authUser): bool
     {
         return $authUser->can('ViewAny:Expense');
@@ -80,4 +71,5 @@ class ExpensePolicy
     {
         return $authUser->can('Reorder:Expense');
     }
+
 }

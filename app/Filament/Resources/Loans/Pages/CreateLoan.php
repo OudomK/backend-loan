@@ -20,7 +20,9 @@ class CreateLoan extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         if (!empty($data['borrower_id'])) {
-            $cycle = Loan::where('borrower_id', $data['borrower_id'])->count() + 1;
+            $cycle = Loan::where('borrower_id', $data['borrower_id'])
+                ->where('status', '!=', 'rejected')
+                ->count() + 1;
             $data['loan_cycle'] = $cycle;
 
             if (empty($data['loan_code'])) {
@@ -38,6 +40,9 @@ class CreateLoan extends CreateRecord
         if (isset($data['amount'], $data['interest_rate']) && $data['amount'] !== '' && $data['interest_rate'] !== '') {
             $data['monthly_interest'] = round(((float) $data['amount'] * (float) $data['interest_rate']) / 100, 2);
         }
+
+        // Track who submitted this loan
+        $data['submitted_by'] = \Illuminate\Support\Facades\Auth::id();
 
         return $data;
     }
@@ -57,6 +62,15 @@ class CreateLoan extends CreateRecord
         if (!$this->record instanceof Loan) {
             return;
         }
+
+        // Log the initial submission in approval history
+        $this->record->approvals()->create([
+            'user_id' => \Illuminate\Support\Facades\Auth::id() ?? 1,
+            'action' => \App\Models\LoanApproval::ACTION_SUBMITTED,
+            'from_status' => null,
+            'to_status' => $this->record->status,
+            'comments' => 'Initial loan submission',
+        ]);
 
         if (!$this->canGenerateSchedule($this->record)) {
             return;

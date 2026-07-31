@@ -104,14 +104,20 @@ class CustomerHistoryController extends Controller
             $isKHR = str_contains(strtoupper($loan->currency ?? ''), 'KHR');
             $penaltyPerDay = $isKHR ? 10000.0 : 2.5;
         }
-        $penaltyGross = $daysOverdue * $penaltyPerDay;
+        $currentLateDays = 0;
+        if ($loan->late_since_date) {
+            $earliestDate = \Carbon\Carbon::parse($loan->late_since_date)->startOfDay();
+            $today = \Carbon\Carbon::today();
+            if ($today->gt($earliestDate)) {
+                $currentLateDays = (int) abs($today->diffInDays($earliestDate, false));
+            }
+        }
+        
+        // Dynamic penalty from current overdue days
+        $dynamicPenalty = $currentLateDays * $penaltyPerDay;
 
-        // Add penalty paid so far including waivers (total lifetime)
-        $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
-            ->sum(\Illuminate\Support\Facades\DB::raw('penalty_paid + waived_amount'));
-        $arr['penalty_paid_so_far'] = $penaltyPaidSoFar;
-
-        $penaltyDue = $penaltyGross - $penaltyPaidSoFar;
+        // Total penalty due = dynamic penalty + historical unpaid penalty
+        $penaltyDue = $dynamicPenalty + (float) ($loan->accumulated_penalty ?? 0.00);
         if ($penaltyDue < 0) $penaltyDue = 0.0;
 
         $arr['summary'] = [
@@ -368,18 +374,21 @@ class CustomerHistoryController extends Controller
             case 'borrower':
                 $customer = Borrower::find($id);
                 $loans = Loan::where('borrower_id', $id)
+                    ->where('status', '!=', 'rejected')
                     ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'product', 'paymentQr'])
                     ->get();
                 break;
             case 'coborrower':
                 $customer = CoBorrower::find($id);
                 $loans = Loan::where('co_borrower_id', $id)
+                    ->where('status', '!=', 'rejected')
                     ->with(['payments', 'collaterals', 'borrower', 'guarantor', 'officer', 'product', 'paymentQr'])
                     ->get();
                 break;
             case 'guarantor':
                 $customer = Guarantor::find($id);
                 $loans = Loan::where('guarantor_id', $id)
+                    ->where('status', '!=', 'rejected')
                     ->with(['payments', 'collaterals', 'borrower', 'coBorrower', 'officer', 'product', 'paymentQr'])
                     ->get();
                 break;
@@ -409,6 +418,7 @@ class CustomerHistoryController extends Controller
 
         $contractNo = trim($contractNo);
         $loan = Loan::where('loan_code', $contractNo)
+            ->where('status', '!=', 'rejected')
             ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'borrower', 'product', 'paymentQr'])
             ->orderBy('id', 'desc')
             ->first();
@@ -424,6 +434,7 @@ class CustomerHistoryController extends Controller
         }
 
         $loans = Loan::where('borrower_id', $borrowerId)
+            ->where('status', '!=', 'rejected')
             ->with(['payments', 'collaterals', 'coBorrower', 'guarantor', 'officer', 'product', 'paymentQr'])
             ->get();
 

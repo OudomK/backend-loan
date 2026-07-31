@@ -38,7 +38,7 @@ class ActiveLoanReportController extends Controller
                 $query->where('transaction_date', '<=', $refDateStr);
             },
         ])
-            ->where('status', '!=', 'pending')
+            ->whereNotIn('status', ['pending', 'pending_check', 'pending_verify', 'pending_approval', 'rejected'])
             ->where(function ($query) use ($refDateStr) {
                 $query->whereNull('written_off_at')
                     ->orWhereDate('written_off_at', '>', $refDateStr);

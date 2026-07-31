@@ -11,73 +11,65 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class CollateralPolicy
 {
     use HandlesAuthorization;
-
-    public function before(AuthUser $user, string $ability): ?bool
-    {
-        if (!\App\Services\FeatureToggle::isAccessible('collaterals', $user)) {
-            return false;
-        }
-
-        return null;
-    }
     
     public function viewAny(AuthUser $authUser): bool
     {
-        return true;
+        return $authUser->can('ViewAny:Collateral');
     }
 
     public function view(AuthUser $authUser, Collateral $collateral): bool
     {
-        return true;
+        return $authUser->can('View:Collateral');
     }
 
     public function create(AuthUser $authUser): bool
     {
-        return true;
+        return $authUser->can('Create:Collateral');
     }
 
     public function update(AuthUser $authUser, Collateral $collateral): bool
     {
-        return true;
+        return $authUser->can('Update:Collateral');
     }
 
     public function delete(AuthUser $authUser, Collateral $collateral): bool
     {
-        return true;
+        return $authUser->can('Delete:Collateral');
     }
 
     public function deleteAny(AuthUser $authUser): bool
     {
-        return true;
+        return $authUser->can('DeleteAny:Collateral');
     }
 
     public function restore(AuthUser $authUser, Collateral $collateral): bool
     {
-        return true;
+        return $authUser->can('Restore:Collateral');
     }
 
     public function forceDelete(AuthUser $authUser, Collateral $collateral): bool
     {
-        return true;
+        return $authUser->can('ForceDelete:Collateral');
     }
 
     public function forceDeleteAny(AuthUser $authUser): bool
     {
-        return true;
+        return $authUser->can('ForceDeleteAny:Collateral');
     }
 
     public function restoreAny(AuthUser $authUser): bool
     {
-        return true;
+        return $authUser->can('RestoreAny:Collateral');
     }
 
     public function replicate(AuthUser $authUser, Collateral $collateral): bool
     {
-        return true;
+        return $authUser->can('Replicate:Collateral');
     }
 
     public function reorder(AuthUser $authUser): bool
     {
-        return true;
+        return $authUser->can('Reorder:Collateral');
     }
+
 }

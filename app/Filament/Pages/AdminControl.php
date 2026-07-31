@@ -43,6 +43,7 @@ class AdminControl extends Page implements HasForms
         $this->form->fill([
             'custom_fonts' => FeatureToggle::isEnabled('custom_fonts'),
             'loan_products' => FeatureToggle::isEnabled('loan_products'),
+            'id_types' => FeatureToggle::isEnabled('id_types'),
             'relationships' => FeatureToggle::isEnabled('relationships'),
             'translations' => FeatureToggle::isEnabled('translations'),
             'activity_logs' => FeatureToggle::isEnabled('activity_logs'),
@@ -85,6 +86,7 @@ class AdminControl extends Page implements HasForms
                     ->schema([
                         Toggle::make('custom_fonts')->label('Enable Custom Fonts')->default(true),
                         Toggle::make('loan_products')->label('Enable Loan Products')->default(true),
+                        Toggle::make('id_types')->label('Enable ID Types')->default(true),
                         Toggle::make('relationships')->label('Enable Relationships')->default(true),
                         Toggle::make('translations')->label('Enable Translations')->default(true),
                         Toggle::make('activity_logs')->label('Enable Audit Logs')->default(true),
@@ -127,6 +129,7 @@ class AdminControl extends Page implements HasForms
         $keys = [
             'custom_fonts',
             'loan_products',
+            'id_types',
             'relationships',
             'translations',
             'activity_logs',

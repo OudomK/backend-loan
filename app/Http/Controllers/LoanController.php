@@ -51,7 +51,9 @@ class LoanController extends Controller
         if ($customerCode === '') {
             $customerCode = 'L' . str_pad((string) $borrowerId, 3, '0', STR_PAD_LEFT);
         }
-        $cycle = Loan::where('borrower_id', $borrowerId)->count() + 1;
+        $cycle = Loan::where('borrower_id', $borrowerId)
+            ->where('status', '!=', 'rejected')
+            ->count() + 1;
         $suggestedLoanCode = $customerCode . '-C' . $cycle;
         return response()->json([
             'cycle' => $cycle,
@@ -67,10 +69,10 @@ class LoanController extends Controller
             'interest_rate' => 'nullable|numeric',
             'duration_months' => 'nullable|integer',
             'start_date' => 'nullable|date',
-            'status' => 'required|in:pending,active,completed,paid_off',
+            'status' => 'required|in:pending,pending_check,pending_verify,pending_approval,active,completed,paid_off,rejected',
             'currency' => 'nullable|string',
             'repayment_method' => 'nullable|string',
-            'purpose' => 'nullable|string|max:255',
+            'purpose' => 'required|string|max:255',
             'loan_code' => 'nullable|string',
             'payment_frequency' => 'nullable|string',
             'loan_officer_id' => 'nullable|exists:loan_officers,id',
@@ -141,9 +143,27 @@ class LoanController extends Controller
         $defaultRate = $currency === 'KHR' ? 10000 : 2.5;
         $validated['penalty_rate'] = \App\Models\Setting::where('key', $settingKey)->value('value') ?? $defaultRate;
 
+        // Force legacy 'pending' status to the new 'pending_check' stage
+        if (($validated['status'] ?? '') === 'pending') {
+            $validated['status'] = \App\Models\LoanApproval::STATUS_PENDING_CHECK;
+        }
+
+        // Track who submitted this from the API (might be null if API has no auth context yet, fallback to officer id)
+        $validated['submitted_by'] = \Illuminate\Support\Facades\Auth::id() ?? $validated['loan_officer_id'] ?? null;
+
         DB::beginTransaction();
         try {
             $loan = Loan::create($validated);
+
+            if ($loan->status === \App\Models\LoanApproval::STATUS_PENDING_CHECK) {
+                $loan->approvals()->create([
+                    'user_id' => $validated['submitted_by'] ?: 1, // Fallback to a valid user ID if none
+                    'action' => \App\Models\LoanApproval::ACTION_SUBMITTED,
+                    'from_status' => null,
+                    'to_status' => $loan->status,
+                    'comments' => 'Initial loan submission via Mobile App',
+                ]);
+            }
 
             // Save collaterals if any
             if (isset($validated['collaterals'])) {
@@ -378,7 +398,7 @@ class LoanController extends Controller
             'monthly_payment' => 'sometimes|required|numeric',
             'start_date' => 'sometimes|required|date',
             'status' => 'sometimes|required|in:pending,active,completed,paid_off',
-            'purpose' => 'nullable|string|max:255',
+            'purpose' => 'sometimes|required|string|max:255',
             'admin_fee' => 'nullable|numeric',
             'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
@@ -446,7 +466,7 @@ class LoanController extends Controller
             'payments.*.remaining_balance' => 'nullable|numeric',
         ]);
 
-        \Illuminate\Support\Facades\DB::transaction(function () use ($loan, $validated) {
+        DB::transaction(function () use ($loan, $validated) {
             foreach ($validated['payments'] as $paymentData) {
                 // Ensure the payment belongs to this loan
                 $payment = $loan->payments()->find($paymentData['id']);

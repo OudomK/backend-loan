@@ -83,12 +83,81 @@ class Loan extends Model
         'maturity_date',
         'product_id',
         'aging',
+        'locked_aging',
+        'accumulated_penalty',
         'late_since_date',
         'monthly_interest',
         'reschedule_fee',
         'rescheduled_at',
         'payment_qr_id',
+        'submitted_by',
+        'checked_by',
+        'verified_by',
+        'approved_by',
+        'checked_at',
+        'verified_at',
+        'approved_at',
+        'rejection_reason',
     ];
+
+    // ── Approval Workflow ────────────────────────────────────────────
+
+    public function approvals(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LoanApproval::class)->orderBy('created_at', 'desc');
+    }
+
+    public function submitter(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'submitted_by');
+    }
+
+    public function checker(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'checked_by');
+    }
+
+    public function verifier(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    public function approver(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
+    public function canBeChecked(): bool
+    {
+        return $this->status === LoanApproval::STATUS_PENDING_CHECK;
+    }
+
+    public function canBeVerified(): bool
+    {
+        return $this->status === LoanApproval::STATUS_PENDING_VERIFY;
+    }
+
+    public function canBeApproved(): bool
+    {
+        return $this->status === LoanApproval::STATUS_PENDING_APPROVAL;
+    }
+
+    public function canBeRejected(): bool
+    {
+        return in_array($this->status, LoanApproval::pendingStatuses());
+    }
+
+    public function isPendingAnyApproval(): bool
+    {
+        return in_array($this->status, LoanApproval::pendingStatuses());
+    }
+
+    public function canBeResubmitted(): bool
+    {
+        return $this->status === LoanApproval::STATUS_REJECTED;
+    }
+
+    // ── End Approval Workflow ────────────────────────────────────────
 
     public function paymentQr(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
@@ -200,37 +269,18 @@ class Loan extends Model
 
         $totalAging = $this->locked_aging + $currentLateDays;
 
-        // Calculate Penalty Gross using total aging
-        $penaltyRate = $this->penalty_rate ?? (str_contains(strtoupper($this->currency ?? ''), 'KHR') ? 10000.0 : 2.5);
-        $penaltyGross = round($totalAging * $penaltyRate, 2);
-        
-        // Calculate total penalty paid so far
-        $penaltyPaidTotal = (float) \App\Models\RepaymentTransaction::where('loan_id', $this->id)
-            ->sum(\Illuminate\Support\Facades\DB::raw('penalty_paid + waived_amount'));
-
-        $isPenaltyFullyPaid = $penaltyPaidTotal >= ($penaltyGross - 0.01);
-
         if (!$hasUnpaidRows) {
-            if ($isPenaltyFullyPaid) {
-                // Completely caught up!
+            // Installments paid. Lock the aging.
+            if ($this->late_since_date) {
                 $this->update([
+                    'locked_aging' => $totalAging,
                     'late_since_date' => null,
-                    'locked_aging' => 0,
-                    'aging' => 0
+                    'aging' => $totalAging
                 ]);
             } else {
-                // Installments paid, but penalty not paid. Lock the aging.
-                if ($this->late_since_date) {
-                    $this->update([
-                        'locked_aging' => $totalAging,
-                        'late_since_date' => null,
-                        'aging' => $totalAging
-                    ]);
-                } else {
-                    $this->update([
-                        'aging' => $this->locked_aging
-                    ]);
-                }
+                $this->update([
+                    'aging' => $this->locked_aging
+                ]);
             }
         } else {
             // Still late (either owes installments OR owes penalty)

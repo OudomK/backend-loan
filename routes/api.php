@@ -47,12 +47,13 @@ use App\Http\Controllers\RevenueController;
 use App\Http\Controllers\SavingAccountController;
 use App\Http\Controllers\SaverController;
 use App\Http\Controllers\WriteOffCollectionReportController;
-use App\Http\Controllers\TestDataController;
+
 use App\Http\Controllers\WriteOffReportController;
 
 // ——— Public routes (no auth) ———
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/translations', [\App\Http\Controllers\Api\TranslationController::class, 'index']);
+
 
 Route::get('/app/footer-user', function () {
     return response()->json([
@@ -132,6 +133,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/relationships', [\App\Http\Controllers\RelationshipController::class, 'index']);
     Route::get('/payment-methods', [\App\Http\Controllers\PaymentMethodController::class, 'index']);
+    Route::get('/id-types', [\App\Http\Controllers\IdTypeController::class, 'index']);
 
     Route::get('/user', function (Request $request) {
         $user = $request->user();
@@ -171,6 +173,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('loans/preview-schedule', [LoanController::class, 'previewSchedule']);
     Route::get('loans/suggest-code', [LoanController::class, 'suggestCode']);
     Route::post('loans/{id}/write-off', [LoanController::class, 'writeOff']);
+
+
+    // Loan Approvals
+    Route::get('loans/pending-approvals', [\App\Http\Controllers\LoanApprovalApiController::class, 'getPendingApprovals']);
+    Route::post('loans/{id}/approval-action', [\App\Http\Controllers\LoanApprovalApiController::class, 'performAction']);
+
     Route::apiResource('loans', LoanController::class);
     Route::put('loans/{id}/schedule', [LoanController::class, 'updateSchedule']);
 
@@ -199,6 +207,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('saving-accounts/post-interest', [SavingAccountController::class, 'postInterest']);
     Route::get('saving-accounts/{account}/transactions', [SavingAccountController::class, 'getTransactions']);
     Route::post('saving-accounts/{account}/close', [SavingAccountController::class, 'closeAccount']);
+
+
 
     // Export Capital Share Routes
     Route::get('capital-shares/export-excel', [CapitalShareController::class, 'exportExcel']);
