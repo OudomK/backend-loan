@@ -85,12 +85,12 @@ class User extends Authenticatable implements FilamentUser, HasAvatar
             return collect();
         }
 
-        $role = $roleModel::query()
+        $roles = $roleModel::query()
             ->with('permissions')
             ->whereRaw('LOWER(name) = ?', [strtolower($legacyRole)])
-            ->first();
+            ->get();
 
-        return $role?->permissions?->pluck('name') ?? collect();
+        return $roles->flatMap(fn ($role) => $role->permissions)->pluck('name')->unique()->values();
     }
 
     /**
