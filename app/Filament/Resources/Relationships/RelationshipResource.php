@@ -13,21 +13,23 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
+use App\Filament\Concerns\ChecksFeatureToggle;
 
 class RelationshipResource extends Resource
 {
+    use ChecksFeatureToggle;
+
+    protected static ?string $featureToggleKey = 'relationships';
+
     protected static ?string $model = Relationship::class;
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
 
-    protected static string|\UnitEnum|null $navigationGroup = 'Settings';
+    protected static string|\UnitEnum|null $navigationGroup = 'Master Data';
 
     protected static ?string $recordTitleAttribute = 'name';
 
-    public static function canAccess(): bool
-    {
-        return \App\Services\FeatureToggle::isEnabled('relationships');
-    }
+
 
     public static function form(Schema $schema): Schema
     {

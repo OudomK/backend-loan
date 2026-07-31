@@ -78,12 +78,16 @@ class LoanForm
                                                     }),
                                                 Select::make('status')
                                                     ->options([
-                                                        'pending' => 'Pending',
+                                                        'pending' => 'Pending (Legacy)',
+                                                        'pending_check' => 'Pending Check',
+                                                        'pending_verify' => 'Pending Verify',
+                                                        'pending_approval' => 'Pending Approval',
                                                         'active' => 'Active',
                                                         'completed' => 'Completed',
                                                         'paid_off' => 'Paid off',
+                                                        'rejected' => 'Rejected',
                                                     ])
-                                                    ->default('pending')
+                                                    ->default('pending_check')
                                                     ->required(),
                                                 Select::make('loan_officer_id')
                                                     ->relationship('officer', 'id')

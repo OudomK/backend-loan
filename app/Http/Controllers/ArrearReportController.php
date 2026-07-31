@@ -47,13 +47,18 @@ class ArrearReportController extends Controller
                 'currency',
                 'late_since_date',
                 'aging',
+                'locked_aging',
+                'accumulated_penalty',
                 'penalty_rate'
             ])
             ->where('status', 'active')
-            // Only get loans with overdue payments or due today
-            ->whereHas('payments', function ($pQuery) use ($refDateStr) {
-                $pQuery->where('payment_date', '<=', $refDateStr)
-                    ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)');
+            // Only get loans with overdue payments or due today or with unpaid penalties
+            ->where(function ($q) use ($refDateStr) {
+                $q->whereHas('payments', function ($pQuery) use ($refDateStr) {
+                    $pQuery->where('payment_date', '<=', $refDateStr)
+                        ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)');
+                })
+                ->orWhere('accumulated_penalty', '>', 0.01);
             });
 
         if ($officerId && $officerId !== 'all') {
@@ -113,6 +118,12 @@ class ArrearReportController extends Controller
         // 2. Filter by Aging in PHP (if necessary)
         $filtered = $loans->filter(function ($loan) use ($referenceDate, $reportType, $fromDate) {
             $arrearDateStr = $loan->calculated_late_since_date ?? $loan->late_since_date;
+
+            if (!$arrearDateStr && (float)$loan->accumulated_penalty > 0) {
+                $days = $loan->locked_aging ?? $loan->aging ?? 0;
+                $arrearDateStr = $referenceDate->copy()->subDays($days)->toDateString();
+                $loan->calculated_late_since_date = $arrearDateStr;
+            }
 
             if (!$arrearDateStr) {
                 return false;

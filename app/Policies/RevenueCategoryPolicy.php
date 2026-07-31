@@ -11,15 +11,6 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class RevenueCategoryPolicy
 {
     use HandlesAuthorization;
-
-    public function before(AuthUser $user, string $ability): ?bool
-    {
-        if (!\App\Services\FeatureToggle::isAccessible('revenue_categories', $user)) {
-            return false;
-        }
-
-        return null;
-    }
     
     public function viewAny(AuthUser $authUser): bool
     {
@@ -80,4 +71,5 @@ class RevenueCategoryPolicy
     {
         return $authUser->can('Reorder:RevenueCategory');
     }
+
 }

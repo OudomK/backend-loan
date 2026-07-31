@@ -11,14 +11,6 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class InvestorPolicy
 {
     use HandlesAuthorization;
-
-    public function before(AuthUser $user, string $ability): ?bool
-    {
-        if (!\App\Services\FeatureToggle::isAccessible('investors', $user)) {
-            return false;
-        }
-        return null;
-    }
     
     public function viewAny(AuthUser $authUser): bool
     {

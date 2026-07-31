@@ -32,11 +32,15 @@ class ArrearReportResource extends JsonResource
         $arrearInterest = (float) ($this->arrear_interest ?? 0);
         $totalArrearDue = round($arrearPrincipal + $arrearInterest, 2);
         $penaltyPaid = (float) ($this->penalty_paid_total ?? 0);
-        $penaltyGross = 0;
-        if ($aging > 0) {
-            $penaltyGross = round($aging * $this->resolvePenaltyRate($this->resource), 2);
+        if (!$this->late_since_date) {
+            $penaltyDue = (float)($this->accumulated_penalty ?? 0);
+        } else {
+            $penaltyGross = 0;
+            if ($aging > 0) {
+                $penaltyGross = round($aging * $this->resolvePenaltyRate($this->resource), 2);
+            }
+            $penaltyDue = max(0, $penaltyGross - $penaltyPaid);
         }
-        $penaltyDue = max(0, $penaltyGross - $penaltyPaid);
 
         $status = 'Active';
         if ($totalArrearDue <= 0.01) {

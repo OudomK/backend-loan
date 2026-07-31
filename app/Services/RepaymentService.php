@@ -13,7 +13,7 @@ class RepaymentService
 {
     /**
      * @param  array<string, mixed>  $validated
-     * @return array{transaction: \App\Models\RepaymentTransaction, loan: \App\Models\Loan}
+     * @return array{transaction: RepaymentTransaction, loan: Loan}
      */
     public function process(array $validated): array
     {
@@ -36,6 +36,24 @@ class RepaymentService
             }
 
             $cashPenaltyPaid = round(max($penaltyAmountToPay, 0), 2);
+
+            $newAccumulatedPenalty = round($penaltyDue - $cashPenaltyPaid - $waivedAmount, 2);
+            if ($newAccumulatedPenalty < 0) {
+                $newAccumulatedPenalty = 0.0;
+            }
+            $previousAccumulatedPenalty = (float) ($loan->accumulated_penalty ?? 0);
+            $loan->accumulated_penalty = $newAccumulatedPenalty;
+            
+            // Only reset aging when penalty was actually paid off
+            // (i.e., there WAS a penalty before, and now it's cleared)
+            $hadPenalty = $previousAccumulatedPenalty > 0.001 || $loan->locked_aging > 0;
+            if ($hadPenalty && $newAccumulatedPenalty <= 0.001 && $cashPenaltyPaid > 0.001) {
+                $loan->locked_aging = 0;
+                $loan->late_since_date = null;
+                $loan->aging = 0;
+            }
+            
+            $loan->save();
 
             if (
                 $validated['repayment_type'] !== 'Withdraw'
@@ -77,11 +95,51 @@ class RepaymentService
                 ? 'total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0) + COALESCE(fee_amount, 0))'
                 : 'total_paid < (COALESCE(principal_amount, 0) + COALESCE(interest_amount, 0))';
 
-            /** @var \Illuminate\Database\Eloquent\Collection<int, \App\Models\Payment> $installments */
+            /** @var \Illuminate\Database\Eloquent\Collection<int, Payment> $installments */
             $installments = Payment::where('loan_id', $loan->id)
                 ->whereRaw($installmentDueExpression)
                 ->orderBy('payment_date', 'asc')
                 ->get();
+
+            // ─── Lock current aging BEFORE rows are paid ───
+            // When a late row is paid, updateAging() won't see it anymore.
+            // We must capture the current late days into locked_aging NOW.
+            $today = Carbon::today();
+            $arrearExpr = $usesInstallmentFee
+                ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'
+                : 'total_paid < (principal_amount + interest_amount - 0.01)';
+            $hasOverdueRows = Payment::where('loan_id', $loan->id)
+                ->where('payment_date', '<', $today->toDateString())
+                ->whereRaw($arrearExpr)
+                ->exists();
+
+            if ($hasOverdueRows) {
+                // Ensure late_since_date is set if not already
+                if (!$loan->late_since_date) {
+                    $earliestOverdue = Payment::where('loan_id', $loan->id)
+                        ->where('payment_date', '<', $today->toDateString())
+                        ->whereRaw($arrearExpr)
+                        ->orderBy('payment_date', 'asc')
+                        ->first();
+                    if ($earliestOverdue) {
+                        $loan->late_since_date = $earliestOverdue->payment_date;
+                    }
+                }
+
+                // Lock the current late days into locked_aging
+                if ($loan->late_since_date) {
+                    $lateSince = Carbon::parse($loan->late_since_date)->startOfDay();
+                    $txDate = Carbon::parse($validated['transaction_date'])->startOfDay();
+                    $agingEndDate = $txDate->lte($today) ? $txDate : $today;
+                    if ($agingEndDate->gt($lateSince)) {
+                        $daysToLock = (int) abs($agingEndDate->diffInDays($lateSince));
+                        $loan->locked_aging = (int) ($loan->locked_aging ?? 0) + $daysToLock;
+                        $loan->late_since_date = null; // Will be recalculated by updateAging()
+                        $loan->save();
+                    }
+                }
+            }
+            // ─── End: Lock current aging ───
 
             if ($installments->isEmpty() && $validated['repayment_type'] !== 'Withdraw') {
                 throw new \RuntimeException('No unpaid installments found for this loan.');
@@ -166,12 +224,12 @@ class RepaymentService
             $lastUpdatedInst = null;
             $now = Carbon::now();
 
-            /** @var \App\Models\Payment|null $firstInst */
+            /** @var Payment|null $firstInst */
             $firstInst = $installments->first();
-            /** @var \App\Models\Payment|null $secondInst */
+            /** @var Payment|null $secondInst */
             $secondInst = $installments->get(1);
 
-            /** @var \App\Models\Payment $inst */
+            /** @var Payment $inst */
             // Save first installment's due amount before the loop modifies it
             $firstInstOriginalDue = 0.0;
             if ($firstInst) {
@@ -407,8 +465,8 @@ class RepaymentService
     }
 
     /**
-     * @param  \App\Models\RepaymentTransaction|int  $transaction
-     * @return array{loan: \App\Models\Loan, transaction: \App\Models\RepaymentTransaction}
+     * @param  RepaymentTransaction|int  $transaction
+     * @return array{loan: Loan, transaction: RepaymentTransaction}
      */
     public function void(RepaymentTransaction|int $transaction): array
     {
@@ -469,7 +527,7 @@ class RepaymentService
                     $interestToReverse = (float) $transaction->interest_paid;
                     $principalToReverse = (float) ($transaction->principal_paid + $transaction->paid_off_amount);
 
-                    /** @var \App\Models\Payment $inst */
+                    /** @var Payment $inst */
                     foreach ($installments as $inst) {
                         if ($feeToReverse > 0.001 && $inst->fee_paid > 0) {
                             $reduceFee = min($feeToReverse, (float) $inst->fee_paid);

@@ -80,6 +80,7 @@ class RoleResource extends Resource
                 'reschedule_refinance' => 'Reschedule & Refinance',
                 'customer_management' => 'Client Management',
                 'customer_history' => 'Client History',
+                'pending_approvals' => 'Loan Approvals',
             ],
             'HR & Payroll' => [
                 'hr_position' => 'Position (HR)',
@@ -149,14 +150,23 @@ class RoleResource extends Resource
 
                 $set(
                     "ui_feature_{$key}_actions",
-                    $state ? array_keys(static::getSystemUiActionsForGroup($groupName)) : []
+                    $state ? array_keys(static::getSystemUiActionsForGroup($groupName, $key)) : []
                 );
             }
         }
     }
 
-    protected static function getSystemUiActionsForGroup(string $groupName): array
+    protected static function getSystemUiActionsForGroup(string $groupName, ?string $key = null): array
     {
+        if ($key === 'pending_approvals') {
+            return [
+                'check' => 'Check',
+                'verify' => 'Verify',
+                'approve' => 'Approve',
+                'reject' => 'Reject',
+            ];
+        }
+
         if ($groupName === 'Reports') {
             return ['export' => 'Export'];
         }
@@ -176,6 +186,10 @@ class RoleResource extends Resource
             foreach ([
                 'ui:dividend' => 'ui:dividend_declaration',
                 'ui:hr_employee' => 'ui:hr_payroll',
+                'ui:pending_approvals:check' => 'check_loan',
+                'ui:pending_approvals:verify' => 'verify_loan',
+                'ui:pending_approvals:approve' => 'approve_loan',
+                'ui:pending_approvals:reject' => 'reject_loan',
             ] as $source => $alias) {
                 if ($permission === $source || str_starts_with($permission, "{$source}:")) {
                     $expanded->push($alias . substr($permission, strlen($source)));
@@ -198,6 +212,7 @@ class RoleResource extends Resource
             \App\Filament\Resources\ActivityLogs\ActivityLogResource::class => 'activity_logs',
             \App\Filament\Resources\PaymentQrs\PaymentQrResource::class => 'payment_qrs',
             \App\Filament\Resources\PaymentMethods\PaymentMethodResource::class => 'payment_methods',
+            \App\Filament\Resources\IdTypes\IdTypeResource::class => 'id_types',
 
             \App\Filament\Resources\ExpenseCategories\ExpenseCategoryResource::class => 'expense_categories',
             \App\Filament\Resources\RevenueCategories\RevenueCategoryResource::class => 'revenue_categories',
@@ -354,7 +369,7 @@ class RoleResource extends Resource
                                         CheckboxList::make("ui_feature_{$key}_actions")
                                             ->label('Actions')
                                             ->options(function () use ($groupName, $key) {
-                                                $actions = static::getSystemUiActionsForGroup($groupName);
+                                                $actions = static::getSystemUiActionsForGroup($groupName, $key);
                                                 if ($key === 'customer_history' && isset($actions['edit'])) {
                                                     $actions['edit'] = 'Edit Schedule Repay';
                                                 }

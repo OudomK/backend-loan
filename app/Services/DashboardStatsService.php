@@ -39,10 +39,12 @@ class DashboardStatsService
 
     private function cacheCoreKpis(int $ttl): void
     {
+        $pendingStatuses = ['pending', 'pending_check', 'pending_verify', 'pending_approval'];
+
         Cache::put('filament.stats.pending_loans_data', [
-            'count' => Loan::where('status', 'pending')->count(),
-            'usd' => Loan::where('status', 'pending')->where('currency', 'LIKE', 'USD%')->sum('amount'),
-            'khr' => Loan::where('status', 'pending')->where('currency', 'LIKE', 'KHR%')->sum('amount'),
+            'count' => Loan::whereIn('status', $pendingStatuses)->count(),
+            'usd' => Loan::whereIn('status', $pendingStatuses)->where('currency', 'LIKE', 'USD%')->sum('amount'),
+            'khr' => Loan::whereIn('status', $pendingStatuses)->where('currency', 'LIKE', 'KHR%')->sum('amount'),
         ], $ttl);
 
         Cache::put('filament.stats.active_borrowers', Borrower::whereHas('loans', fn ($q) => $q->where('status', 'active'))->count(), $ttl);
@@ -80,7 +82,7 @@ class DashboardStatsService
         $overdueLoans = 0;
 
         foreach ($activeLoans as $loan) {
-            /** @var \App\Models\Loan $loan */
+            /** @var Loan $loan */
             $snapshot = $this->portfolioSnapshot($loan, $referenceDate);
             $currentOS = $snapshot['outstanding'];
             if ($currentOS <= 0.01) {

@@ -11,15 +11,6 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class ExpenseCategoryPolicy
 {
     use HandlesAuthorization;
-
-    public function before(AuthUser $user, string $ability): ?bool
-    {
-        if (!\App\Services\FeatureToggle::isAccessible('expense_categories', $user)) {
-            return false;
-        }
-
-        return null;
-    }
     
     public function viewAny(AuthUser $authUser): bool
     {

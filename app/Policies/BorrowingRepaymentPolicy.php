@@ -11,14 +11,6 @@ use Illuminate\Auth\Access\HandlesAuthorization;
 class BorrowingRepaymentPolicy
 {
     use HandlesAuthorization;
-
-    public function before(AuthUser $user, string $ability): ?bool
-    {
-        if (!\App\Services\FeatureToggle::isAccessible('borrowing_repayments', $user)) {
-            return false;
-        }
-        return null;
-    }
     
     public function viewAny(AuthUser $authUser): bool
     {
