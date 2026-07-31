@@ -154,6 +154,18 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
     });
 
+    Route::get('/debug-user', function (Request $request) {
+        $user = \App\Models\User::where('email', $request->query('email'))->first();
+        if (!$user) return response()->json(['error' => 'User not found']);
+        return response()->json([
+            'id' => $user->id,
+            'legacy_role' => $user->role,
+            'spatie_roles' => $user->roles->pluck('name'),
+            'effective_permissions' => $user->effectivePermissionNames(),
+            'can_view_any_user' => $user->can('ViewAny:User'),
+        ]);
+    });
+
     Route::post('/customers/import', [CustomerImportController::class, 'import']);
     Route::get('/customers/import/template', [CustomerImportController::class, 'downloadTemplate']);
     Route::get('/customers/export', [CustomerExportController::class, 'export']);
