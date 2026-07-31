@@ -28,13 +28,13 @@ class LoanApprovalApiController extends Controller
 
         $allowedStatuses = [];
 
-        if ($user && $user->hasPermissionTo('check_loan')) {
+        if ($user && $user->can('check_loan')) {
             $allowedStatuses[] = 'pending_check';
         }
-        if ($user && $user->hasPermissionTo('verify_loan')) {
+        if ($user && $user->can('verify_loan')) {
             $allowedStatuses[] = 'pending_verify';
         }
-        if ($user && $user->hasPermissionTo('approve_loan')) {
+        if ($user && $user->can('approve_loan')) {
             $allowedStatuses[] = 'pending_approval';
         }
 
@@ -78,31 +78,31 @@ class LoanApprovalApiController extends Controller
         try {
             switch ($action) {
                 case 'check':
-                    if (!$user->hasPermissionTo('check_loan')) {
+                    if (!$user->can('check_loan')) {
                         return response()->json(['error' => 'You do not have permission to check loans.'], 403);
                     }
                     $this->approvalService->check($loan, $user, $comments);
                     break;
                 case 'verify':
-                    if (!$user->hasPermissionTo('verify_loan')) {
+                    if (!$user->can('verify_loan')) {
                         return response()->json(['error' => 'You do not have permission to verify loans.'], 403);
                     }
                     $this->approvalService->verify($loan, $user, $comments);
                     break;
                 case 'approve':
-                    if (!$user->hasPermissionTo('approve_loan')) {
+                    if (!$user->can('approve_loan')) {
                         return response()->json(['error' => 'You do not have permission to approve loans.'], 403);
                     }
                     $this->approvalService->approve($loan, $user, $comments);
                     break;
                 case 'reject':
-                    if (!$user->hasPermissionTo('reject_loan')) {
+                    if (!$user->can('reject_loan')) {
                         return response()->json(['error' => 'You do not have permission to reject loans.'], 403);
                     }
                     $this->approvalService->reject($loan, $user, $comments);
                     break;
                 case 'resubmit':
-                    if (!$user->hasPermissionTo('check_loan')) { // same as check for resubmit
+                    if (!$user->can('check_loan')) { // same as check for resubmit
                         return response()->json(['error' => 'You do not have permission to resubmit loans.'], 403);
                     }
                     $this->approvalService->resubmit($loan, $user, $comments);
