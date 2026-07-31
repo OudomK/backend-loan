@@ -156,7 +156,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/debug-user', function (Request $request) {
         $user = \App\Models\User::where('email', $request->query('email'))->first();
-        if (!$user) return response()->json(['error' => 'User not found']);
+        if (!$user)
+            return response()->json(['error' => 'User not found']);
         return response()->json([
             'id' => $user->id,
             'legacy_role' => $user->role,
@@ -164,6 +165,16 @@ Route::middleware('auth:sanctum')->group(function () {
             'effective_permissions' => $user->effectivePermissionNames(),
             'can_view_any_user' => $user->can('ViewAny:User'),
         ]);
+    });
+
+    Route::get('/debug-log', function () {
+        $logFile = storage_path('logs/laravel.log');
+        if (!file_exists($logFile)) {
+            return response('No log file found.', 404);
+        }
+        $lines = file($logFile);
+        $lastLines = array_slice($lines, -100);
+        return response(implode("", $lastLines), 200)->header('Content-Type', 'text/plain');
     });
 
     Route::post('/customers/import', [CustomerImportController::class, 'import']);
