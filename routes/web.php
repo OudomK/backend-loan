@@ -54,6 +54,7 @@ Route::get('/admin/sso/{token}', function ($token) {
 
         // Auto-unlock admin panel for SSO users
         session(['admin_unlocked' => true]);
+        \Illuminate\Support\Facades\Cookie::queue('admin_unlocked', true, 0);
 
         // Enforce single-session: bind new session to this user
         $user->forceFill(['current_session_id' => session()->getId()])->saveQuietly();
