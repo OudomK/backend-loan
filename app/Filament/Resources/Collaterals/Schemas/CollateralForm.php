@@ -26,7 +26,7 @@ class CollateralForm
                         ])
                             ->schema([
                                 Select::make('loan_id')
-                                    ->relationship('loan', 'loan_code')
+                                    ->relationship('loan', 'loan_code', modifyQueryUsing: fn ($query) => $query->whereNotNull('loan_code'))
                                     ->searchable()
                                     ->preload()
                                     ->required()
