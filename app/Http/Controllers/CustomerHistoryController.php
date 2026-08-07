@@ -92,33 +92,12 @@ class CustomerHistoryController extends Controller
         if ($osBalance < 0.001) $osBalance = 0.0;
 
         $earliestOverdue = $dynamicEarliestOverdue;
-        $daysOverdue = (int) $loan->aging;
+        $daysOverdue = $loan->currentAging($now);
         if ($daysOverdue < 0) $daysOverdue = 0;
 
         $dateOverdueStr = $earliestOverdue ? $earliestOverdue->format('Y-m-d') : '';
 
-        // penalty rate
-        if ($loan->penalty_rate !== null) {
-            $penaltyPerDay = (float)$loan->penalty_rate;
-        } else {
-            $isKHR = str_contains(strtoupper($loan->currency ?? ''), 'KHR');
-            $penaltyPerDay = $isKHR ? 10000.0 : 2.5;
-        }
-        $currentLateDays = 0;
-        if ($loan->late_since_date) {
-            $earliestDate = \Carbon\Carbon::parse($loan->late_since_date)->startOfDay();
-            $today = \Carbon\Carbon::today();
-            if ($today->gt($earliestDate)) {
-                $currentLateDays = (int) abs($today->diffInDays($earliestDate, false));
-            }
-        }
-        
-        // Dynamic penalty from current overdue days
-        $dynamicPenalty = $currentLateDays * $penaltyPerDay;
-
-        // Total penalty due = dynamic penalty + historical unpaid penalty
-        $penaltyDue = $dynamicPenalty + (float) ($loan->accumulated_penalty ?? 0.00);
-        if ($penaltyDue < 0) $penaltyDue = 0.0;
+        $penaltyDue = $loan->currentPenaltyDue($now);
 
         $arr['summary'] = [
             'total_paid' => $totalPaidForLoan,
@@ -237,12 +216,12 @@ class CustomerHistoryController extends Controller
             $scheduleOnTimeLabel = "-$diff";
         } elseif ($isFullyPaid && $payDate && $dDate) {
             $diff = (int) $dDate->diffInDays($payDate, false);
-            $scheduleOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
+            $scheduleOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)abs($diff) : "0");
         }
 
         if ($p->total_paid > 0 && $payDate && $dDate) {
             $diff = (int) $dDate->diffInDays($payDate, false);
-            $paymentOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
+            $paymentOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)abs($diff) : "0");
         }
 
         return [
@@ -284,7 +263,7 @@ class CustomerHistoryController extends Controller
                     $aDate = $allocDateStr ? \Carbon\Carbon::parse($allocDateStr)->startOfDay() : null;
                     if ($aDate) {
                         $diff = (int) $dDate->diffInDays($aDate, false);
-                        $allocOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)(abs($diff) + 1) : "0");
+                        $allocOnTimeLabel = $diff > 0 ? "-$diff" : ($diff < 0 ? (string)abs($diff) : "0");
                     }
                 }
 

@@ -204,12 +204,10 @@ class QualityPortfolioController extends Controller
                     }
 
                     $effectiveArrearDate = $earliestOverdueDate ?? $earliestPrincipalArrearDate;
-
-                    if (!$effectiveArrearDate) {
+                    $aging = $loan->agingAt($toDate, $effectiveArrearDate, $effectiveArrearDate !== null);
+                    if ($aging <= 0) {
                         continue;
                     }
-
-                    $aging = abs($toDate->startOfDay()->diffInDays(Carbon::parse($effectiveArrearDate)->startOfDay()));
 
                     if ($aging >= 1) {
                         $par1Count++;

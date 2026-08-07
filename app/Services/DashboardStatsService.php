@@ -192,15 +192,8 @@ class DashboardStatsService
 
     private function cacheParAgingBuckets(int $ttl): void
     {
-        $today = now()->toDateString();
         $agingLoans = Loan::where('status', 'active')
-            ->select('id')
-            ->addSelect([
-                'real_aging' => Payment::selectRaw('DATEDIFF(?, MIN(payment_date))', [$today])
-                    ->whereColumn('loan_id', 'loans.id')
-                    ->where('payment_date', '<', $today)
-                    ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
-            ])
+            ->select('id', 'locked_aging', 'late_since_date')
             ->get();
 
         $buckets = [
@@ -212,7 +205,7 @@ class DashboardStatsService
         ];
 
         foreach ($agingLoans as $agingLoan) {
-            $aging = $agingLoan->real_aging ?? 0;
+            $aging = $agingLoan->currentAging();
             if ($aging <= 0) {
                 $buckets['Current']++;
             } elseif ($aging <= 30) {
@@ -389,7 +382,7 @@ class DashboardStatsService
 
         return [
             'outstanding' => $outstanding,
-            'aging' => $aging,
+            'aging' => $loan->currentAging($referenceDate),
         ];
     }
 }

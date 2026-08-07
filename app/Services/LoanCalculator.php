@@ -40,6 +40,14 @@ class LoanCalculator
             return ceil($amount); // Round up to next whole number for USD
         };
 
+        // Principal installments in KHR are rounded to whole thousand riel.
+        $roundScheduledPrincipal = function ($amount, $currency) {
+            if (strpos($currency, 'KHR') !== false) {
+                return ceil($amount / 1000) * 1000;
+            }
+
+            return ceil($amount);
+        };
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
             if ($adminFee <= 0)
                 return 0;
@@ -51,7 +59,7 @@ class LoanCalculator
             return $applyRounding($totalFeeAmount / $totalPayments, $currency);
         };
 
-        $buildFixedIntervalSchedule = function (int $intervalDays, ?int $totalPaymentsOverride = null) use ($principal, $rate, $duration, $startDateObj, $applyRounding, $calculatePeriodFee, $currency, $firstRepaymentDate) {
+        $buildFixedIntervalSchedule = function (int $intervalDays, ?int $totalPaymentsOverride = null, bool $ratePerPayment = false, bool $normalizeFinalPayment = false) use ($principal, $rate, $duration, $startDateObj, $applyRounding, $calculatePeriodFee, $currency, $firstRepaymentDate) {
             if ($principal <= 0 || $duration <= 0 || $intervalDays <= 0) {
                 return [];
             }
@@ -60,7 +68,7 @@ class LoanCalculator
                 ? max(1, $totalPaymentsOverride)
                 : max(1, (int) ceil(($duration * 30) / $intervalDays));
             $periodPrincipalRaw = $principal / $totalPayments;
-            $periodInterestRaw = $principal * ($rate / 100) * ($intervalDays / 30);
+            $periodInterestRaw = $principal * ($rate / 100) * ($ratePerPayment ? 1 : ($intervalDays / 30));
             $remainingBalanceLocal = $principal;
             $rows = [];
 
@@ -75,12 +83,17 @@ class LoanCalculator
                     $currentPaymentDate->add(new DateInterval('P' . ($intervalDays * $i) . 'D'));
                 }
 
+                $feePay = $calculatePeriodFee($i, $totalPayments);
+
                 if ($i === $totalPayments) {
                     $principalPay = $remainingBalanceLocal;
-
-                    // Smart Check: Only adjust if final principal is higher than normal
                     $standardPrincipalPay = $applyRounding($periodPrincipalRaw, $currency);
-                    if ($principalPay > $standardPrincipalPay) {
+
+                    if ($normalizeFinalPayment) {
+                        $standardInterestPay = $applyRounding($periodInterestRaw, $currency);
+                        $standardPayment = $applyRounding($standardPrincipalPay + $standardInterestPay + $feePay, $currency);
+                        $interestPay = max(0, $standardPayment - $principalPay - $feePay);
+                    } elseif ($principalPay > $standardPrincipalPay) {
                         $diff = $principalPay - $standardPrincipalPay;
                         $adjustedInterest = $periodInterestRaw - $diff;
                         $interestPay = $applyRounding(max(0, $adjustedInterest), $currency);
@@ -95,8 +108,6 @@ class LoanCalculator
                     $remainingBalanceLocal = max(0, $remainingBalanceLocal - $principalPay);
                     $interestPay = $applyRounding($periodInterestRaw, $currency);
                 }
-
-                $feePay = $calculatePeriodFee($i, $totalPayments);
 
                 $rows[] = [
                     'period' => $i,
@@ -216,7 +227,7 @@ class LoanCalculator
 
             $totalPayments = $duration * 2;
             $monthlyPrincipal = $principal / $duration;
-            $monthlyInterest = $principal * ($rate / 100);
+            $periodInterest = $principal * ($rate / 100);
 
 
 
@@ -224,6 +235,8 @@ class LoanCalculator
             $secondPaymentPrincipal = $monthlyPrincipal * ($secondPayPercent / 100);
 
             $remainingBalance = $principal;
+            $exactCumulativePrincipal = 0;
+            $principalPaidSoFar = 0;
             $allPayments = [];
             $loanStartDate = clone $startDateObj;
             $paymentDates = $buildSemiMonthlyDates($loanStartDate, $totalPayments, $payDay1, $payDay2);
@@ -231,6 +244,10 @@ class LoanCalculator
             for ($i = 1; $i <= $totalPayments; $i++) {
                 $paymentMeta = $paymentDates[$i - 1] ?? null;
                 if (!$paymentMeta) {
+                    break;
+                }
+
+                if ($i > 1 && $remainingBalance <= 0) {
                     break;
                 }
 
@@ -243,14 +260,27 @@ class LoanCalculator
 
                     if ($daysFromStart < 15) {
                         // Shortage day: DO NOT pro-rate. Charge normal flat amount.
-                        $firstPaymentInterest = $applyRounding($monthlyInterest * ($firstPayPercent / 100), $currency);
-                        $principalPay = $applyRounding($firstPaymentPrincipal, $currency);
+                        $firstPaymentInterest = $applyRounding($periodInterest, $currency);
+                        $principalPayRaw = $firstPaymentPrincipal;
                     } else {
                         // Excess/Normal day: Pro-rate both interest and principal on first payment based on actual days
-                        $firstPaymentInterest = $applyRounding($monthlyInterest * ($daysFromStart / 30), $currency);
-                        $principalPay = $applyRounding($monthlyPrincipal * ($daysFromStart / 30), $currency);
+                        $firstPaymentInterest = $applyRounding($periodInterest, $currency);
+                        $principalPayRaw = $monthlyPrincipal * ($daysFromStart / 30);
                     }
 
+                    // Split remaining balance in the final month to avoid $0 payment on the second half
+                    if ($isFirst) {
+                        $normalFirst = $roundScheduledPrincipal($firstPaymentPrincipal, $currency);
+                        $normalSecond = $roundScheduledPrincipal($secondPaymentPrincipal, $currency);
+                        $fullMonthPrincipal = $normalFirst + $normalSecond;
+                        
+                        if ($remainingBalance < $fullMonthPrincipal) {
+                            $principalPayRaw = $remainingBalance * ($firstPayPercent / 100);
+                        }
+                    }
+
+                    $principalPay = $roundScheduledPrincipal($principalPayRaw, $currency);
+                    
                     $principalPay = min($principalPay, $remainingBalance);
 
                     $feePay = $calculatePeriodFee($i, $totalPayments);
@@ -271,7 +301,7 @@ class LoanCalculator
                     $remainingBalance -= $principalPay;
                 } elseif ($i == $totalPayments) {
                     $finalInterestPercent = $isFirst ? $firstPayPercent : $secondPayPercent;
-                    $finalInterest = $applyRounding($monthlyInterest * ($finalInterestPercent / 100), $currency);
+                    $finalInterest = $applyRounding($periodInterest, $currency);
                     $feePay = $calculatePeriodFee($i, $totalPayments);
                     $paymentAmt = $applyRounding($remainingBalance + $finalInterest + $feePay, $currency);
                     if ($paymentAmt != ($remainingBalance + $finalInterest + $feePay)) {
@@ -289,9 +319,23 @@ class LoanCalculator
                     ];
                     break;
                 } else {
-                    $principalPay = $applyRounding($isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal, $currency);
+                    $principalPayRaw = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
+                    
+                    // Split remaining balance in the final month to avoid $0 payment on the second half
+                    if ($isFirst) {
+                        $normalFirst = $roundScheduledPrincipal($firstPaymentPrincipal, $currency);
+                        $normalSecond = $roundScheduledPrincipal($secondPaymentPrincipal, $currency);
+                        $fullMonthPrincipal = $normalFirst + $normalSecond;
+                        
+                        if ($remainingBalance < $fullMonthPrincipal) {
+                            $principalPayRaw = $remainingBalance * ($firstPayPercent / 100);
+                        }
+                    }
+
+                    $principalPay = $roundScheduledPrincipal($principalPayRaw, $currency);
                     $principalPay = min($principalPay, $remainingBalance);
-                    $interestPay = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
+                    
+                    $interestPay = $applyRounding($periodInterest, $currency);
                     $feePay = $calculatePeriodFee($i, $totalPayments);
                     $paymentAmt = $applyRounding($principalPay + $interestPay + $feePay, $currency);
                     if ($paymentAmt != ($principalPay + $interestPay + $feePay)) {
@@ -311,33 +355,25 @@ class LoanCalculator
                 }
             }
 
-            // Smart Check for 50_50 / 70_30 to prevent final payment spike or dip due to rounding
-            if (count($allPayments) > 1) {
-                // Check the last 2 payments (both halves of the final month)
-                for ($checkIndex = max(0, count($allPayments) - 2); $checkIndex < count($allPayments); $checkIndex++) {
+            // Normalize both half-payments in the final printed month.
+            if (count($allPayments) > 0) {
+                $firstCheckIndex = max(0, count($allPayments) - 2);
+
+                for ($checkIndex = $firstCheckIndex; $checkIndex < count($allPayments); $checkIndex++) {
                     $paymentMeta = $paymentDates[$checkIndex] ?? null;
                     $isFirstHalf = $paymentMeta ? (bool) $paymentMeta['is_first_half'] : false;
                     $normalPrincipal = $applyRounding($isFirstHalf ? $firstPaymentPrincipal : $secondPaymentPrincipal, $currency);
-                    $normalInterest = $applyRounding($monthlyInterest * ($isFirstHalf ? $firstPayPercent : $secondPayPercent) / 100, $currency);
+                    $normalInterest = $applyRounding($periodInterest, $currency);
                     $normalFee = $calculatePeriodFee($checkIndex + 1, $totalPayments);
                     $normalPayment = $applyRounding($normalPrincipal + $normalInterest + $normalFee, $currency);
 
-                    if ($allPayments[$checkIndex]['payment'] != $normalPayment) {
-                        $difference = $allPayments[$checkIndex]['payment'] - $normalPayment;
-                        if ($difference > 0) {
-                            // Payment is too high: waive interest
-                            $allPayments[$checkIndex]['interest'] = max(0, $allPayments[$checkIndex]['interest'] - $difference);
-                            $allPayments[$checkIndex]['payment'] = $applyRounding($allPayments[$checkIndex]['principal'] + $allPayments[$checkIndex]['interest'] + $allPayments[$checkIndex]['fee'], $currency);
-                        } else {
-                            // Payment is too low: pad interest
-                            $diffAbs = abs($difference);
-                            $allPayments[$checkIndex]['interest'] += $diffAbs;
-                            $allPayments[$checkIndex]['payment'] += $diffAbs;
-                        }
-                    }
+                    $allPayments[$checkIndex]['interest'] = max(0, $normalPayment - $allPayments[$checkIndex]['principal'] - $allPayments[$checkIndex]['fee']);
+                    $allPayments[$checkIndex]['payment'] = $applyRounding(
+                        $allPayments[$checkIndex]['principal'] + $allPayments[$checkIndex]['interest'] + $allPayments[$checkIndex]['fee'],
+                        $currency
+                    );
                 }
             }
-
             usort($allPayments, fn($a, $b) => $a['order'] <=> $b['order']);
             $runningBalance = $principal;
             foreach ($allPayments as $idx => &$pay) {
@@ -357,12 +393,14 @@ class LoanCalculator
 
             $totalPayments = $duration * 2;
             $monthlyPrincipal = $principal / $duration;
-            $monthlyInterest = $principal * ($rate / 100);
+            $periodInterest = $principal * ($rate / 100);
 
             $firstPaymentPrincipal = $monthlyPrincipal * ($firstPayPercent / 100);
             $secondPaymentPrincipal = $monthlyPrincipal * ($secondPayPercent / 100);
 
             $remainingBalance = $principal;
+            $exactCumulativePrincipal = 0;
+            $principalPaidSoFar = 0;
             $allPayments = [];
             $loanStartDate = clone $startDateObj;
             $paymentDates = $buildSemiMonthlyDates($loanStartDate, $totalPayments, $payDay1, $payDay2);
@@ -374,22 +412,20 @@ class LoanCalculator
                     break;
                 }
 
+                if ($i > 1 && $remainingBalance <= 0) {
+                    break;
+                }
+
                 /** @var DateTime $currentPaymentDate */
                 $currentPaymentDate = clone $paymentMeta['date'];
                 $isFirst = (bool) $paymentMeta['is_first_half'];
 
                 if ($i == 1) {
                     $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days + 1;
-                    if ($daysFromStart < 15) {
-                        // Shortage day: DO NOT pro-rate. Charge normal flat 50%.
-                        $interestPay = $applyRounding($monthlyInterest * ($firstPayPercent / 100), $currency);
-                    } else {
-                        // Excess/Normal day: Pro-rate interest based on actual days
-                        $interestPay = $applyRounding($monthlyInterest * ($daysFromStart / 30), $currency);
-                    }
-                } else {
-                    $interestPay = $applyRounding($monthlyInterest * ($isFirst ? $firstPayPercent : $secondPayPercent) / 100, $currency);
                 }
+
+                // The configured rate is charged once for every half-payment.
+                $interestPay = $applyRounding($periodInterest, $currency);
 
                 if ($i == $totalPayments) {
                     $principalPay = $remainingBalance;
@@ -413,15 +449,28 @@ class LoanCalculator
                     if ($i == 1) {
                         if ($daysFromStart < 15) {
                             // Shortage day: DO NOT pro-rate. Charge normal flat 50% principal.
-                            $principalPay = $applyRounding($firstPaymentPrincipal, $currency);
+                            $principalPayRaw = $firstPaymentPrincipal;
                         } else {
                             // Excess/Normal day: Pro-rate principal based on actual days
-                            $principalPay = $applyRounding($monthlyPrincipal * ($daysFromStart / 30), $currency);
+                            $principalPayRaw = $monthlyPrincipal * ($daysFromStart / 30);
                         }
                     } else {
-                        $rawPrincipalPay = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
-                        $principalPay = $applyRounding($rawPrincipalPay, $currency);
+                        $principalPayRaw = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
                     }
+                    
+                    // Split remaining balance in the final month to avoid $0 payment on the second half
+                    if ($isFirst) {
+                        $normalFirst = $roundScheduledPrincipal($firstPaymentPrincipal, $currency);
+                        $normalSecond = $roundScheduledPrincipal($secondPaymentPrincipal, $currency);
+                        $fullMonthPrincipal = $normalFirst + $normalSecond;
+                        
+                        if ($remainingBalance < $fullMonthPrincipal) {
+                            $principalPayRaw = $remainingBalance * ($firstPayPercent / 100);
+                        }
+                    }
+                    
+                    $principalPay = $roundScheduledPrincipal($principalPayRaw, $currency);
+                    
                     $principalPay = min($principalPay, $remainingBalance);
                     $feePay = $calculatePeriodFee($i, $totalPayments);
                     $paymentAmt = $applyRounding($principalPay + $interestPay + $feePay, $currency);
@@ -442,33 +491,25 @@ class LoanCalculator
                 }
             }
 
-            // Smart Check for 50_50 / 70_30 to prevent final payment spike due to rounding
-            if (count($allPayments) > 1) {
-                $lastIndex = count($allPayments) - 1;
-                $paymentMeta = $paymentDates[$lastIndex] ?? null;
-                $isLastFirstHalf = $paymentMeta ? (bool) $paymentMeta['is_first_half'] : false;
-                $normalLastPrincipal = $applyRounding($isLastFirstHalf ? $firstPaymentPrincipal : $secondPaymentPrincipal, $currency);
+            // Normalize both half-payments in the final printed month.
+            if (count($allPayments) > 0) {
+                $firstCheckIndex = max(0, count($allPayments) - 2);
 
-                if ($allPayments[$lastIndex]['principal'] > $normalLastPrincipal) {
-                    $difference = $allPayments[$lastIndex]['principal'] - $normalLastPrincipal;
-                    $allPayments[$lastIndex]['principal'] -= $difference;
-                    $allPayments[$lastIndex]['payment'] -= $difference;
+                for ($checkIndex = $firstCheckIndex; $checkIndex < count($allPayments); $checkIndex++) {
+                    $paymentMeta = $paymentDates[$checkIndex] ?? null;
+                    $isFirstHalf = $paymentMeta ? (bool) $paymentMeta['is_first_half'] : false;
+                    $normalPrincipal = $applyRounding($isFirstHalf ? $firstPaymentPrincipal : $secondPaymentPrincipal, $currency);
+                    $normalInterest = $applyRounding($periodInterest, $currency);
+                    $normalFee = $calculatePeriodFee($checkIndex + 1, $totalPayments);
+                    $normalPayment = $applyRounding($normalPrincipal + $normalInterest + $normalFee, $currency);
 
-                    $allPayments[0]['principal'] += $difference;
-                    $allPayments[0]['payment'] += $difference;
-                } else {
-                    $normalLastInterest = $applyRounding($monthlyInterest * ($isLastFirstHalf ? $firstPayPercent : $secondPayPercent) / 100, $currency);
-                    $normalLastFee = $calculatePeriodFee($lastIndex + 1, $totalPayments);
-                    $normalLastPayment = $applyRounding($normalLastPrincipal + $normalLastInterest + $normalLastFee, $currency);
-
-                    if ($allPayments[$lastIndex]['payment'] < $normalLastPayment) {
-                        $difference = $normalLastPayment - $allPayments[$lastIndex]['payment'];
-                        $allPayments[$lastIndex]['interest'] += $difference;
-                        $allPayments[$lastIndex]['payment'] += $difference;
-                    }
+                    $allPayments[$checkIndex]['interest'] = max(0, $normalPayment - $allPayments[$checkIndex]['principal'] - $allPayments[$checkIndex]['fee']);
+                    $allPayments[$checkIndex]['payment'] = $applyRounding(
+                        $allPayments[$checkIndex]['principal'] + $allPayments[$checkIndex]['interest'] + $allPayments[$checkIndex]['fee'],
+                        $currency
+                    );
                 }
             }
-
             usort($allPayments, fn($a, $b) => $a['order'] <=> $b['order']);
             $runningBalance = $principal;
             foreach ($allPayments as $idx => &$pay) {
@@ -483,11 +524,14 @@ class LoanCalculator
             unset($pay);
             $results = $allPayments;
         } elseif ($option === 'fixed_daily') {
-            $results = $buildFixedIntervalSchedule(1, $duration);
+            // Daily rate is charged once for every repayment and the final row is normalized.
+            $results = $buildFixedIntervalSchedule(1, $duration, true, true);
         } elseif ($option === 'fixed_biweekly') {
-            $results = $buildFixedIntervalSchedule(14, $duration);
+            // Biweekly rate is charged once for every repayment and the final row is normalized.
+            $results = $buildFixedIntervalSchedule(14, $duration, true, true);
         } elseif ($option === 'fixed_weekly') {
-            $results = $buildFixedIntervalSchedule(7, $duration);
+            // Weekly rate is charged once for every repayment and the final row is normalized.
+            $results = $buildFixedIntervalSchedule(7, $duration, true, true);
         } elseif ($option === 'annuity_monthly') {
             // Separate unbiased rounding exclusively for Annuity to prevent massive ballooning
             $applyAnnuityRounding = function ($amount, $currency) {
@@ -639,8 +683,7 @@ class LoanCalculator
                             $adjustedInterest = $monthlyInterest - $diff;
                             $currentInterest = max(0, $adjustedInterest);
                         } else {
-                            // Principal is lower: pad interest
-                            $currentInterest = $monthlyInterest + abs($diff);
+                            $currentInterest = $monthlyInterest;
                         }
                     } else {
                         $currentInterest = $monthlyInterest;
@@ -696,20 +739,10 @@ class LoanCalculator
                     $currentPrincipal = $remainingBalance;
 
                     if ($duration > 1) {
-                        // Smart Check: Adjust interest to keep final payment flat
-                        if ($currentPrincipal != $monthlyPrincipal) {
-                            $diff = $currentPrincipal - $monthlyPrincipal;
-                            if ($diff > 0) {
-                                // Principal is higher: waive interest
-                                $adjustedInterest = $monthlyInterest - $diff;
-                                $currentInterest = max(0, $adjustedInterest);
-                            } else {
-                                // Principal is lower: pad interest
-                                $currentInterest = $monthlyInterest + abs($diff);
-                            }
-                        } else {
-                            $currentInterest = $monthlyInterest;
-                        }
+                        // Keep the final installment aligned with a normal monthly installment.
+                        $feePay = $calculatePeriodFee($i, $duration);
+                        $standardPayment = $applyRounding($monthlyPrincipal + $monthlyInterest + $feePay, $currency);
+                        $currentInterest = max(0, $standardPayment - $currentPrincipal - $feePay);
                     }
 
                     $remainingBalance = 0;
@@ -719,7 +752,7 @@ class LoanCalculator
                     $remainingBalance = max(0, $remainingBalance - $currentPrincipal);
                 }
 
-                $feePay = $calculatePeriodFee($i, $duration);
+                $feePay = $feePay ?? $calculatePeriodFee($i, $duration);
                 $results[] = [
                     'period' => $i,
                     'date' => $currentPaymentDate->format('d/m/Y'),
@@ -829,5 +862,156 @@ class LoanCalculator
 
         return $results;
     }
-}
+    public static function formatScheduleForPrint(array $schedule, string $repaymentMethod, float $loanAmount): array
+    {
+        $rows = [];
+        $isBimonthly = str_contains(strtolower($repaymentMethod), '70_30') || 
+                       str_contains(strtolower($repaymentMethod), '70/30') || 
+                       str_contains(strtolower($repaymentMethod), '50_50') || 
+                       str_contains(strtolower($repaymentMethod), '50/50') || 
+                       str_contains(strtolower($repaymentMethod), 'biweekly') || 
+                       str_contains(strtolower($repaymentMethod), 'bimonthly');
 
+        if (!$isBimonthly) {
+            // For monthly, daily, weekly, just map directly to rows
+            $balance = $loanAmount;
+            $no = 1;
+            foreach ($schedule as $payment) {
+                $principal = (float)($payment['principal'] ?? $payment['principal_amount'] ?? 0);
+                
+                // Use provided balance or calculate it
+                $pBalance = $payment['balance'] ?? $payment['outstanding_balance'] ?? $payment['remaining_balance'] ?? null;
+                if ($pBalance !== null && $pBalance >= 0) {
+                    $balance = (float)$pBalance;
+                } else {
+                    $balance = max(0, $balance - $principal);
+                }
+
+                $totalDue = (float)($payment['payment'] ?? $payment['total_paid'] ?? 0);
+                // If payment key is missing but interest/fee are present
+                if (empty($payment['payment']) && isset($payment['interest_amount'])) {
+                    $totalDue = $principal + (float)($payment['interest_amount'] ?? 0) + (float)($payment['fee_amount'] ?? 0);
+                }
+
+                $dateStr = $payment['date'] ?? $payment['payment_date'] ?? '';
+
+                $rows[] = [
+                    'no' => $no++,
+                    'date' => $dateStr,
+                    'principal' => $principal,
+                    'payment' => $totalDue,
+                    'balance' => $balance,
+                    'notes' => ''
+                ];
+            }
+            return $rows;
+        }
+
+        // Bimonthly logic
+        if (empty($schedule)) return $rows;
+
+        $balance = $loanAmount;
+        $currentDate = null;
+        $currentPrincipal = 0.0;
+        $currentPayment11 = 0.0;
+        $currentPayment26 = 0.0;
+        $paymentsInRow = 0;
+        $lastPaymentInRow = null;
+
+        $flushRow = function() use (&$rows, &$currentDate, &$currentPrincipal, &$currentPayment11, &$currentPayment26, &$balance, &$paymentsInRow, &$lastPaymentInRow) {
+            if ($currentDate === null) return;
+
+            $principal = $currentPrincipal;
+            $pBalance = $lastPaymentInRow['balance'] ?? $lastPaymentInRow['outstanding_balance'] ?? $lastPaymentInRow['remaining_balance'] ?? null;
+            
+            if ($pBalance !== null && $pBalance >= 0) {
+                // If it's the last payment or balance > 0, use it
+                $balance = (float)$pBalance;
+            } else {
+                $balance -= $principal;
+                if ($balance < 0.01) $balance = 0;
+            }
+
+            $rows[] = [
+                'no' => count($rows) + 1,
+                'date' => $currentDate,
+                'principal' => $principal,
+                'payment11' => $currentPayment11,
+                'payment26' => $currentPayment26,
+                'balance' => $balance,
+                'notes' => ''
+            ];
+
+            $currentDate = null;
+            $currentPrincipal = 0.0;
+            $currentPayment11 = 0.0;
+            $currentPayment26 = 0.0;
+            $paymentsInRow = 0;
+            $lastPaymentInRow = null;
+        };
+
+        $currentMonth = null;
+        $currentYear = null;
+
+        // Sort schedule by date or order if needed, but we assume it's already sorted
+        foreach ($schedule as $payment) {
+            $rawDate = $payment['date'] ?? $payment['payment_date'] ?? '';
+            // Parse date (d/m/Y or Y-m-d)
+            $pDate = null;
+            if (preg_match('/^(\d{2})\/(\d{2})\/(\d{4})$/', $rawDate, $matches)) {
+                $pDate = DateTime::createFromFormat('d/m/Y', $rawDate);
+            } else {
+                $pDate = DateTime::createFromFormat('Y-m-d', $rawDate);
+            }
+
+            if ($pDate) {
+                $month = (int)$pDate->format('m');
+                $year = (int)$pDate->format('Y');
+
+                if ($currentMonth !== null && ($month !== $currentMonth || $year !== $currentYear)) {
+                    $flushRow();
+                }
+                $currentMonth = $month;
+                $currentYear = $year;
+            } else {
+                if ($paymentsInRow >= 2) {
+                    $flushRow();
+                }
+            }
+
+            $lastPaymentInRow = $payment;
+            if ($currentDate === null) {
+                $currentDate = $rawDate;
+            }
+            
+            $principal = (float)($payment['principal'] ?? $payment['principal_amount'] ?? 0);
+            $currentPrincipal += $principal;
+
+            $totalPayment = (float)($payment['payment'] ?? $payment['total_paid'] ?? 0);
+            if (empty($payment['payment']) && isset($payment['interest_amount'])) {
+                $totalPayment = $principal + (float)($payment['interest_amount'] ?? 0) + (float)($payment['fee_amount'] ?? 0);
+            }
+
+            // Determine slot
+            $slot = 26;
+            if ($pDate) {
+                $day = (int)$pDate->format('d');
+                if ($day == 11) $slot = 11;
+                elseif ($day == 26) $slot = 26;
+                else $slot = $day <= 15 ? 11 : 26;
+            }
+
+            if ($slot === 11) {
+                $currentPayment11 += $totalPayment;
+            } else {
+                $currentPayment26 += $totalPayment;
+            }
+
+            $paymentsInRow++;
+        }
+
+        $flushRow();
+
+        return $rows;
+    }
+}

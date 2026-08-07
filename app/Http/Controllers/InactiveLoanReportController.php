@@ -103,9 +103,50 @@ class InactiveLoanReportController extends Controller
                 'inactive_date' => $inactiveDate,
                 'write_off_amount' => $loan->write_off_balance ?? 0,
             ];
-        });
+        })->filter()->values()->toArray();
 
-        return response()->json($data->values());
+        $paginate = filter_var($request->query('paginate', 'true'), FILTER_VALIDATE_BOOLEAN);
+        $page = (int) $request->query('page', 1);
+        $limit = (int) $request->query('limit', 50);
+
+        if (!$paginate) {
+            return response()->json($data);
+        }
+
+        $grandTotals = [];
+        foreach ($data as $item) {
+            $curr = strtoupper(explode(' ', (string) ($item['currency_code'] ?? 'USD'))[0]);
+            if (!isset($grandTotals[$curr])) {
+                $grandTotals[$curr] = [
+                    'disbursement_amount' => 0,
+                    'outstanding_amount' => 0,
+                    'principal_paid' => 0,
+                    'interest_paid' => 0,
+                    'write_off_amount' => 0,
+                ];
+            }
+            $grandTotals[$curr]['disbursement_amount'] += (float) ($item['disbursement_amount'] ?? 0);
+            $grandTotals[$curr]['outstanding_amount'] += (float) ($item['outstanding_amount'] ?? 0);
+            $grandTotals[$curr]['principal_paid'] += (float) ($item['principal_paid'] ?? 0);
+            $grandTotals[$curr]['interest_paid'] += (float) ($item['interest_paid'] ?? 0);
+            $grandTotals[$curr]['write_off_amount'] += (float) ($item['write_off_amount'] ?? 0);
+        }
+
+        $totalRecords = count($data);
+        $lastPage = (int) ceil($totalRecords / $limit);
+        $offset = ($page - 1) * $limit;
+
+        $paginatedData = array_slice($data, $offset, $limit);
+
+        return response()->json([
+            'data' => $paginatedData,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage > 0 ? $lastPage : 1,
+                'total' => $totalRecords,
+                'grand_totals' => $grandTotals
+            ]
+        ]);
     }
 
     public function exportExcel(Request $request)
@@ -121,6 +162,7 @@ class InactiveLoanReportController extends Controller
             'currency' => $currency,
             'from_date' => $fromDate,
             'to_date' => $toDate,
+            'paginate' => 'false'
         ]);
 
         $response = $this->index($originalRequest);

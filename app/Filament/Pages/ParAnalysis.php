@@ -189,7 +189,7 @@ class ParAnalysis extends Page
 
         return [
             'outstanding' => $outstanding,
-            'aging' => $aging,
+            'aging' => $loan->currentAging($referenceDate),
         ];
     }
 }

@@ -2,19 +2,13 @@
 
 namespace App\Http\Resources;
 
-use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Carbon\Carbon;
 
 class ArrearReportResource extends JsonResource
 {
-    /**
-     * @var array<string, float>|null
-     */
-    private static ?array $penaltyRates = null;
-
-    /**
+/**
      * Transform the resource into an array.
      *
      * @return array<string, mixed>
@@ -27,20 +21,12 @@ class ArrearReportResource extends JsonResource
         $referenceDate = $referenceDateStr ? Carbon::parse($referenceDateStr) : Carbon::today();
 
         $arrearDate = $this->calculated_late_since_date ?? $this->late_since_date;
-        $aging = $arrearDate ? abs($referenceDate->diffInDays(Carbon::parse($arrearDate))) : 0;
         $arrearPrincipal = (float) ($this->arrear_principal ?? 0);
         $arrearInterest = (float) ($this->arrear_interest ?? 0);
         $totalArrearDue = round($arrearPrincipal + $arrearInterest, 2);
+        $aging = $this->agingAt($referenceDate, $arrearDate, $totalArrearDue > 0.01);
         $penaltyPaid = (float) ($this->penalty_paid_total ?? 0);
-        if (!$this->late_since_date) {
-            $penaltyDue = (float)($this->accumulated_penalty ?? 0);
-        } else {
-            $penaltyGross = 0;
-            if ($aging > 0) {
-                $penaltyGross = round($aging * $this->resolvePenaltyRate($this->resource), 2);
-            }
-            $penaltyDue = max(0, $penaltyGross - $penaltyPaid);
-        }
+        $penaltyDue = $this->currentPenaltyDue($referenceDate);
 
         $status = 'Active';
         if ($totalArrearDue <= 0.01) {
@@ -79,31 +65,6 @@ class ArrearReportResource extends JsonResource
             'status' => $status,
             'currency' => $this->currency,
         ];
-    }
-
-    /**
-     * Resolve the penalty rate from the loan or settings.
-     */
-    private function resolvePenaltyRate(\App\Models\Loan $loan): float
-    {
-        if ($loan->penalty_rate !== null) {
-            return (float) $loan->penalty_rate;
-        }
-
-        if (self::$penaltyRates === null) {
-            $settings = Setting::whereIn('key', ['default_penalty_usd', 'default_penalty_khr'])
-                ->pluck('value', 'key')
-                ->toArray();
-
-            self::$penaltyRates = [
-                'USD' => (float) ($settings['default_penalty_usd'] ?? 2.5),
-                'KHR' => (float) ($settings['default_penalty_khr'] ?? 10000),
-            ];
-        }
-
-        return $loan->currency === 'KHR'
-            ? self::$penaltyRates['KHR']
-            : self::$penaltyRates['USD'];
     }
 
     /**

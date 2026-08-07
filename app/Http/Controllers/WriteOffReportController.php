@@ -120,7 +120,54 @@ class WriteOffReportController extends Controller
             }
         }
 
-        return response()->json($reportData);
+        $paginate = filter_var($request->query('paginate', 'true'), FILTER_VALIDATE_BOOLEAN);
+        $page = (int) $request->query('page', 1);
+        $limit = (int) $request->query('limit', 50);
+
+        if (!$paginate) {
+            return response()->json([
+                'success' => true,
+                'data' => $reportData,
+            ]);
+        }
+
+        $grandTotals = [];
+        foreach ($reportData as $item) {
+            $curr = strtoupper(explode(' ', (string) ($item['currency'] ?? 'USD'))[0]);
+            if (!isset($grandTotals[$curr])) {
+                $grandTotals[$curr] = [
+                    'amount' => 0,
+                    'amount_write_off' => 0,
+                    'write_off_balance' => 0,
+                    'principal_collected' => 0,
+                    'interest_collected' => 0,
+                    'recovery_amount' => 0,
+                ];
+            }
+            $grandTotals[$curr]['amount'] += (float) ($item['amount'] ?? 0);
+            $grandTotals[$curr]['amount_write_off'] += (float) ($item['amount_write_off'] ?? 0);
+            $grandTotals[$curr]['write_off_balance'] += (float) ($item['write_off_balance'] ?? 0);
+            $grandTotals[$curr]['principal_collected'] += (float) ($item['principal_collected'] ?? 0);
+            $grandTotals[$curr]['interest_collected'] += (float) ($item['interest_collected'] ?? 0);
+            $grandTotals[$curr]['recovery_amount'] += (float) ($item['recovery_amount'] ?? 0);
+        }
+
+        $totalRecords = count($reportData);
+        $lastPage = (int) ceil($totalRecords / $limit);
+        $offset = ($page - 1) * $limit;
+
+        $paginatedData = array_slice($reportData, $offset, $limit);
+
+        return response()->json([
+            'success' => true,
+            'data' => $paginatedData,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage > 0 ? $lastPage : 1,
+                'total' => $totalRecords,
+                'grand_totals' => $grandTotals
+            ]
+        ]);
     }
 
     private function principalComponent(mixed $transaction): float
@@ -147,8 +194,9 @@ class WriteOffReportController extends Controller
 
     public function exportExcel(Request $request)
     {
+        $request->merge(['paginate' => 'false']);
         $response = $this->index($request);
-        $data = json_decode($response->getContent(), true);
+        $data = json_decode($response->getContent(), true)['data'] ?? [];
 
         $fromDateInput = $request->query('from_date');
         $toDateInput = $request->query('to_date');

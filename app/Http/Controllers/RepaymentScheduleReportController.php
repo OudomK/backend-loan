@@ -69,11 +69,12 @@ class RepaymentScheduleReportController extends Controller
                 'loan_officers.name as officer_name',
                 DB::raw('((payments.principal_amount + payments.interest_amount + COALESCE(payments.fee_amount, 0)) - payments.total_paid) as remaining'),
                 DB::raw('(SELECT COALESCE(SUM(p2.principal_amount), 0) FROM payments p2 WHERE p2.loan_id = payments.loan_id AND p2.payment_number <= payments.payment_number AND p2.deleted_at IS NULL) as cumulative_principal'),
-                DB::raw('CASE WHEN payments.payment_date < CURDATE() AND payments.total_paid < (payments.principal_amount + payments.interest_amount + COALESCE(payments.fee_amount, 0)) THEN DATEDIFF(CURDATE(), payments.payment_date) ELSE 0 END as days_overdue')
+                DB::raw('CASE WHEN loans.late_since_date IS NOT NULL THEN COALESCE(loans.locked_aging, 0) + GREATEST(0, DATEDIFF(CURDATE(), loans.late_since_date)) ELSE COALESCE(loans.locked_aging, 0) END as days_overdue')
             )
             ->join('loans', 'loans.id', '=', 'payments.loan_id')
             ->join('borrowers', 'borrowers.id', '=', 'loans.borrower_id')
             ->leftJoin('loan_officers', 'loan_officers.id', '=', 'loans.loan_officer_id')
+            ->whereIn('loans.status', ['active', 'arrear'])
             // Only upcoming or unpaid parts
             ->whereRaw('payments.total_paid < (payments.principal_amount + payments.interest_amount + COALESCE(payments.fee_amount, 0)) - 0.01')
             ->whereNull('payments.deleted_at')

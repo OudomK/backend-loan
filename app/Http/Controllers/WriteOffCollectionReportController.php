@@ -118,13 +118,11 @@ class WriteOffCollectionReportController extends Controller
                 $effectiveArrearDate = $earliestArrearDate ?? $earliestPrincipalArrearDate;
 
                 $amountDefault = max(0, $cumulativePrincipalDue - $principalPaid);
-                $aging = 0;
-
-                if ($effectiveArrearDate) {
-                    $aging = abs($toDate->copy()->startOfDay()->diffInDays(
-                        Carbon::parse($effectiveArrearDate)->startOfDay()
-                    ));
-                }
+                $aging = $loan->agingAt(
+                    $toDate,
+                    $effectiveArrearDate,
+                    $effectiveArrearDate !== null || $amountDefault > 0.01
+                );
 
                 if ($aging <= 0 && $amountDefault > 0.01) {
                     $aging = 1;
@@ -182,6 +180,39 @@ class WriteOffCollectionReportController extends Controller
             ->filter()
             ->values();
 
+        $paginate = filter_var($request->query('paginate', 'true'), FILTER_VALIDATE_BOOLEAN);
+        $page = (int) $request->query('page', 1);
+        $limit = (int) $request->query('limit', 50);
+
+        $flatLoans = $loans->toArray();
+        $totalRecords = count($flatLoans);
+
+        $grandTotals = [];
+        foreach ($flatLoans as $item) {
+            $curr = strtoupper(explode(' ', (string) ($item['currency'] ?? 'USD'))[0]);
+            if (!isset($grandTotals[$curr])) {
+                $grandTotals[$curr] = [
+                    'amount' => 0,
+                    'amount_default' => 0,
+                    'default_balance' => 0,
+                    'recovery_amount' => 0,
+                ];
+            }
+            $grandTotals[$curr]['amount'] += (float) ($item['amount'] ?? 0);
+            $grandTotals[$curr]['amount_default'] += (float) ($item['amount_default'] ?? 0);
+            $grandTotals[$curr]['default_balance'] += (float) ($item['default_balance'] ?? 0);
+            $grandTotals[$curr]['recovery_amount'] += (float) ($item['recovery_amount'] ?? 0);
+        }
+
+        if ($paginate) {
+            $lastPage = (int) ceil($totalRecords / $limit);
+            $offset = ($page - 1) * $limit;
+            $paginatedLoans = array_slice($flatLoans, $offset, $limit);
+        } else {
+            $paginatedLoans = $flatLoans;
+            $lastPage = 1;
+        }
+
         $categories = [
             'Standard Loan' => [],
             'Special Mention Loan' => [],
@@ -190,13 +221,24 @@ class WriteOffCollectionReportController extends Controller
             'Loss Loan' => [],
         ];
 
-        foreach ($loans->groupBy('classification') as $classification => $items) {
-            $categories[$classification] = $items->values()->toArray();
+        foreach ($paginatedLoans as $item) {
+            $classification = $item['classification'] ?? 'Standard Loan';
+            if (isset($categories[$classification])) {
+                $categories[$classification][] = $item;
+            } else {
+                $categories['Standard Loan'][] = $item;
+            }
         }
 
         return response()->json([
             'success' => true,
             'data' => $categories,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage > 0 ? $lastPage : 1,
+                'total' => $totalRecords,
+                'grand_totals' => $grandTotals
+            ]
         ]);
     }
 
@@ -228,6 +270,7 @@ class WriteOffCollectionReportController extends Controller
 
     public function exportExcel(Request $request)
     {
+        $request->merge(['paginate' => 'false']);
         $response = $this->index($request);
         $data = json_decode($response->getContent(), true);
 

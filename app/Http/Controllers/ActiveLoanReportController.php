@@ -48,6 +48,12 @@ class ActiveLoanReportController extends Controller
             $query->where('start_date', '<=', $refDateStr);
         }
 
+        // A live Active Loan view must not include loans already completed or paid off.
+        // Historical reports keep the broader candidate set and reconstruct status at $refDate.
+        if ($refDate->isSameDay(Carbon::today())) {
+            $query->whereIn('status', ['active', 'arrear']);
+        }
+
         if ($officerId && $officerId !== 'all') {
             $query->where('loan_officer_id', $officerId);
         }
@@ -114,9 +120,7 @@ class ActiveLoanReportController extends Controller
             }
 
             $overdueAmount = max(0, $totalDueBeforeRefDate - $scheduledPaidAtDate);
-            $agingDays = $earliestArrearDate
-                ? (int) abs($refDate->diffInDays(Carbon::parse($earliestArrearDate)))
-                : 0;
+            $agingDays = $loan->agingAt($refDate, $earliestArrearDate, $overdueAmount > 0.01);
 
             $collateralType = $loan->collaterals->isNotEmpty() ? $loan->collaterals->first()->type : '';
             $firstRepaymentDate = optional($loan->payments->first())->payment_date
@@ -174,9 +178,52 @@ class ActiveLoanReportController extends Controller
                 'secure_loan_type' => $loan->collaterals->isNotEmpty() ? 'Secured' : 'Unsecured',
                 'provision_amount' => $outstanding * $this->getProvisionRate($agingDays),
             ];
-        })->filter()->values();
+        })->filter()->values()->toArray();
 
-        return response()->json($data);
+        $paginate = filter_var($request->query('paginate', 'true'), FILTER_VALIDATE_BOOLEAN);
+        $page = (int) $request->query('page', 1);
+        $limit = (int) $request->query('limit', 50);
+
+        if (!$paginate) {
+            return response()->json($data);
+        }
+
+        $grandTotals = [];
+        foreach ($data as $item) {
+            $curr = strtoupper(explode(' ', (string) ($item['currency_code'] ?? 'USD'))[0]);
+            if (!isset($grandTotals[$curr])) {
+                $grandTotals[$curr] = [
+                    'disbursement_amount' => 0,
+                    'outstanding_amount' => 0,
+                    'principal_paid' => 0,
+                    'interest_paid' => 0,
+                    'overdue_amount' => 0,
+                    'provision_amount' => 0,
+                ];
+            }
+            $grandTotals[$curr]['disbursement_amount'] += (float) ($item['disbursement_amount'] ?? 0);
+            $grandTotals[$curr]['outstanding_amount'] += (float) ($item['outstanding_amount'] ?? 0);
+            $grandTotals[$curr]['principal_paid'] += (float) ($item['principal_paid'] ?? 0);
+            $grandTotals[$curr]['interest_paid'] += (float) ($item['interest_paid'] ?? 0);
+            $grandTotals[$curr]['overdue_amount'] += (float) ($item['overdue_amount'] ?? 0);
+            $grandTotals[$curr]['provision_amount'] += (float) ($item['provision_amount'] ?? 0);
+        }
+
+        $totalRecords = count($data);
+        $lastPage = (int) ceil($totalRecords / $limit);
+        $offset = ($page - 1) * $limit;
+
+        $paginatedData = array_slice($data, $offset, $limit);
+
+        return response()->json([
+            'data' => $paginatedData,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage > 0 ? $lastPage : 1,
+                'total' => $totalRecords,
+                'grand_totals' => $grandTotals
+            ]
+        ]);
     }
 
     public function exportExcel(Request $request)
@@ -192,6 +239,7 @@ class ActiveLoanReportController extends Controller
             'currency' => $currency,
             'from_date' => $fromDateStr,
             'to_date' => $toDateStr,
+            'paginate' => 'false'
         ]);
 
         $response = $this->index($originalRequest);

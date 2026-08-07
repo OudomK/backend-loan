@@ -38,6 +38,8 @@ class Loan extends Model
 {
     use SoftDeletes, LogsActivity;
 
+    protected $appends = ['print_schedule'];
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
@@ -306,6 +308,104 @@ class Loan extends Model
         }
     }
 
+
+    /**
+     * Return the loan-level aging used by live screens.
+     */
+    public function currentAging(?\Carbon\Carbon $referenceDate = null): int
+    {
+        $referenceDate = ($referenceDate ?? \Carbon\Carbon::today())->copy()->startOfDay();
+        $lockedAging = max(0, (int) ($this->locked_aging ?? 0));
+
+        if (! $this->late_since_date) {
+            return $lockedAging;
+        }
+
+        $lateSinceDate = \Carbon\Carbon::parse($this->late_since_date)->startOfDay();
+        $currentLateDays = $referenceDate->gt($lateSinceDate)
+            ? $referenceDate->diffInDays($lateSinceDate)
+            : 0;
+
+        return $lockedAging + $currentLateDays;
+    }
+
+    /**
+     * Return the daily penalty locked onto this loan when it was created.
+     */
+    public function resolvePenaltyRate(): float
+    {
+        if ($this->penalty_rate !== null) {
+            return (float) $this->penalty_rate;
+        }
+
+        $settingKey = $this->currency === 'KHR'
+            ? 'default_penalty_khr'
+            : 'default_penalty_usd';
+        $defaultRate = $this->currency === 'KHR' ? 10000.0 : 2.5;
+
+        return (float) (Setting::where('key', $settingKey)->value('value') ?? $defaultRate);
+    }
+
+    /**
+     * Resolve aging at a report reference date without using row-level values on live screens.
+     */
+    public function agingAt(\Carbon\Carbon $referenceDate, ?string $arrearDate = null, bool $hasArrears = false): int
+    {
+        $referenceDate = $referenceDate->copy()->startOfDay();
+        if ($referenceDate->isSameDay(\Carbon\Carbon::today())) {
+            return $this->currentAging($referenceDate);
+        }
+
+        if (! $arrearDate) {
+            return $hasArrears ? 1 : 0;
+        }
+
+        $arrearDate = \Carbon\Carbon::parse($arrearDate)->startOfDay();
+        $aging = $referenceDate->gt($arrearDate)
+            ? $referenceDate->diffInDays($arrearDate)
+            : 0;
+
+        return $aging > 0 || ! $hasArrears ? $aging : 1;
+    }
+    /**
+     * Return penalty payments and waivers made during the active late period.
+     */
+    public function currentPeriodPenaltyCredits(?\Carbon\Carbon $referenceDate = null): float
+    {
+        if (! $this->late_since_date) {
+            return 0.0;
+        }
+
+        $referenceDate = ($referenceDate ?? \Carbon\Carbon::today())->copy()->startOfDay();
+
+        return (float) $this->transactions()
+            ->whereDate('transaction_date', '>=', $this->late_since_date)
+            ->whereDate('transaction_date', '<=', $referenceDate->toDateString())
+            ->sum(\Illuminate\Support\Facades\DB::raw('penalty_paid + waived_amount'));
+    }
+
+    /**
+     * Calculate the outstanding penalty for this loan at a given date.
+     *
+     * accumulated_penalty is the frozen balance from completed late periods.
+     */
+    public function currentPenaltyDue(?\Carbon\Carbon $referenceDate = null): float
+    {
+        $referenceDate = ($referenceDate ?? \Carbon\Carbon::today())->copy()->startOfDay();
+        $frozenPenalty = max(0, (float) ($this->accumulated_penalty ?? 0));
+
+        if (! $this->late_since_date) {
+            return round($frozenPenalty, 2);
+        }
+
+        $lateSinceDate = \Carbon\Carbon::parse($this->late_since_date)->startOfDay();
+        $currentLateDays = $referenceDate->gt($lateSinceDate)
+            ? $referenceDate->diffInDays($lateSinceDate)
+            : 0;
+        $currentPenalty = $currentLateDays * $this->resolvePenaltyRate();
+
+        return round(max(0, $frozenPenalty + $currentPenalty - $this->currentPeriodPenaltyCredits($referenceDate)), 2);
+    }
     /**
      * Recalculates the remaining payment schedule based on the current outstanding principal.
      */
@@ -437,5 +537,19 @@ class Loan extends Model
     public function modifications()
     {
         return $this->hasMany(LoanModification::class);
+    }
+
+    public function getPrintScheduleAttribute()
+    {
+        if (!$this->relationLoaded('payments') || $this->payments->isEmpty()) {
+            return [];
+        }
+
+        $paymentsArray = $this->payments->toArray();
+        return \App\Services\LoanCalculator::formatScheduleForPrint(
+            $paymentsArray, 
+            $this->repayment_method ?? '', 
+            (float)($this->amount ?? 0)
+        );
     }
 }

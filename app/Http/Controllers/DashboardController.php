@@ -186,7 +186,7 @@ class DashboardController extends Controller
         return [
             'outstanding' => $outstanding,
             'overdue_amount' => $overdueAmount,
-            'aging' => $aging,
+            'aging' => $loan->currentAging($referenceDate),
         ];
     }
 }

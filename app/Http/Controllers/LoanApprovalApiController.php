@@ -42,7 +42,7 @@ class LoanApprovalApiController extends Controller
             return response()->json([]);
         }
 
-        $loans = Loan::with(['borrower', 'coBorrower', 'guarantor', 'officer', 'product'])
+        $loans = Loan::with(['borrower', 'coBorrower', 'guarantor', 'officer', 'product', 'approvals.user', 'collaterals'])
             ->whereIn('status', $allowedStatuses)
             ->orderBy('id', 'desc')
             ->get();

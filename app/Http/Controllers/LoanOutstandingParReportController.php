@@ -126,13 +126,7 @@ class LoanOutstandingParReportController extends Controller
             }
 
             $effectiveArrearDate = $earliestArrearDate ?? $earliestPrincipalArrearDate;
-
-            $agingDays = 0;
-            if ($effectiveArrearDate) {
-                $agingDays = abs($refDate->copy()->startOfDay()->diffInDays(
-                    Carbon::parse($effectiveArrearDate)->startOfDay()
-                ));
-            }
+            $agingDays = $loan->agingAt($refDate, $effectiveArrearDate, $effectiveArrearDate !== null);
 
             if ($agingDays > 0) {
                 if (str_contains($currency, 'USD')) {

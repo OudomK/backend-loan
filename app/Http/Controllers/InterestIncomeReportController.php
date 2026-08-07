@@ -39,10 +39,55 @@ class InterestIncomeReportController extends Controller
     public function index(Request $request)
     {
         try {
-            $data = $this->getReportData($request);
+            $data = $this->getReportData($request)->toArray();
+            
+            $paginate = filter_var($request->query('paginate', 'true'), FILTER_VALIDATE_BOOLEAN);
+            $page = (int) $request->query('page', 1);
+            $limit = (int) $request->query('limit', 50);
+
+            if (!$paginate) {
+                return response()->json([
+                    'success' => true,
+                    'data' => $data,
+                ]);
+            }
+
+            $grandTotals = [];
+            foreach ($data as $item) {
+                $curr = strtoupper(explode(' ', (string) ($item['currency'] ?? 'USD'))[0]);
+                if (!isset($grandTotals[$curr])) {
+                    $grandTotals[$curr] = [
+                        'interest_paid' => 0,
+                        'transaction_fee_paid' => 0,
+                        'penalty_paid' => 0,
+                        'admin_fee_paid' => 0,
+                        'fee_paid' => 0,
+                        'total' => 0,
+                    ];
+                }
+                $grandTotals[$curr]['interest_paid'] += (float) ($item['interest_paid'] ?? 0);
+                $grandTotals[$curr]['transaction_fee_paid'] += (float) ($item['transaction_fee_paid'] ?? 0);
+                $grandTotals[$curr]['penalty_paid'] += (float) ($item['penalty_paid'] ?? 0);
+                $grandTotals[$curr]['admin_fee_paid'] += (float) ($item['admin_fee_paid'] ?? 0);
+                $grandTotals[$curr]['fee_paid'] += (float) ($item['fee_paid'] ?? 0);
+                $grandTotals[$curr]['total'] += (float) ($item['total'] ?? 0);
+            }
+
+            $totalRecords = count($data);
+            $lastPage = (int) ceil($totalRecords / $limit);
+            $offset = ($page - 1) * $limit;
+
+            $paginatedData = array_slice($data, $offset, $limit);
+
             return response()->json([
                 'success' => true,
-                'data' => $data,
+                'data' => $paginatedData,
+                'meta' => [
+                    'current_page' => $page,
+                    'last_page' => $lastPage > 0 ? $lastPage : 1,
+                    'total' => $totalRecords,
+                    'grand_totals' => $grandTotals
+                ]
             ]);
         } catch (\Exception $e) {
             Log::error("Interest Income Report Error: " . $e->getMessage());
@@ -58,6 +103,7 @@ class InterestIncomeReportController extends Controller
     public function exportExcel(Request $request)
     {
         try {
+            $request->merge(['paginate' => 'false']);
             $data = $this->getReportData($request);
             $fromDateStr = $request->query('from_date');
             $toDateStr = $request->query('to_date');

@@ -58,42 +58,14 @@ class RescheduleRefinanceController extends Controller
                 return (float) $p->total_paid < $due - 0.01;
             })->first();
             $accruedInterest = 0;
-            $penaltyDue = 0;
             if ($nextUnpaidPayment) {
                 $feePaid = $nextUnpaidPayment->fee_paid ?? 0;
                 $alreadyPaidToPrinInt = max(0, (float) $nextUnpaidPayment->total_paid - (float) $feePaid);
                 $interestPaidSoFar = min((float) $nextUnpaidPayment->interest_amount, $alreadyPaidToPrinInt);
                 $accruedInterest = max(0, (float) $nextUnpaidPayment->interest_amount - $interestPaidSoFar);
-
-                $paymentDate = \Carbon\Carbon::parse($nextUnpaidPayment->payment_date)->startOfDay();
-                $today = \Carbon\Carbon::today();
-                $daysPastDue = $today->diffInDays($paymentDate, false);
-                if ($daysPastDue < 0) {
-                    $dpd = (int) abs($daysPastDue);
-                    if ($dpd > 0) {
-                        $penaltyRate = $loan->penalty_rate;
-                        if ($penaltyRate === null) {
-                            $penaltyRate = \App\Models\Setting::where('key', $loan->currency === 'KHR' ? 'default_penalty_khr' : 'default_penalty_usd')->value('value') ?? 2.5;
-                        }
-                        if ($loan->currency === 'USD' && $dpd <= 4) {
-                            $penaltyDue = 0;
-                        } else {
-                            $penaltyGross = round($dpd * (float) $penaltyRate, 2);
-                            $penaltyPaidSoFar = 0.0;
-                            if (isset($paymentDate)) {
-                                $penaltyPaidSoFar = (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
-                                    ->where('transaction_date', '>=', $paymentDate)
-                                    ->sum('penalty_paid')
-                                    + (float) \App\Models\RepaymentTransaction::where('loan_id', $loan->id)
-                                    ->where('transaction_date', '>=', $paymentDate)
-                                    ->sum('waived_amount');
-                            }
-                            $penaltyDue = max(0, $penaltyGross - $penaltyPaidSoFar);
-                        }
-                    }
-                }
             }
 
+            $penaltyDue = $loan->currentPenaltyDue();
             return [
                 'id' => $loan->id,
                 'code' => $loan->loan_code,

@@ -123,6 +123,7 @@ Route::get('/app/settings', function () {
         'co_phone_display_mode' => $dbSettings['co_phone_display_mode'] ?? 'one_line',
         'co_phone_display_count' => $dbSettings['co_phone_display_count'] ?? '3',
         'chart_max_amount' => $dbSettings['chart_max_amount'] ?? '',
+        'require_loan_purpose' => $toBool($dbSettings['require_loan_purpose'] ?? true, true),
     ]);
 });
 
@@ -194,6 +195,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('loan-officers', LoanOfficerController::class);
     Route::get('payment-qrs', [LoanController::class, 'getPaymentQrs']);
     Route::post('loans/preview-schedule', [LoanController::class, 'previewSchedule']);
+    Route::post('loans/recalculate-negotiable', [LoanController::class, 'recalculateNegotiableSchedule']);
     Route::get('loans/suggest-code', [LoanController::class, 'suggestCode']);
     Route::post('loans/{id}/write-off', [LoanController::class, 'writeOff']);
 

@@ -140,11 +140,57 @@ class ArrearReportController extends Controller
             return $aging >= 0 && $aging <= 30;
         })->values();
 
-        return ArrearReportResource::collection($filtered)->resolve();
+        $paginate = filter_var($request->query('paginate', true), FILTER_VALIDATE_BOOLEAN);
+        $page = (int) $request->query('page', 1);
+        $limit = (int) $request->query('limit', 50);
+
+        $mappedData = ArrearReportResource::collection($filtered)->resolve($request);
+
+        if (!$paginate) {
+            return $mappedData;
+        }
+
+        $grandTotals = [];
+        foreach ($mappedData as $item) {
+            $curr = strtoupper(explode(' ', (string) ($item['currency'] ?? 'USD'))[0]);
+            if (!isset($grandTotals[$curr])) {
+                $grandTotals[$curr] = [
+                    'disb_amount' => 0,
+                    'outstanding' => 0,
+                    'arrear_amount' => 0,
+                    'arrear_interest' => 0,
+                    'penalty_due' => 0,
+                    'penalty_paid' => 0,
+                ];
+            }
+            $grandTotals[$curr]['disb_amount'] += (float) ($item['disb_amount'] ?? 0);
+            $grandTotals[$curr]['outstanding'] += (float) ($item['outstanding'] ?? 0);
+            $grandTotals[$curr]['arrear_amount'] += (float) ($item['arrear_amount'] ?? 0);
+            $grandTotals[$curr]['arrear_interest'] += (float) ($item['arrear_interest'] ?? 0);
+            $grandTotals[$curr]['penalty_due'] += (float) ($item['penalty_due'] ?? 0);
+            $grandTotals[$curr]['penalty_paid'] += (float) ($item['penalty_paid'] ?? 0);
+        }
+
+        $totalRecords = count($mappedData);
+        $lastPage = (int) ceil($totalRecords / $limit);
+        $offset = ($page - 1) * $limit;
+
+        $paginatedData = array_slice($mappedData, $offset, $limit);
+
+        return response()->json([
+            'data' => $paginatedData,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage > 0 ? $lastPage : 1,
+                'total' => $totalRecords,
+                'grand_totals' => $grandTotals
+            ]
+        ]);
     }
 
     public function exportExcel(Request $request)
     {
+        $request->merge(['paginate' => false]);
         $data = $this->index($request); // Reuse existing logic to get filtered & formatted data array
 
         $officerId = $request->query('officer_id', 'all');
@@ -165,7 +211,10 @@ class ArrearReportController extends Controller
 
     public function exportUnder30Excel(Request $request)
     {
-        $request->merge(['report_type' => 'under30']);
+        $request->merge([
+            'report_type' => 'under30',
+            'paginate' => false
+        ]);
         $data = $this->index($request);
 
         $officerId = $request->query('officer_id', 'all');

@@ -21,15 +21,19 @@ class RepaymentService
             // Acquire pessimistic lock to prevent double-processing the same loan.
             $loan = Loan::whereKey($validated['loan_id'])->lockForUpdate()->firstOrFail();
             $feeType = trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time';
+            $loan->updateAging();
+            $loan->refresh();
             $usesInstallmentFee = $feeType === 'monthly';
 
             $principalInterestAmount = (float) ($validated['amount_paid'] ?? 0);
             $waivedAmount = (float) ($validated['waived_amount'] ?? 0);
             $feePaid = $usesInstallmentFee ? (float) ($validated['fee_amount'] ?? 0) : 0.0;
             $penaltyAmountToPay = (float) ($validated['penalty_amount'] ?? 0);
-            $penaltyDue = array_key_exists('penalty_due', $validated)
-                ? (float) $validated['penalty_due']
-                : round($penaltyAmountToPay + $waivedAmount, 2);
+            // The backend owns the amount due. A client may display its own preview,
+            // but must never be allowed to change the loan's penalty balance.
+            $penaltyDue = $loan->currentPenaltyDue(
+                Carbon::parse($validated['transaction_date'])->startOfDay()
+            );
 
             if (($penaltyAmountToPay + $waivedAmount) > $penaltyDue + 0.001) {
                 throw new \RuntimeException('Penalty pay and waiver cannot be greater than the penalty due.');
@@ -37,23 +41,6 @@ class RepaymentService
 
             $cashPenaltyPaid = round(max($penaltyAmountToPay, 0), 2);
 
-            $newAccumulatedPenalty = round($penaltyDue - $cashPenaltyPaid - $waivedAmount, 2);
-            if ($newAccumulatedPenalty < 0) {
-                $newAccumulatedPenalty = 0.0;
-            }
-            $previousAccumulatedPenalty = (float) ($loan->accumulated_penalty ?? 0);
-            $loan->accumulated_penalty = $newAccumulatedPenalty;
-            
-            // Only reset aging when penalty was actually paid off
-            // (i.e., there WAS a penalty before, and now it's cleared)
-            $hadPenalty = $previousAccumulatedPenalty > 0.001 || $loan->locked_aging > 0;
-            if ($hadPenalty && $newAccumulatedPenalty <= 0.001 && $cashPenaltyPaid > 0.001) {
-                $loan->locked_aging = 0;
-                $loan->late_since_date = null;
-                $loan->aging = 0;
-            }
-            
-            $loan->save();
 
             if (
                 $validated['repayment_type'] !== 'Withdraw'
@@ -101,46 +88,10 @@ class RepaymentService
                 ->orderBy('payment_date', 'asc')
                 ->get();
 
-            // ─── Lock current aging BEFORE rows are paid ───
-            // When a late row is paid, updateAging() won't see it anymore.
-            // We must capture the current late days into locked_aging NOW.
-            $today = Carbon::today();
+            // Use the same overdue definition when deciding whether to freeze this late period.
             $arrearExpr = $usesInstallmentFee
                 ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'
                 : 'total_paid < (principal_amount + interest_amount - 0.01)';
-            $hasOverdueRows = Payment::where('loan_id', $loan->id)
-                ->where('payment_date', '<', $today->toDateString())
-                ->whereRaw($arrearExpr)
-                ->exists();
-
-            if ($hasOverdueRows) {
-                // Ensure late_since_date is set if not already
-                if (!$loan->late_since_date) {
-                    $earliestOverdue = Payment::where('loan_id', $loan->id)
-                        ->where('payment_date', '<', $today->toDateString())
-                        ->whereRaw($arrearExpr)
-                        ->orderBy('payment_date', 'asc')
-                        ->first();
-                    if ($earliestOverdue) {
-                        $loan->late_since_date = $earliestOverdue->payment_date;
-                    }
-                }
-
-                // Lock the current late days into locked_aging
-                if ($loan->late_since_date) {
-                    $lateSince = Carbon::parse($loan->late_since_date)->startOfDay();
-                    $txDate = Carbon::parse($validated['transaction_date'])->startOfDay();
-                    $agingEndDate = $txDate->lte($today) ? $txDate : $today;
-                    if ($agingEndDate->gt($lateSince)) {
-                        $daysToLock = (int) abs($agingEndDate->diffInDays($lateSince));
-                        $loan->locked_aging = (int) ($loan->locked_aging ?? 0) + $daysToLock;
-                        $loan->late_since_date = null; // Will be recalculated by updateAging()
-                        $loan->save();
-                    }
-                }
-            }
-            // ─── End: Lock current aging ───
-
             if ($installments->isEmpty() && $validated['repayment_type'] !== 'Withdraw') {
                 throw new \RuntimeException('No unpaid installments found for this loan.');
             }
@@ -409,6 +360,24 @@ class RepaymentService
             }
 
             $loan->updateAging();
+
+            $hasOverdueRowsAfterPayment = Payment::where('loan_id', $loan->id)
+                ->where('payment_date', '<', Carbon::today()->toDateString())
+                ->whereRaw($arrearExpr)
+                ->exists();
+
+            if (! $hasOverdueRowsAfterPayment) {
+                // The late period has ended. Freeze the remaining penalty alongside
+                // its locked aging, so neither grows until a later installment is late.
+                $loan->accumulated_penalty = round(max(0, $penaltyDue - $cashPenaltyPaid - $waivedAmount), 2);
+
+                if ($loan->accumulated_penalty <= 0.001) {
+                    $loan->locked_aging = 0;
+                    $loan->aging = 0;
+                }
+
+                $loan->save();
+            }
 
             $unpaidCount = Payment::where('loan_id', $loan->id)
                 ->whereRaw($completedLoanExpression)

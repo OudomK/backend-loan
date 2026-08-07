@@ -55,15 +55,7 @@ class OverdueLoansTable
 
                 TextColumn::make('penalty')
                     ->label('Penalty')
-                    ->getStateUsing(function ($record) {
-                        $isKHR = str_contains($record->loan?->currency ?? '', 'KHR');
-                        $penaltyRate = $record->loan?->penalty_rate;
-                        if ($penaltyRate === null) {
-                            $penaltyRate = \App\Models\Setting::where('key', $isKHR ? 'default_penalty_khr' : 'default_penalty_usd')->value('value') ?? ($isKHR ? 10000 : 2.5);
-                        }
-                        $dpd = abs((int) \Carbon\Carbon::today()->diffInDays(\Carbon\Carbon::parse($record->payment_date)));
-                        return $dpd * $penaltyRate;
-                    })
+                    ->getStateUsing(fn ($record) => $record->loan?->currentPenaltyDue() ?? 0.0)
                     ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::display(
                         (float) $state,
                         $record->loan?->currency ?? CurrencyHelper::USD,
@@ -75,16 +67,19 @@ class OverdueLoansTable
 
                 TextColumn::make('amount_due')
                     ->label('Amount Due')
-                    ->getStateUsing(function ($record) {
-                        $isKHR = str_contains($record->loan?->currency ?? '', 'KHR');
-                        $penaltyRate = $record->loan?->penalty_rate;
-                        if ($penaltyRate === null) {
-                            $penaltyRate = \App\Models\Setting::where('key', $isKHR ? 'default_penalty_khr' : 'default_penalty_usd')->value('value') ?? ($isKHR ? 10000 : 2.5);
+                    ->getStateUsing(function ($record): float {
+                        $loan = $record->loan;
+                        if (! $loan) {
+                            return 0.0;
                         }
-                        $dpd = abs((int) \Carbon\Carbon::today()->diffInDays(\Carbon\Carbon::parse($record->payment_date)));
-                        $penalty = $dpd * $penaltyRate;
-                        
-                        return ($record->principal_amount + $record->interest_amount + ($record->fee_amount ?? 0) + $penalty) - $record->total_paid;
+
+                        $overdueInstallments = (float) $loan->payments()
+                            ->where('payment_date', '<', \Carbon\Carbon::today()->toDateString())
+                            ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
+                            ->selectRaw('COALESCE(SUM(principal_amount + interest_amount + COALESCE(fee_amount, 0) - total_paid), 0) AS total')
+                            ->value('total');
+
+                        return max(0, $overdueInstallments + $loan->currentPenaltyDue());
                     })
                     ->formatStateUsing(fn ($state, $record): string => CurrencyHelper::display(
                         (float) $state,
@@ -103,7 +98,7 @@ class OverdueLoansTable
                         $state > 30 => 'warning',
                         default => 'gray',
                     })
-                    ->getStateUsing(fn($record) => abs((int) \Carbon\Carbon::today()->diffInDays(\Carbon\Carbon::parse($record->payment_date))))
+                    ->getStateUsing(fn ($record) => $record->loan?->currentAging() ?? 0)
                     ->formatStateUsing(fn($state) => "{$state} Days Late")
                     ->alignEnd(),
             ])

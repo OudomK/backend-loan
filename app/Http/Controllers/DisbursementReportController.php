@@ -148,12 +148,10 @@ class DisbursementReportController extends Controller
                         break;
                     }
                 }
-
-                if (!$earliestOverdueDate) {
+                $aging = $loan->agingAt($toDate, $earliestOverdueDate, $earliestOverdueDate !== null);
+                if ($aging <= 0) {
                     continue;
                 }
-
-                $aging = abs($toDate->diffInDays(Carbon::parse($earliestOverdueDate)));
 
                 if ($aging >= 1) {
                     $par1Count++;

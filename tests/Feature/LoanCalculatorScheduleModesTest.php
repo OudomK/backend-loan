@@ -26,6 +26,59 @@ class LoanCalculatorScheduleModesTest extends TestCase
         $this->assertEquals(0, $schedule[array_key_last($schedule)]['balance']);
     }
 
+    public function test_fixed_daily_rate_is_charged_per_payment(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        $schedule = $calculator->calculateLoanWithDates(
+            1000000,
+            1,
+            4,
+            'fixed_daily',
+            '2026-05-01',
+            'KHR'
+        );
+
+        $this->assertEquals(10000, $schedule[0]['interest']);
+        $this->assertEquals(40000, array_sum(array_column($schedule, 'interest')));
+    }
+
+    public function test_fixed_daily_smart_check_normalizes_a_short_final_payment(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        $schedule = $calculator->calculateLoanWithDates(
+            1000000,
+            1,
+            30,
+            'fixed_daily',
+            '2026-05-01',
+            'KHR'
+        );
+
+        $payments = array_column($schedule, 'payment');
+        $this->assertSame($payments[0], $payments[array_key_last($payments)]);
+        $this->assertEquals(44000, $payments[0]);
+        $this->assertEquals(15500, $schedule[array_key_last($schedule)]['interest']);
+    }
+    public function test_fixed_monthly_smart_check_normalizes_a_short_final_payment(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        $schedule = $calculator->calculateLoanWithDates(
+            1000000,
+            1,
+            30,
+            'fixed_monthly',
+            '2026-05-01',
+            'KHR'
+        );
+
+        $lastIndex = array_key_last($schedule);
+        $this->assertEquals($schedule[1]['payment'], $schedule[$lastIndex]['payment']);
+        $this->assertEquals(44000, $schedule[$lastIndex]['payment']);
+        $this->assertEquals(15500, $schedule[$lastIndex]['interest']);
+    }
     public function test_fixed_weekly_schedule_generates_weekly_installments(): void
     {
         $calculator = app(LoanCalculator::class);
@@ -45,6 +98,113 @@ class LoanCalculatorScheduleModesTest extends TestCase
         $this->assertEquals(0, $schedule[array_key_last($schedule)]['balance']);
     }
 
+    public function test_fixed_weekly_rate_is_charged_per_payment(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        $schedule = $calculator->calculateLoanWithDates(
+            1000000,
+            1,
+            4,
+            'fixed_weekly',
+            '2026-05-01',
+            'KHR'
+        );
+
+        $this->assertEquals(10000, $schedule[0]['interest']);
+        $this->assertEquals(40000, array_sum(array_column($schedule, 'interest')));
+    }
+    public function test_fixed_weekly_smart_check_normalizes_a_short_final_payment(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        $schedule = $calculator->calculateLoanWithDates(
+            1000000,
+            1,
+            30,
+            'fixed_weekly',
+            '2026-05-01',
+            'KHR'
+        );
+
+        $payments = array_column($schedule, 'payment');
+        $this->assertSame($payments[0], $payments[array_key_last($payments)]);
+        $this->assertEquals(44000, $payments[0]);
+        $this->assertEquals(15500, $schedule[array_key_last($schedule)]['interest']);
+    }
+    public function test_fixed_biweekly_rate_and_smart_check_match_regular_payment(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        $schedule = $calculator->calculateLoanWithDates(
+            1000000,
+            1,
+            30,
+            'fixed_biweekly',
+            '2026-05-01',
+            'KHR'
+        );
+
+        $payments = array_column($schedule, 'payment');
+        $this->assertSame($payments[0], $payments[array_key_last($payments)]);
+        $this->assertEquals(44000, $payments[0]);
+        $this->assertEquals(15500, $schedule[array_key_last($schedule)]['interest']);
+    }
+
+    public function test_biweekly_70_30_smart_check_matches_its_final_half_payment(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        $schedule = $calculator->calculateLoanWithDates(
+            1000000,
+            1,
+            30,
+            'fixed_15days_70_30',
+            '2026-05-01',
+            'KHR'
+        );
+
+        $lastIndex = array_key_last($schedule);
+        $this->assertEquals(34000, $schedule[$lastIndex - 1]['payment']);
+        $this->assertEquals(20000, $schedule[$lastIndex]['payment']);
+    }
+
+    public function test_biweekly_50_50_smart_check_matches_its_final_half_payment(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        $schedule = $calculator->calculateLoanWithDates(
+            1000000,
+            1,
+            30,
+            'fixed_15days_50_50',
+            '2026-05-01',
+            'KHR'
+        );
+
+        $lastIndex = array_key_last($schedule);
+        $this->assertEquals(27000, $schedule[$lastIndex - 1]['payment']);
+        $this->assertEquals(27000, $schedule[$lastIndex]['payment']);
+    }
+    public function test_biweekly_khr_principal_installments_are_rounded_to_thousands(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        foreach (['fixed_15days_70_30', 'fixed_15days_50_50'] as $method) {
+            $schedule = $calculator->calculateLoanWithDates(
+                1000000,
+                1,
+                30,
+                $method,
+                '2026-05-01',
+                'KHR'
+            );
+
+            foreach ($schedule as $payment) {
+                $this->assertSame(0, ((int) $payment['principal']) % 1000, $method);
+            }
+        }
+    }
     public function test_supported_schedule_modes_preserve_principal_total_and_close_balance(): void
     {
         $calculator = app(LoanCalculator::class);

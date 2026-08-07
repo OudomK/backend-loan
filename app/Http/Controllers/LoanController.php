@@ -63,6 +63,9 @@ class LoanController extends Controller
 
     public function store(Request $request)
     {
+        $requirePurpose = \App\Models\Setting::where('key', 'require_loan_purpose')->value('value');
+        $requirePurpose = $requirePurpose === null ? true : filter_var($requirePurpose, FILTER_VALIDATE_BOOLEAN);
+
         $validated = $request->validate([
             'borrower_id' => 'required|exists:borrowers,id',
             'amount' => 'nullable|numeric',
@@ -72,7 +75,7 @@ class LoanController extends Controller
             'status' => 'required|in:pending,pending_check,pending_verify,pending_approval,active,completed,paid_off,rejected',
             'currency' => 'nullable|string',
             'repayment_method' => 'nullable|string',
-            'purpose' => 'required|string|max:255',
+            'purpose' => ($requirePurpose ? 'required' : 'nullable') . '|string|max:255',
             'loan_code' => 'nullable|string',
             'payment_frequency' => 'nullable|string',
             'loan_officer_id' => 'nullable|exists:loan_officers,id',
@@ -367,11 +370,207 @@ class LoanController extends Controller
                     $validated['pay_day_2'] ?? null,
                 );
             }
+            $printSchedule = \App\Services\LoanCalculator::formatScheduleForPrint(
+                $schedule,
+                $validated['repayment_method'],
+                (float) $validated['amount']
+            );
 
-            return response()->json($schedule);
+            return response()->json([
+                'schedule' => $schedule,
+                'print_schedule' => $printSchedule
+            ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 422);
         }
+    }
+
+    /**
+     * Recalculate a Negotiable schedule on the server side.
+     *
+     * Accepts the current schedule rows (with locked flags), the chosen
+     * calculation type (annuity / linear / flat), and loan parameters.
+     * Returns the recalculated schedule with proper currency-aware rounding.
+     */
+    public function recalculateNegotiableSchedule(Request $request)
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0',
+            'interest_rate' => 'required|numeric|min:0',
+            'currency' => 'nullable|string',
+            'calc_type' => 'required|string|in:annuity,linear,flat',
+            'start_date' => 'nullable|date',
+            'schedule' => 'required|array|min:1',
+            'schedule.*.period' => 'required|integer',
+            'schedule.*.date' => 'required|string',
+            'schedule.*.principal' => 'required|numeric',
+            'schedule.*.interest' => 'required|numeric',
+            'schedule.*.fee' => 'nullable|numeric',
+            'schedule.*.payment' => 'required|numeric',
+            'schedule.*.locked' => 'required|boolean',
+        ]);
+
+        $principal = (float) $validated['amount'];
+        $rate = (float) $validated['interest_rate'];
+        $currency = $validated['currency'] ?? 'USD';
+        $calcType = $validated['calc_type'];
+        $rows = $validated['schedule'];
+        $startDate = !empty($validated['start_date'])
+            ? new \DateTime($validated['start_date'])
+            : null;
+
+        // ------ Currency-aware rounding (mirrors LoanCalculator) ------
+        $customRoundKHR = function ($amount) {
+            $amountInt = (int) round($amount);
+            $remainder = $amountInt % 1000;
+            if ($remainder > 0 && $remainder < 500) {
+                return floor($amountInt / 1000) * 1000 + 500;
+            } elseif ($remainder >= 500) {
+                return ceil($amountInt / 1000) * 1000;
+            }
+            return (float) $amountInt;
+        };
+
+        $applyRounding = function ($amount) use ($currency, $customRoundKHR) {
+            if (stripos($currency, 'KHR') !== false) {
+                return $customRoundKHR($amount);
+            }
+            return ceil($amount);
+        };
+
+        $roundScheduledPrincipal = function ($amount) use ($currency) {
+            if (stripos($currency, 'KHR') !== false) {
+                return ceil($amount / 1000) * 1000;
+            }
+            return ceil($amount);
+        };
+
+        // Annuity rounding (less aggressive, matches LoanCalculator annuity)
+        $applyAnnuityRounding = function ($amount) use ($currency) {
+            if (stripos($currency, 'KHR') !== false) {
+                $remainder = $amount % 1000;
+                if ($remainder == 0) return $amount;
+                elseif ($remainder < 250) return floor($amount / 1000) * 1000;
+                elseif ($remainder < 750) return floor($amount / 1000) * 1000 + 500;
+                else return ceil($amount / 1000) * 1000;
+            }
+            return round($amount, 0);
+        };
+
+        // Choose the appropriate rounding function
+        $roundFn = $calcType === 'annuity' ? $applyAnnuityRounding : $applyRounding;
+
+        // ------ Parse first payment date for pro-rata interest ------
+        $firstPaymentDate = null;
+        $daysFromStart = null;
+        if ($startDate && !empty($rows[0]['date'])) {
+            $rawDate = $rows[0]['date'];
+            // Support both dd/MM/yyyy and yyyy-MM-dd formats
+            if (preg_match('#^\d{1,2}/\d{1,2}/\d{4}$#', $rawDate)) {
+                $firstPaymentDate = \DateTime::createFromFormat('d/m/Y', $rawDate);
+            } else {
+                $firstPaymentDate = new \DateTime($rawDate);
+            }
+            if ($firstPaymentDate) {
+                $daysFromStart = $startDate->diff($firstPaymentDate)->days + 1; // +1 inclusive
+            }
+        }
+
+        // ------ Gather locked / unlocked info ------
+        $sumLockedPrincipal = 0;
+        $unlockedCount = 0;
+        $lastUnlockedIndex = -1;
+
+        foreach ($rows as $i => $row) {
+            if (!empty($row['locked'])) {
+                $sumLockedPrincipal += (float) $row['principal'];
+            } else {
+                $unlockedCount++;
+                $lastUnlockedIndex = $i;
+            }
+        }
+
+        $remainingPrincipal = max(0, $principal - $sumLockedPrincipal);
+        $monthlyRate = $rate / 100;
+
+        // ------ Compute PMT / per-period principal ------
+        $pmt = 0;
+        $unlockedPrincipalPer = 0;
+
+        if ($unlockedCount > 0) {
+            if ($calcType === 'annuity') {
+                if ($monthlyRate > 0) {
+                    $factor = pow(1 + $monthlyRate, $unlockedCount);
+                    $pmt = $remainingPrincipal * ($monthlyRate * $factor) / ($factor - 1);
+                } else {
+                    $pmt = $remainingPrincipal / $unlockedCount;
+                }
+            } else {
+                $unlockedPrincipalPer = $remainingPrincipal / $unlockedCount;
+            }
+        }
+
+        // ------ Build result schedule ------
+        $outstanding = $principal;
+        $result = [];
+
+        foreach ($rows as $i => $row) {
+            $newPrincipal = (float) $row['principal'];
+            $fee = (float) ($row['fee'] ?? 0);
+
+            // Interest — first period uses pro-rata based on actual days
+            if ($i === 0 && $daysFromStart !== null) {
+                // Pro-rata first period interest: rate/30 * daysFromStart
+                if ($calcType === 'flat') {
+                    $newInterest = $roundFn($principal * ($monthlyRate / 30) * $daysFromStart);
+                } else {
+                    $newInterest = $roundFn($outstanding * ($monthlyRate / 30) * $daysFromStart);
+                }
+            } else {
+                if ($calcType === 'flat') {
+                    $newInterest = $roundFn($principal * $monthlyRate);
+                } else {
+                    $newInterest = $roundFn($outstanding * $monthlyRate);
+                }
+            }
+
+            // Principal (only recalculate unlocked rows)
+            if (empty($row['locked'])) {
+                if ($i === $lastUnlockedIndex) {
+                    $newPrincipal = $outstanding; // zero-out
+                } elseif ($calcType === 'annuity') {
+                    // For first period with pro-rata, use standard PMT for principal split
+                    $roundedPmt = $roundFn($pmt);
+                    if ($i === 0 && $daysFromStart !== null) {
+                        // Use standard monthly interest (not pro-rata) for principal calculation
+                        $standardInterest = $roundFn($outstanding * $monthlyRate);
+                        $newPrincipal = $roundedPmt - $standardInterest;
+                    } else {
+                        $newPrincipal = $roundedPmt - $newInterest;
+                    }
+                    if ($newPrincipal < 0) $newPrincipal = 0;
+                } else {
+                    $newPrincipal = $roundScheduledPrincipal($unlockedPrincipalPer);
+                }
+            }
+
+            $payment = $roundFn($newPrincipal + $newInterest + $fee);
+
+            $outstanding -= $newPrincipal;
+            if ($outstanding < 0.01) $outstanding = 0;
+
+            $result[] = [
+                'period' => $row['period'],
+                'date' => $row['date'],
+                'principal' => $newPrincipal,
+                'interest' => $newInterest,
+                'fee' => $fee,
+                'payment' => $payment,
+                'balance' => $outstanding,
+            ];
+        }
+
+        return response()->json(['schedule' => $result]);
     }
 
     public function show(Loan $loan)
@@ -390,6 +589,9 @@ class LoanController extends Controller
 
     public function update(Request $request, Loan $loan)
     {
+        $requirePurpose = \App\Models\Setting::where('key', 'require_loan_purpose')->value('value');
+        $requirePurpose = $requirePurpose === null ? true : filter_var($requirePurpose, FILTER_VALIDATE_BOOLEAN);
+
         $validated = $request->validate([
             'borrower_id' => 'sometimes|required|exists:borrowers,id',
             'amount' => 'sometimes|required|numeric',
@@ -398,7 +600,7 @@ class LoanController extends Controller
             'monthly_payment' => 'sometimes|required|numeric',
             'start_date' => 'sometimes|required|date',
             'status' => 'sometimes|required|in:pending,active,completed,paid_off',
-            'purpose' => 'sometimes|required|string|max:255',
+            'purpose' => 'sometimes|' . ($requirePurpose ? 'required' : 'nullable') . '|string|max:255',
             'admin_fee' => 'nullable|numeric',
             'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
@@ -450,6 +652,23 @@ class LoanController extends Controller
         return response()->json(['message' => 'Loan successfully written off.', 'loan' => $loan]);
     }
 
+    private function applyRounding(float $amount, string $currency): float
+    {
+        if (strpos($currency, 'KHR') !== false) {
+            $amountInt = (int) round($amount);
+            $remainder = $amountInt % 1000;
+
+            if ($remainder > 0 && $remainder < 500) {
+                return (float) (floor($amountInt / 1000) * 1000 + 500);
+            } elseif ($remainder >= 500) {
+                return (float) (ceil($amountInt / 1000) * 1000);
+            }
+
+            return (float) $amountInt;
+        }
+        return ceil($amount);
+    }
+
     public function updateSchedule(Request $request, int $id)
     {
         $loan = Loan::findOrFail($id);
@@ -471,17 +690,22 @@ class LoanController extends Controller
                 // Ensure the payment belongs to this loan
                 $payment = $loan->payments()->find($paymentData['id']);
                 if ($payment) {
-                    $principal = (float) $paymentData['principal_amount'];
-                    $interest = (float) $paymentData['interest_amount'];
-                    $fee = (float) $paymentData['fee_amount'];
+                    $principalRaw = (float) $paymentData['principal_amount'];
+                    $interestRaw = (float) $paymentData['interest_amount'];
+                    $feeRaw = (float) $paymentData['fee_amount'];
                     
+                    $currency = $loan->currency ?? 'USD';
+                    $principal = $this->applyRounding($principalRaw, $currency);
+                    $interest = $this->applyRounding($interestRaw, $currency);
+                    $fee = $this->applyRounding($feeRaw, $currency);
+
                     $payment->update([
                         'payment_date' => $paymentData['payment_date'],
                         'principal_amount' => $principal,
                         'interest_amount' => $interest,
                         'fee_amount' => $fee,
                         'total_due' => $principal + $interest + $fee,
-                        'outstanding_balance' => isset($paymentData['outstanding_balance']) ? (float) $paymentData['outstanding_balance'] : (isset($paymentData['balance']) ? (float) $paymentData['balance'] : (isset($paymentData['remaining_balance']) ? (float) $paymentData['remaining_balance'] : null)),
+                        'outstanding_balance' => isset($paymentData['outstanding_balance']) ? $this->applyRounding((float) $paymentData['outstanding_balance'], $currency) : (isset($paymentData['balance']) ? $this->applyRounding((float) $paymentData['balance'], $currency) : (isset($paymentData['remaining_balance']) ? $this->applyRounding((float) $paymentData['remaining_balance'], $currency) : null)),
                     ]);
                 }
             }
