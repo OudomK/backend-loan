@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\Excel\WriteOffCollectionExcelExport;
 use App\Models\Loan;
+use App\Models\LoanApproval;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use App\Exports\Excel\WriteOffCollectionExcelExport;
 
 class WriteOffCollectionReportController extends Controller
 {
@@ -22,7 +23,6 @@ class WriteOffCollectionReportController extends Controller
             ? Carbon::parse($toDateInput)->endOfDay()
             : Carbon::today()->endOfDay();
 
-        $fromDateStr = $fromDate->toDateString();
         $toDateStr = $toDate->toDateString();
         $toDateTime = $toDate->toDateTimeString();
 
@@ -40,8 +40,13 @@ class WriteOffCollectionReportController extends Controller
                     ->orderBy('transaction_date', 'asc');
             },
         ])
-            ->where('status', '!=', 'pending')
-            ->whereDate('start_date', '>=', $fromDateStr)
+            ->whereNotIn('status', [
+                'pending',
+                LoanApproval::STATUS_PENDING_CHECK,
+                LoanApproval::STATUS_PENDING_VERIFY,
+                LoanApproval::STATUS_PENDING_APPROVAL,
+                LoanApproval::STATUS_REJECTED,
+            ])
             ->whereDate('start_date', '<=', $toDateStr);
 
         if ($currency && $currency !== 'all') {
@@ -52,20 +57,20 @@ class WriteOffCollectionReportController extends Controller
             ->orderBy('borrower_id', 'desc')
             ->orderBy('id', 'desc')
             ->get()
-            ->map(function ($loan) use ($toDate, $toDateStr) {
+            ->map(function ($loan) use ($fromDate, $toDate, $toDateStr) {
                 $borrower = $loan->borrower;
                 $borrowerName = $borrower
-                    ? trim((string) (($borrower->last_name ?? '') . ' ' . ($borrower->first_name ?? '')))
+                    ? trim((string) (($borrower->last_name ?? '').' '.($borrower->first_name ?? '')))
                     : '';
 
                 $co = $loan->coBorrower;
                 $coName = $co
-                    ? trim((string) (($co->last_name ?? '') . ' ' . ($co->first_name ?? '')))
+                    ? trim((string) (($co->last_name ?? '').' '.($co->first_name ?? '')))
                     : '';
 
                 $guarantor = $loan->guarantor;
                 $guarantorName = $guarantor
-                    ? trim((string) (($guarantor->last_name ?? '') . ' ' . ($guarantor->first_name ?? '')))
+                    ? trim((string) (($guarantor->last_name ?? '').' '.($guarantor->first_name ?? '')))
                     : '';
 
                 $transactionsAtDate = $loan->transactions;
@@ -82,11 +87,19 @@ class WriteOffCollectionReportController extends Controller
                         - (float) ($transaction->withdrawn_prepayment ?? 0);
                 });
 
-                $recoveryAmount = max(0, $transactionsAtDate->sum(function ($transaction) {
+                $cumulativeRecoveryAmount = max(0, $transactionsAtDate->sum(function ($transaction) {
                     return (float) ($transaction->recovery_amount ?? 0);
                 }));
 
-                $outstanding = max(0, (float) ($loan->amount ?? 0) - $principalPaid);
+                $recoveryAmount = max(0, $transactionsAtDate
+                    ->filter(function ($transaction) use ($fromDate) {
+                        return Carbon::parse($transaction->transaction_date)->gte($fromDate);
+                    })
+                    ->sum(function ($transaction) {
+                        return (float) ($transaction->recovery_amount ?? 0);
+                    }));
+
+                $outstanding = max(0, $loan->getBasePrincipalForOS() - $principalPaid);
 
                 $cumulativeDue = 0.0;
                 $cumulativePrincipalDue = 0.0;
@@ -133,7 +146,7 @@ class WriteOffCollectionReportController extends Controller
                     : null;
                 $isWrittenOffAtDate = $writtenOffAt !== null && $writtenOffAt->lte($toDate);
 
-                if ($outstanding <= 0.01 && !$isWrittenOffAtDate) {
+                if ($outstanding <= 0.01 && ! $isWrittenOffAtDate) {
                     return null;
                 }
 
@@ -143,7 +156,7 @@ class WriteOffCollectionReportController extends Controller
                 }
 
                 $defaultBalance = $isWrittenOffAtDate
-                    ? max(0, $writeOffAmount - $recoveryAmount)
+                    ? max(0, $writeOffAmount - $cumulativeRecoveryAmount)
                     : $outstanding;
                 $amountDefault = $isWrittenOffAtDate
                     ? max(0, $writeOffAmount)
@@ -190,7 +203,7 @@ class WriteOffCollectionReportController extends Controller
         $grandTotals = [];
         foreach ($flatLoans as $item) {
             $curr = strtoupper(explode(' ', (string) ($item['currency'] ?? 'USD'))[0]);
-            if (!isset($grandTotals[$curr])) {
+            if (! isset($grandTotals[$curr])) {
                 $grandTotals[$curr] = [
                     'amount' => 0,
                     'amount_default' => 0,
@@ -237,8 +250,8 @@ class WriteOffCollectionReportController extends Controller
                 'current_page' => $page,
                 'last_page' => $lastPage > 0 ? $lastPage : 1,
                 'total' => $totalRecords,
-                'grand_totals' => $grandTotals
-            ]
+                'grand_totals' => $grandTotals,
+            ],
         ]);
     }
 
@@ -281,7 +294,8 @@ class WriteOffCollectionReportController extends Controller
         $fromDateStr = $fromDateInput ?? Carbon::today()->startOfMonth()->toDateString();
         $toDateStr = $toDateInput ?? Carbon::today()->toDateString();
 
-        $export = new WriteOffCollectionExcelExport();
+        $export = new WriteOffCollectionExcelExport;
+
         return $export->download($data['data'] ?? [], $request, $fromDateStr, $toDateStr, $currency);
     }
 }

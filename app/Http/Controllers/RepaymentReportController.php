@@ -16,14 +16,28 @@ class RepaymentReportController extends Controller
 
         $query = RepaymentTransaction::query()
             ->with([
-                'loan' => function($q) { $q->withTrashed(); },
-                'loan.borrower' => function($q) { $q->withTrashed(); },
-                'loan.coBorrower' => function($q) { $q->withTrashed(); },
-                'loan.guarantor' => function($q) { $q->withTrashed(); },
-                'loan.officer',
+                'loan' => function ($q) {
+                    $q->withTrashed();
+                },
+                'loan.borrower' => function ($q) {
+                    $q->withTrashed();
+                },
+                'loan.coBorrower' => function ($q) {
+                    $q->withTrashed();
+                },
+                'loan.guarantor' => function ($q) {
+                    $q->withTrashed();
+                },
+                'loan.officer' => function ($q) {
+                    $q->withTrashed();
+                },
                 'loan.collaterals',
-                'loan.product',
-                'collector'
+                'loan.product' => function ($q) {
+                    $q->withTrashed();
+                },
+                'collector' => function ($q) {
+                    $q->withTrashed();
+                },
             ])
             ->join('loans', 'repayment_transactions.loan_id', '=', 'loans.id')
             ->join('borrowers', 'loans.borrower_id', '=', 'borrowers.id')
@@ -54,13 +68,9 @@ class RepaymentReportController extends Controller
         }
 
 
-        $totalsQuery = clone $query;
-        // Calculate totals group by currency
-        $totalsResult = $totalsQuery->selectRaw('
-            SUBSTRING_INDEX(loans.currency, " ", 1) as currency_code,
-            SUM(loans.amount) as disb_amount,
-            SUM(loans.refinanced_amount) as re_finance,
-            SUM(loans.refinance_fee) as re_finance_fee,
+        // Transaction amounts are summed per repayment row.
+        $totalsResult = (clone $query)->selectRaw('
+            loans.currency as currency_value,
             SUM(repayment_transactions.principal_paid) as principal_paid,
             SUM(repayment_transactions.interest_paid) as interest_paid,
             SUM(repayment_transactions.penalty_paid) as penalty_paid,
@@ -78,26 +88,43 @@ class RepaymentReportController extends Controller
                 + repayment_transactions.fee_paid
             ) as total_paid
         ')
-        ->groupBy('currency_code')
-        ->get();
+            ->groupBy('loans.currency')
+            ->get();
+
+        // Loan-level amounts must only be counted once even when a loan has
+        // multiple repayment transactions in the selected period.
+        $uniqueLoans = (clone $query)
+            ->select([
+                'loans.id as loan_id',
+                'loans.currency as currency_value',
+                'loans.amount as disb_amount',
+                'loans.refinanced_amount as re_finance',
+                'loans.refinance_fee as re_finance_fee',
+            ])
+            ->distinct()
+            ->get();
 
         $grandTotals = [];
         foreach ($totalsResult as $row) {
-            $currency = strtoupper($row->currency_code ?? 'USD');
-            $grandTotals[$currency] = [
-                'disb_amount' => (float) $row->disb_amount,
-                're_finance' => (float) $row->re_finance,
-                're_finance_fee' => (float) $row->re_finance_fee,
-                'principal_paid' => (float) $row->principal_paid,
-                'interest_paid' => (float) $row->interest_paid,
-                'penalty_paid' => (float) $row->penalty_paid,
-                'paid_off_paid' => (float) $row->paid_off_paid,
-                'recovery' => (float) $row->recovery,
-                'prepayment' => (float) $row->prepayment,
-                'withd_prepayment' => (float) $row->withd_prepayment,
-                'fee_paid' => (float) $row->fee_paid,
-                'total_paid' => (float) $row->total_paid,
-            ];
+            $currencyCode = $this->currencyCode($row->currency_value ?? 'USD');
+            $grandTotals[$currencyCode] ??= $this->emptyGrandTotal();
+            $grandTotals[$currencyCode]['principal_paid'] += (float) $row->principal_paid;
+            $grandTotals[$currencyCode]['interest_paid'] += (float) $row->interest_paid;
+            $grandTotals[$currencyCode]['penalty_paid'] += (float) $row->penalty_paid;
+            $grandTotals[$currencyCode]['paid_off_paid'] += (float) $row->paid_off_paid;
+            $grandTotals[$currencyCode]['recovery'] += (float) $row->recovery;
+            $grandTotals[$currencyCode]['prepayment'] += (float) $row->prepayment;
+            $grandTotals[$currencyCode]['withd_prepayment'] += (float) $row->withd_prepayment;
+            $grandTotals[$currencyCode]['fee_paid'] += (float) $row->fee_paid;
+            $grandTotals[$currencyCode]['total_paid'] += (float) $row->total_paid;
+        }
+
+        foreach ($uniqueLoans as $loan) {
+            $currencyCode = $this->currencyCode($loan->currency_value ?? 'USD');
+            $grandTotals[$currencyCode] ??= $this->emptyGrandTotal();
+            $grandTotals[$currencyCode]['disb_amount'] += (float) $loan->disb_amount;
+            $grandTotals[$currencyCode]['re_finance'] += (float) $loan->re_finance;
+            $grandTotals[$currencyCode]['re_finance_fee'] += (float) $loan->re_finance_fee;
         }
 
         $query->orderBy('repayment_transactions.transaction_date', 'desc')
@@ -139,5 +166,28 @@ class RepaymentReportController extends Controller
                 'grand_totals' => $grandTotals
             ]
         ]);
+    }
+
+    private function currencyCode(?string $currency): string
+    {
+        return strtoupper(explode(' ', trim((string) ($currency ?: 'USD')))[0]);
+    }
+
+    private function emptyGrandTotal(): array
+    {
+        return [
+            'disb_amount' => 0.0,
+            're_finance' => 0.0,
+            're_finance_fee' => 0.0,
+            'principal_paid' => 0.0,
+            'interest_paid' => 0.0,
+            'penalty_paid' => 0.0,
+            'paid_off_paid' => 0.0,
+            'recovery' => 0.0,
+            'prepayment' => 0.0,
+            'withd_prepayment' => 0.0,
+            'fee_paid' => 0.0,
+            'total_paid' => 0.0,
+        ];
     }
 }

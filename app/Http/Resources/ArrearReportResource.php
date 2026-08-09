@@ -2,13 +2,13 @@
 
 namespace App\Http\Resources;
 
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Carbon\Carbon;
 
 class ArrearReportResource extends JsonResource
 {
-/**
+    /**
      * Transform the resource into an array.
      *
      * @return array<string, mixed>
@@ -23,8 +23,11 @@ class ArrearReportResource extends JsonResource
         $arrearDate = $this->calculated_late_since_date ?? $this->late_since_date;
         $arrearPrincipal = (float) ($this->arrear_principal ?? 0);
         $arrearInterest = (float) ($this->arrear_interest ?? 0);
-        $totalArrearDue = round($arrearPrincipal + $arrearInterest, 2);
-        $aging = $this->agingAt($referenceDate, $arrearDate, $totalArrearDue > 0.01);
+        $arrearFee = (float) ($this->arrear_fee ?? 0);
+        $totalArrearDue = round($arrearPrincipal + $arrearInterest + $arrearFee, 2);
+        $aging = $arrearDate && Carbon::parse($arrearDate)->isSameDay($referenceDate)
+            ? 0
+            : $this->agingAt($referenceDate, $arrearDate, $totalArrearDue > 0.01);
         $penaltyPaid = (float) ($this->penalty_paid_total ?? 0);
         $penaltyDue = $this->currentPenaltyDue($referenceDate);
 
@@ -40,9 +43,9 @@ class ArrearReportResource extends JsonResource
             'arrear_date' => $arrearDate,
             'loan_no' => $this->loan_code,
             'cid' => $borrower?->customer_code ?? '-',
-            'name' => $borrower ? trim($borrower->first_name . ' ' . $borrower->last_name) : '-',
-            'coborrower' => $this->coBorrower ? $this->coBorrower->first_name . ' ' . $this->coBorrower->last_name : '-',
-            'guarantor' => $this->guarantor ? $this->guarantor->first_name . ' ' . $this->guarantor->last_name : '-',
+            'name' => $borrower ? trim($borrower->first_name.' '.$borrower->last_name) : '-',
+            'coborrower' => $this->coBorrower ? $this->coBorrower->first_name.' '.$this->coBorrower->last_name : '-',
+            'guarantor' => $this->guarantor ? $this->guarantor->first_name.' '.$this->guarantor->last_name : '-',
             'gender' => $borrower?->gender ?? '-',
             'phone' => $borrower?->phone ?? '-',
             'coborrower_phone' => $this->coBorrower?->phone ?? '-',
@@ -59,7 +62,7 @@ class ArrearReportResource extends JsonResource
             'outstanding' => $this->calculated_outstanding ?? 0,
             'arrear_amount' => $arrearPrincipal,
             'arrear_interest' => $arrearInterest,
-            'arrear_fee' => 0,
+            'arrear_fee' => $arrearFee,
             'penalty_due' => $penaltyDue,
             'penalty_paid' => $penaltyPaid,
             'status' => $status,
@@ -73,7 +76,7 @@ class ArrearReportResource extends JsonResource
     private function getCollateralTypeLabel(): string
     {
         $first = $this->collaterals->first();
-        if (!$first) {
+        if (! $first) {
             return '-';
         }
         $type = trim((string) $first->type);
@@ -81,9 +84,11 @@ class ArrearReportResource extends JsonResource
             return '-';
         }
         if (is_numeric($type)) {
-            $desc = !empty(trim((string) ($first->description ?? ''))) ? trim($first->description) : null;
+            $desc = ! empty(trim((string) ($first->description ?? ''))) ? trim($first->description) : null;
+
             return $desc ?? '-';
         }
+
         return $type;
     }
 }

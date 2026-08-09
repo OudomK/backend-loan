@@ -30,7 +30,7 @@ class LoanCollectionReportController extends Controller
                 'repayment_transactions.amount_paid',
                 'loans.loan_code',
                 'loans.currency',
-                'borrowers.id as borrower_id',
+                'borrowers.customer_code as customer_code',
                 'borrowers.first_name as borrower_first',
                 'borrowers.last_name as borrower_last',
                 'borrowers.phone',
@@ -80,7 +80,12 @@ class LoanCollectionReportController extends Controller
             $grandTotals[$curr]['interest'] += (float) ($item->interest_paid ?? 0);
             $grandTotals[$curr]['penalty'] += (float) ($item->penalty_paid ?? 0);
             $grandTotals[$curr]['fee'] += (float) ($item->fee_paid ?? 0);
-            $grandTotals[$curr]['total'] += round((float) ($item->amount_paid ?? 0) + (float) ($item->penalty_paid ?? 0), 2);
+            $grandTotals[$curr]['total'] += round(
+                (float) ($item->amount_paid ?? 0)
+                    + (float) ($item->penalty_paid ?? 0)
+                    + (float) ($item->fee_paid ?? 0),
+                2
+            );
         }
 
         if ($paginate) {
@@ -94,7 +99,7 @@ class LoanCollectionReportController extends Controller
             return [
                 'date' => $row->transaction_date,
                 'loan_code' => \App\Support\FormatHelper::formatLoanCode((string) $row->loan_code),
-                'cid' => $row->borrower_id,
+                'cid' => $row->customer_code ?? '-',
                 'name' => $row->borrower_first . ' ' . $row->borrower_last,
                 'phone' => $row->phone,
                 'co_name' => $row->officer_name,
@@ -104,7 +109,12 @@ class LoanCollectionReportController extends Controller
                 'interest' => $row->interest_paid,
                 'penalty' => $row->penalty_paid,
                 'fee' => $row->fee_paid,
-                'total' => round((float) $row->amount_paid + (float) $row->penalty_paid, 2),
+                'total' => round(
+                    (float) $row->amount_paid
+                        + (float) $row->penalty_paid
+                        + (float) $row->fee_paid,
+                    2
+                ),
                 'currency' => $row->currency,
             ];
         });

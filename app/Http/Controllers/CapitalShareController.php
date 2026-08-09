@@ -8,8 +8,7 @@ use App\Models\CapitalShareTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use App\Services\LoanCalculator;
-use App\Services\BalloonPaymentCalculator;
+use App\Services\LoanScheduleService;
 
 /**
  * Handles Capital & Share records.
@@ -790,7 +789,7 @@ class CapitalShareController extends Controller
         });
     }
 
-    public function previewSchedule(Request $request, LoanCalculator $calculator)
+    public function previewSchedule(Request $request, LoanScheduleService $scheduleService)
     {
         $validated = $request->validate([
             'amount' => 'required|numeric',
@@ -811,37 +810,14 @@ class CapitalShareController extends Controller
             if ($method === 'Interest Only')
                 $method = 'Balloon';
 
-            if ($method === 'Balloon') {
-                $loanData = [
-                    'amount' => $validated['amount'],
-                    'interest_rate' => $validated['interest_rate'],
-                    'duration_months' => $validated['term_months'],
-                    'start_date' => $validated['borrowing_date'],
-                    'currency' => $validated['currency'] ?? 'USD',
-                ];
-                $scheduleRaw = BalloonPaymentCalculator::generateSchedule($loanData, 'interest_only');
-
-                $schedule = array_map(function ($item) {
-                    return [
-                        'period' => $item['payment_number'],
-                        'date' => $item['payment_date'],
-                        'principal' => $item['principal_amount'],
-                        'interest' => $item['interest_amount'],
-                        'payment' => $item['total_paid'],
-                        'balance' => $item['remaining_balance'] ?? 0,
-                        'is_balloon' => $item['is_balloon'] ?? false,
-                    ];
-                }, $scheduleRaw);
-            } else {
-                $schedule = $calculator->calculateLoanWithDates(
-                    $validated['amount'],
-                    $validated['interest_rate'],
-                    $validated['term_months'],
-                    $method === 'negotiable' ? 'fixed_monthly' : $method,
-                    $validated['borrowing_date'],
-                    $validated['currency'] ?? 'USD'
-                );
-            }
+            $schedule = $scheduleService->generate([
+                'amount' => $validated['amount'],
+                'interest_rate' => $validated['interest_rate'],
+                'duration_months' => $validated['term_months'],
+                'repayment_method' => $method,
+                'start_date' => $validated['borrowing_date'],
+                'currency' => $validated['currency'] ?? 'USD',
+            ]);
 
             return response()->json($schedule);
         } catch (\Exception $e) {

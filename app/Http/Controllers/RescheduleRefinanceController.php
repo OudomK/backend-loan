@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
@@ -16,9 +17,18 @@ class RescheduleRefinanceController extends Controller
 
     public function searchActiveLoans(Request $request)
     {
-        $query = $request->input('query');
+        $validated = $request->validate([
+            'query' => 'required|string|max:100',
+        ]);
+        $query = trim($validated['query']);
 
-        $loans = Loan::with(['borrower', 'payments'])
+        $loans = Loan::with([
+            'borrower',
+            'payments' => fn ($paymentQuery) => $paymentQuery
+                ->orderBy('payment_date')
+                ->orderBy('payment_number'),
+            'paymentQr',
+        ])
             ->where('status', 'active')
             ->where(function ($q) use ($query) {
                 $like = "%{$query}%";
@@ -30,7 +40,7 @@ class RescheduleRefinanceController extends Controller
                         $bq->where('first_name', 'like', $like)
                             ->orWhere('last_name', 'like', $like)
                             ->orWhere('latin_name', 'like', $like)
-                    ->orWhere('nickname', 'like', $like)
+                            ->orWhere('nickname', 'like', $like)
                             ->orWhere('id_number', 'like', $like)
                             ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(id_number, ' ', '')"), 'like', $likeNoSpace)
                             ->orWhere('phone', 'like', $like)
@@ -42,19 +52,26 @@ class RescheduleRefinanceController extends Controller
             ->whereHas('payments', function ($query) {
                 $query->whereRaw("total_paid < (principal_amount + interest_amount + CASE WHEN COALESCE(loans.admin_fee_type, 'one_time') = 'monthly' THEN COALESCE(fee_amount, 0) ELSE 0 END - 0.01)");
             })
+            ->limit(50)
             ->get();
 
         return response()->json($loans->map(function (Loan $loan) {
             $currentBalance = $this->loanService->calculateCurrentBalance($loan);
             // Count installments not yet fully paid (per-row comparison).
-            $remainingTerm = $loan->payments->filter(function ($p) {
-                $due = (float) $p->principal_amount + (float) $p->interest_amount;
+            $remainingTerm = $loan->payments->filter(function ($p) use ($loan) {
+                $due = (float) $p->principal_amount
+                    + (float) $p->interest_amount
+                    + (trim((string) ($loan->admin_fee_type ?? '')) === 'monthly'
+                        ? (float) ($p->fee_amount ?? 0)
+                        : 0);
+
                 return (float) $p->total_paid < $due - 0.01;
             })->count();
 
             // Calculate one-month (next unpaid) interest
             $nextUnpaidPayment = $loan->payments->filter(function ($p) {
                 $due = (float) $p->principal_amount + (float) $p->interest_amount + (float) $p->penalty_amount;
+
                 return (float) $p->total_paid < $due - 0.01;
             })->first();
             $accruedInterest = 0;
@@ -66,20 +83,21 @@ class RescheduleRefinanceController extends Controller
             }
 
             $penaltyDue = $loan->currentPenaltyDue();
+
             return [
                 'id' => $loan->id,
                 'code' => $loan->loan_code,
-                'name' => $loan->borrower->first_name . ' ' . $loan->borrower->last_name,
-                'first_name' => $loan->borrower->first_name,
-                'last_name' => $loan->borrower->last_name,
-                'gender' => $loan->borrower->gender,
-                'phone' => $loan->borrower->phone,
-                'id_card_number' => $loan->borrower->id_number,
-                'address' => $loan->borrower->address,
-                'village' => $loan->borrower->village,
-                'commune' => $loan->borrower->commune,
-                'district' => $loan->borrower->district,
-                'province' => $loan->borrower->province,
+                'name' => trim(($loan->borrower?->first_name ?? '').' '.($loan->borrower?->last_name ?? '')),
+                'first_name' => $loan->borrower?->first_name,
+                'last_name' => $loan->borrower?->last_name,
+                'gender' => $loan->borrower?->gender,
+                'phone' => $loan->borrower?->phone,
+                'id_card_number' => $loan->borrower?->id_number,
+                'address' => $loan->borrower?->address,
+                'village' => $loan->borrower?->village,
+                'commune' => $loan->borrower?->commune,
+                'district' => $loan->borrower?->district,
+                'province' => $loan->borrower?->province,
                 'amount' => $loan->amount,
                 'balance' => $currentBalance,
                 'rate' => $loan->interest_rate,
@@ -105,11 +123,24 @@ class RescheduleRefinanceController extends Controller
             'new_rate' => 'required|numeric|min:0',
             'remaining_term' => 'required|integer|min:1',
             'reschedule_date' => 'required|date',
-            'first_payment_date' => 'nullable|date',
+            'first_payment_date' => 'required|date|after:reschedule_date',
             'repayment_method' => 'nullable|string',
             'reschedule_fee' => 'nullable|numeric|min:0',
             'pay_off_principal' => 'nullable|numeric|min:0',
             'accrued_interest' => 'nullable|numeric|min:0',
+            'custom_schedule' => 'nullable|array|min:1',
+            'custom_schedule.*.period' => 'nullable|integer|min:1',
+            'custom_schedule.*.payment_number' => 'nullable|integer|min:1',
+            'custom_schedule.*.date' => 'nullable|string',
+            'custom_schedule.*.payment_date' => 'nullable|string',
+            'custom_schedule.*.principal' => 'nullable|numeric|min:0',
+            'custom_schedule.*.principal_amount' => 'nullable|numeric|min:0',
+            'custom_schedule.*.interest' => 'nullable|numeric|min:0',
+            'custom_schedule.*.interest_amount' => 'nullable|numeric|min:0',
+            'custom_schedule.*.fee' => 'nullable|numeric|min:0',
+            'custom_schedule.*.fee_amount' => 'nullable|numeric|min:0',
+            'custom_schedule.*.balance' => 'nullable|numeric|min:0',
+            'custom_schedule.*.outstanding_balance' => 'nullable|numeric|min:0',
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);
@@ -117,7 +148,7 @@ class RescheduleRefinanceController extends Controller
 
         return response()->json([
             'message' => 'Loan rescheduled successfully',
-            'loan' => $updatedLoan->load('payments')
+            'loan' => $updatedLoan->load('payments'),
         ]);
     }
 
@@ -125,13 +156,26 @@ class RescheduleRefinanceController extends Controller
     {
         $validated = $request->validate([
             'old_loan_id' => 'required|exists:loans,id',
-            'additional_amount' => 'required|numeric',
-            'new_rate' => 'required|numeric',
-            'new_term' => 'required|integer',
+            'additional_amount' => 'required|numeric|min:0',
+            'new_rate' => 'required|numeric|min:0',
+            'new_term' => 'required|integer|min:1',
             'start_date' => 'required|date',
-            'refinance_fee' => 'nullable|numeric',
+            'refinance_fee' => 'nullable|numeric|min:0',
             'penalty_amount' => 'nullable|numeric|min:0',
             'repayment_method' => 'nullable|string',
+            'custom_schedule' => 'nullable|array|min:1',
+            'custom_schedule.*.period' => 'nullable|integer|min:1',
+            'custom_schedule.*.payment_number' => 'nullable|integer|min:1',
+            'custom_schedule.*.date' => 'nullable|string',
+            'custom_schedule.*.payment_date' => 'nullable|string',
+            'custom_schedule.*.principal' => 'nullable|numeric|min:0',
+            'custom_schedule.*.principal_amount' => 'nullable|numeric|min:0',
+            'custom_schedule.*.interest' => 'nullable|numeric|min:0',
+            'custom_schedule.*.interest_amount' => 'nullable|numeric|min:0',
+            'custom_schedule.*.fee' => 'nullable|numeric|min:0',
+            'custom_schedule.*.fee_amount' => 'nullable|numeric|min:0',
+            'custom_schedule.*.balance' => 'nullable|numeric|min:0',
+            'custom_schedule.*.outstanding_balance' => 'nullable|numeric|min:0',
         ]);
 
         $oldLoan = Loan::findOrFail($validated['old_loan_id']);
@@ -139,7 +183,7 @@ class RescheduleRefinanceController extends Controller
 
         return response()->json([
             'message' => 'Loan refinanced successfully',
-            'new_loan_id' => $newLoan->id
+            'new_loan_id' => $newLoan->id,
         ]);
     }
 
@@ -148,15 +192,18 @@ class RescheduleRefinanceController extends Controller
         $validated = $request->validate([
             'type' => 'required|in:reschedule,refinance',
             'loan_id' => 'required|exists:loans,id',
-            'new_rate' => 'required|numeric',
-            'term' => 'required|integer', // remaining_term for reschedule, new_term for refinance
-            'additional_amount' => 'nullable|numeric',
+            'new_rate' => 'required|numeric|min:0',
+            'term' => 'required|integer|min:1', // remaining_term for reschedule, new_term for refinance
+            'additional_amount' => 'nullable|numeric|min:0',
             'paydown_amount' => 'nullable|numeric|min:0',
             'start_date' => 'required|date',
             'repayment_method' => 'nullable|string',
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);
+        if ($loan->status !== 'active') {
+            abort(422, 'Only an active loan cycle can be previewed.');
+        }
         $schedule = $this->loanService->previewModification($loan, $validated);
 
         return response()->json($schedule);

@@ -26,11 +26,19 @@ class WriteOffReportController extends Controller
         $toDateTime = $toDate->toDateTimeString();
 
         $query = Loan::with([
-            'borrower',
-            'officer',
-            'disburseOfficer',
+            'borrower' => function ($query) {
+                $query->withTrashed();
+            },
+            'officer' => function ($query) {
+                $query->withTrashed();
+            },
+            'disburseOfficer' => function ($query) {
+                $query->withTrashed();
+            },
             'collaterals',
-            'product',
+            'product' => function ($query) {
+                $query->withTrashed();
+            },
             'transactions' => function ($query) use ($toDateTime) {
                 $query->where('transaction_date', '<=', $toDateTime)
                     ->orderBy('transaction_date', 'asc');
@@ -79,6 +87,10 @@ class WriteOffReportController extends Controller
 
                 $currentWriteOffBalance = max(0, $writeOffAmount - $recoveryAmount);
                 $borrowerName = trim((string) (($loan->borrower->last_name ?? '') . ' ' . ($loan->borrower->first_name ?? '')));
+                $paymentFrequency = \App\Support\FormatHelper::effectivePaymentFrequency(
+                    $loan->payment_frequency,
+                    $loan->repayment_method
+                );
 
                 $reportData[] = [
                     'written_off_date' => $loan->written_off_at,
@@ -94,9 +106,9 @@ class WriteOffReportController extends Controller
                     'amount' => (float) ($loan->amount ?? 0),
                     'currency' => $loan->currency,
                     'rate' => (float) ($loan->interest_rate ?? 0),
-                    'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $loan->payment_frequency),
+                    'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $paymentFrequency),
                     'term' => (int) ($loan->duration_months ?? 0),
-                    'tenor' => $this->tenorLabel($loan->payment_frequency),
+                    'tenor' => $this->tenorLabel($paymentFrequency),
                     'payment_method' => \App\Support\FormatHelper::formatPaymentMethod((string) ($loan->repayment_method ?? '')),
                     'loan_cycle' => (int) ($loan->loan_cycle ?? 1),
                     'refinance_fee' => (float) ($loan->refinance_fee ?? 0),

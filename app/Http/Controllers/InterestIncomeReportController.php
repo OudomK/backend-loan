@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\LoanApproval;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -168,7 +169,7 @@ class InterestIncomeReportController extends Controller
                 'borrowers.last_name',
                 'loan_products.name as product_name',
             ])
-            ->where('loans.status', '!=', 'pending')
+            ->whereNotIn('loans.status', LoanApproval::nonReportableStatuses())
             ->whereNull('loans.deleted_at');
 
         $query->addSelect([
@@ -237,6 +238,10 @@ class InterestIncomeReportController extends Controller
 
             $totalFee = $scheduledFeeCollected + $penaltyCollected + $adminFeeIncome;
             $totalCollected = $interestCollected + $totalFee;
+            $paymentFrequency = \App\Support\FormatHelper::effectivePaymentFrequency(
+                $loan->payment_frequency ?? null,
+                $loan->repayment_method ?? null
+            );
 
             return [
                 'disb_date' => $loan->disb_date,
@@ -247,7 +252,7 @@ class InterestIncomeReportController extends Controller
                 'currency' => $loan->currency ?? 'USD',
                 'interest_rate' => (double) ($loan->interest_rate ?? 0),
                 'term' => $loan->term ?? 0,
-                'payment_frequency' => str_replace('Biweekly', 'Bi-weekly', ucfirst(strtolower($loan->payment_frequency ?? 'Monthly'))),
+                'payment_frequency' => str_replace('Biweekly', 'Bi-weekly', ucfirst(strtolower($paymentFrequency ?: 'Monthly'))),
                 'repayment_method' => \App\Support\FormatHelper::formatPaymentMethod((string) ($loan->repayment_method ?? 'N/A')),
                 'product_name' => $loan->product_name ?? 'General Loan',
                 'collateral_type' => $loan->collateral_type ?? '',

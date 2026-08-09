@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * @property int $id
@@ -36,7 +36,7 @@ use Spatie\Activitylog\LogOptions;
  */
 class Loan extends Model
 {
-    use SoftDeletes, LogsActivity;
+    use LogsActivity, SoftDeletes;
 
     protected $appends = ['print_schedule'];
 
@@ -218,20 +218,37 @@ class Loan extends Model
 
     public function getBasePrincipalForOS(): float
     {
-        $firstPayment = $this->payments->first();
-        if ($firstPayment && $firstPayment->outstanding_balance !== null && (float)$firstPayment->outstanding_balance > 0) {
-            $os = (float)$firstPayment->outstanding_balance;
-            $princ = (float)$firstPayment->principal_amount;
+        // The persisted contract principal is the OS source of truth. Automatic
+        // schedule recalculation must never inflate the customer's debt. When an
+        // authorized user edits schedule principal, LoanController synchronizes
+        // this amount in the same transaction.
+        return max(0, (float) $this->amount);
+    }
 
-            // If the outstanding_balance exactly matches the loan amount, it was saved as the starting balance.
-            if (abs($os - (float)$this->amount) < 0.01) {
-                return $os;
-            }
+    /**
+     * Return the upfront administrative fee as an amount.
+     *
+     * admin_fee is stored as a percentage. Monthly fees belong to individual
+     * installments and therefore are not an upfront processing fee.
+     */
+    public function processingFeeAmount(): float
+    {
+        $feePercent = max(0, (float) ($this->admin_fee ?? 0));
+        $feeType = trim((string) ($this->admin_fee_type ?? '')) ?: 'one_time';
 
-            return $os + $princ;
+        if ($feePercent <= 0 || $feeType === 'monthly') {
+            return 0.0;
         }
-        $totalSchedulePrincipal = (float) $this->payments->sum('principal_amount');
-        return $totalSchedulePrincipal > 0 ? $totalSchedulePrincipal : (float)$this->amount;
+
+        $baseAmount = $feeType === 'capitalized_upfront'
+            ? (float) ($this->disbursed_amount ?? 0)
+            : (float) ($this->amount ?? 0);
+
+        if ($baseAmount <= 0) {
+            $baseAmount = (float) ($this->amount ?? 0);
+        }
+
+        return round($baseAmount * $feePercent / 100, 2);
     }
 
     public function updateAging(): void
@@ -250,7 +267,7 @@ class Loan extends Model
 
         // Calculate the end date for aging calculation
         $endDate = $today;
-        if (!$hasUnpaidRows) {
+        if (! $hasUnpaidRows) {
             $lastTxDate = \App\Models\RepaymentTransaction::where('loan_id', $this->id)->max('transaction_date');
             if ($lastTxDate) {
                 $parsed = \Carbon\Carbon::parse($lastTxDate)->startOfDay();
@@ -271,22 +288,22 @@ class Loan extends Model
 
         $totalAging = $this->locked_aging + $currentLateDays;
 
-        if (!$hasUnpaidRows) {
+        if (! $hasUnpaidRows) {
             // Installments paid. Lock the aging.
             if ($this->late_since_date) {
                 $this->update([
                     'locked_aging' => $totalAging,
                     'late_since_date' => null,
-                    'aging' => $totalAging
+                    'aging' => $totalAging,
                 ]);
             } else {
                 $this->update([
-                    'aging' => $this->locked_aging
+                    'aging' => $this->locked_aging,
                 ]);
             }
         } else {
             // Still late (either owes installments OR owes penalty)
-            if (!$this->late_since_date) {
+            if (! $this->late_since_date) {
                 // Determine when it first became late
                 $earliestArrear = \App\Models\Payment::where('loan_id', $this->id)
                     ->where('payment_date', '<', $today->toDateString())
@@ -307,7 +324,6 @@ class Loan extends Model
             $this->update(['aging' => $this->locked_aging + $currentLateDays]);
         }
     }
-
 
     /**
      * Return the loan-level aging used by live screens.
@@ -367,6 +383,7 @@ class Loan extends Model
 
         return $aging > 0 || ! $hasArrears ? $aging : 1;
     }
+
     /**
      * Return penalty payments and waivers made during the active late period.
      */
@@ -406,6 +423,7 @@ class Loan extends Model
 
         return round(max(0, $frozenPenalty + $currentPenalty - $this->currentPeriodPenaltyCredits($referenceDate)), 2);
     }
+
     /**
      * Recalculates the remaining payment schedule based on the current outstanding principal.
      */
@@ -427,7 +445,7 @@ class Loan extends Model
             + (float) $this->transactions()->sum('prepayment_paid')
             + (float) $this->transactions()->sum('paid_off_amount')
             - (float) $this->transactions()->sum('withdrawn_prepayment');
-        $outstandingPrincipal = round($this->amount - $totalPrincipalPaid, 0);
+        $outstandingPrincipal = round((float) $this->amount - $totalPrincipalPaid, 2);
 
         if ($outstandingPrincipal <= 0) {
             $deletedPayments = Payment::where('loan_id', $this->id)
@@ -461,13 +479,32 @@ class Loan extends Model
             ->orderBy('payment_number', 'asc')
             ->get();
 
+        $retainedPayments = Payment::where('loan_id', $this->id)
+            ->where('payment_number', '<=', $lastPaidNumber)
+            ->get();
+
+        $unpaidPrincipalInRetainedRows = $retainedPayments->sum(function (Payment $payment): float {
+            $paidToPrincipalAndInterest = max(
+                0,
+                (float) $payment->total_paid - (float) ($payment->fee_paid ?? 0)
+            );
+            $interestPaid = min((float) $payment->interest_amount, $paidToPrincipalAndInterest);
+            $principalPaid = min(
+                (float) $payment->principal_amount,
+                max(0, $paidToPrincipalAndInterest - $interestPaid)
+            );
+
+            return max(0, (float) $payment->principal_amount - $principalPaid);
+        });
+
         if ($futurePayments->isEmpty()) {
             $this->update(['monthly_payment' => 0]);
+
             return;
         }
 
         // 3. Calculate Ratio and update future installments in place
-        // This preserves complex schedules (like 15-day, custom skips, and balloon setups) 
+        // This preserves complex schedules (like 15-day, custom skips, and balloon setups)
         // by scaling the remaining principal and interest instead of naive recreation.
         $scheduledRemainingPrincipal = $futurePayments->sum('principal_amount');
 
@@ -491,31 +528,38 @@ class Loan extends Model
             return;
         }
 
-        $ratio = $outstandingPrincipal / $scheduledRemainingPrincipal;
-        $currentBalance = $outstandingPrincipal;
+        // Partially paid retained rows may still contain unpaid principal. Do not
+        // allocate that amount again into future rows, otherwise every partial or
+        // prepayment can progressively inflate both principal and interest.
+        $futurePrincipalTarget = max(
+            0,
+            round($outstandingPrincipal - $unpaidPrincipalInRetainedRows, 2)
+        );
+        $ratio = $futurePrincipalTarget / $scheduledRemainingPrincipal;
+        $currentBalance = $futurePrincipalTarget;
         $newMonthlyPayment = 0;
 
         foreach ($futurePayments as $index => $payment) {
             /** @var \App\Models\Payment $payment */
             $isLast = ($index === $futurePayments->count() - 1);
 
-            $newInterest = round($payment->interest_amount * $ratio, 0);
+            $newInterest = round($payment->interest_amount * $ratio, 2);
 
             if ($isLast) {
                 // Absorb any rounding differences in the final payment
                 $newPrincipal = $currentBalance;
             } else {
-                $newPrincipal = round($payment->principal_amount * $ratio, 0);
+                $newPrincipal = round($payment->principal_amount * $ratio, 2);
             }
 
             if ($index === 0) {
                 // Approximate new monthly payment based on the first upcoming adjusted installment
-                $newMonthlyPayment = round($newPrincipal + $newInterest + $payment->fee_amount, 0);
+                $newMonthlyPayment = round($newPrincipal + $newInterest + $payment->fee_amount, 2);
             }
 
             $payment->principal_amount = $newPrincipal;
             $payment->interest_amount = $newInterest;
-            $payment->total_due = round($newPrincipal + $newInterest + ($payment->fee_amount ?? 0), 0);
+            $payment->total_due = round($newPrincipal + $newInterest + ($payment->fee_amount ?? 0), 2);
             $payment->save();
 
             $currentBalance -= $newPrincipal;
@@ -529,6 +573,8 @@ class Loan extends Model
                 'orphaned_payments_reset' => $orphanedPaymentsReset,
                 'updated_installments' => $futurePayments->count(),
                 'outstanding_principal' => $outstandingPrincipal,
+                'unpaid_principal_in_retained_rows' => round($unpaidPrincipalInRetainedRows, 2),
+                'future_principal_target' => round($futurePrincipalTarget, 2),
                 'monthly_payment' => $newMonthlyPayment,
             ])
             ->log('Recalculated future loan schedule');
@@ -541,15 +587,16 @@ class Loan extends Model
 
     public function getPrintScheduleAttribute()
     {
-        if (!$this->relationLoaded('payments') || $this->payments->isEmpty()) {
+        if (! $this->relationLoaded('payments') || $this->payments->isEmpty()) {
             return [];
         }
 
         $paymentsArray = $this->payments->toArray();
+
         return \App\Services\LoanCalculator::formatScheduleForPrint(
-            $paymentsArray, 
-            $this->repayment_method ?? '', 
-            (float)($this->amount ?? 0)
+            $paymentsArray,
+            $this->repayment_method ?? '',
+            (float) ($this->amount ?? 0)
         );
     }
 }

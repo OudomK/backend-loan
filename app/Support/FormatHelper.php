@@ -109,4 +109,13 @@ class FormatHelper
 
         return $interestRate * $multiplier;
     }
+
+    public static function effectivePaymentFrequency(?string $paymentFrequency, ?string $repaymentMethod): string
+    {
+        if (in_array($repaymentMethod, ['fixed_15days_70_30', 'fixed_15days_50_50'], true)) {
+            return 'biweekly';
+        }
+
+        return trim((string) $paymentFrequency);
+    }
 }

@@ -39,7 +39,7 @@ class LoanReportResource extends JsonResource
             'currency' => $loan->currency,
             'rate' => $loan->interest_rate,
             'interest_rate' => $loan->interest_rate,
-            'processing_fee' => 0,
+            'processing_fee' => $loan->processingFeeAmount(),
             'monthly_interest' => (float) $loan->monthly_interest,
             'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $loan->payment_frequency),
             'term' => $loan->duration_months,

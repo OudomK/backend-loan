@@ -20,6 +20,17 @@ class RepaymentService
         return DB::transaction(function () use ($validated): array {
             // Acquire pessimistic lock to prevent double-processing the same loan.
             $loan = Loan::whereKey($validated['loan_id'])->lockForUpdate()->firstOrFail();
+
+            if ($validated['repayment_type'] === 'Recovery') {
+                return $this->processRecovery($loan, $validated);
+            }
+
+            if ($loan->status !== 'active') {
+                throw new \RuntimeException(
+                    'Repayment is only allowed on the active cycle of the selected loan.'
+                );
+            }
+
             $feeType = trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time';
             $loan->updateAging();
             $loan->refresh();
@@ -40,7 +51,6 @@ class RepaymentService
             }
 
             $cashPenaltyPaid = round(max($penaltyAmountToPay, 0), 2);
-
 
             if (
                 $validated['repayment_type'] !== 'Withdraw'
@@ -64,7 +74,7 @@ class RepaymentService
 
                 if ((float) $validated['amount_paid'] > $balance + 0.001) {
                     throw new \RuntimeException(
-                        "Withdrawal amount ({$validated['amount_paid']}) exceeds prepayment balance (" . number_format($balance, 2) . ')'
+                        "Withdrawal amount ({$validated['amount_paid']}) exceeds prepayment balance (".number_format($balance, 2).')'
                     );
                 }
             }
@@ -102,7 +112,7 @@ class RepaymentService
 
                 if (abs($totalToDistribute - $dueForFirstPI) > 0.01) {
                     throw new \RuntimeException(
-                        'Total payment must cover the current installment due (' . number_format($dueForFirstPI, 2) . ').'
+                        'Total payment must cover the current installment due ('.number_format($dueForFirstPI, 2).').'
                     );
                 }
             }
@@ -143,7 +153,7 @@ class RepaymentService
 
                 if (abs($totalToDistribute - $expectedPayOffTotal) > 0.01) {
                     throw new \RuntimeException(
-                        'Total payment must match the Pay Off amount (' . number_format($expectedPayOffTotal, 2) . ').'
+                        'Total payment must match the Pay Off amount ('.number_format($expectedPayOffTotal, 2).').'
                     );
                 }
             }
@@ -304,9 +314,9 @@ class RepaymentService
             if ($cashPenaltyPaid > 0) {
                 // Find the oldest unpaid installment
                 $inst = Payment::where('loan_id', $loan->id)
-                               ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)')
-                               ->orderBy('payment_date', 'asc')
-                               ->first();
+                    ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)')
+                    ->orderBy('payment_date', 'asc')
+                    ->first();
                 if ($inst) {
                     $inst->penalty_amount += $cashPenaltyPaid;
                     $inst->save();
@@ -434,7 +444,78 @@ class RepaymentService
     }
 
     /**
-     * @param  RepaymentTransaction|int  $transaction
+     * Record cash recovered from a written-off loan without reopening or
+     * modifying its amortization schedule.
+     *
+     * @param  array<string, mixed>  $validated
+     * @return array{transaction: RepaymentTransaction, loan: Loan}
+     */
+    private function processRecovery(Loan $loan, array $validated): array
+    {
+        $amount = round((float) ($validated['amount_paid'] ?? 0), 2);
+        $transactionDate = Carbon::parse($validated['transaction_date'])->startOfDay();
+        $writtenOffAt = $loan->written_off_at
+            ? Carbon::parse($loan->written_off_at)->startOfDay()
+            : null;
+
+        if ($amount <= 0) {
+            throw new \RuntimeException('Recovery amount must be greater than zero.');
+        }
+
+        if ($writtenOffAt === null || $writtenOffAt->gt($transactionDate)) {
+            throw new \RuntimeException('Recovery can only be recorded after the loan is written off.');
+        }
+
+        $writeOffAmount = (float) ($loan->write_off_balance ?? 0);
+        if ($writeOffAmount <= 0.01) {
+            $principalCollectedBeforeWriteOff = (float) RepaymentTransaction::where('loan_id', $loan->id)
+                ->whereDate('transaction_date', '<=', $writtenOffAt->toDateString())
+                ->where('repayment_type', '!=', 'Recovery')
+                ->selectRaw(
+                    'COALESCE(SUM(COALESCE(principal_paid, 0) + COALESCE(prepayment_paid, 0) + COALESCE(paid_off_amount, 0) - COALESCE(withdrawn_prepayment, 0)), 0) AS aggregate'
+                )
+                ->value('aggregate');
+            $writeOffAmount = max(0, (float) $loan->amount - $principalCollectedBeforeWriteOff);
+        }
+
+        $existingRecovery = (float) RepaymentTransaction::where('loan_id', $loan->id)
+            ->sum('recovery_amount');
+        $remainingBalance = max(0, round($writeOffAmount - $existingRecovery, 2));
+
+        if ($amount > $remainingBalance + 0.001) {
+            throw new \RuntimeException(
+                'Recovery amount cannot exceed the remaining write-off balance ('
+                .number_format($remainingBalance, 2)
+                .').'
+            );
+        }
+
+        $transaction = RepaymentTransaction::create([
+            'loan_id' => $loan->id,
+            'collector_id' => $validated['collector_id'],
+            'amount_paid' => $amount,
+            'waived_amount' => 0,
+            'principal_paid' => 0,
+            'interest_paid' => 0,
+            'penalty_paid' => 0,
+            'fee_paid' => 0,
+            'payment_method' => $validated['payment_method'],
+            'repayment_type' => 'Recovery',
+            'transaction_date' => $validated['transaction_date'],
+            'paid_off_amount' => 0,
+            'recovery_amount' => $amount,
+            'withdrawn_prepayment' => 0,
+        ]);
+
+        $loan->update(['recovery_amount' => round($existingRecovery + $amount, 2)]);
+
+        return [
+            'transaction' => $transaction->fresh(),
+            'loan' => $loan->fresh(),
+        ];
+    }
+
+    /**
      * @return array{loan: Loan, transaction: RepaymentTransaction}
      */
     public function void(RepaymentTransaction|int $transaction): array
@@ -449,6 +530,22 @@ class RepaymentService
 
             if ($transaction->repayment_type === 'Pay Off') {
                 throw new \RuntimeException('Cannot void a Pay Off transaction.');
+            }
+
+            if (
+                $transaction->repayment_type === 'Recovery'
+                && ! \App\Models\PaymentAllocation::where('repayment_transaction_id', $transaction->id)->exists()
+            ) {
+                $transaction->delete();
+                $loan->update([
+                    'recovery_amount' => round((float) RepaymentTransaction::where('loan_id', $loan->id)
+                        ->sum('recovery_amount'), 2),
+                ]);
+
+                return [
+                    'loan' => $loan->fresh(),
+                    'transaction' => $transaction,
+                ];
             }
 
             if ($transaction->repayment_type === 'Withdraw') {
@@ -469,8 +566,8 @@ class RepaymentService
                                 $inst->total_paid = 0;
                                 $inst->penalty_amount = 0;
                             } else {
-                                // If this row's repayment_transaction_id was this transaction, but it still has total_paid > 0, 
-                                // we should ideally set it to the PREVIOUS transaction ID. But without a full history of transaction IDs, 
+                                // If this row's repayment_transaction_id was this transaction, but it still has total_paid > 0,
+                                // we should ideally set it to the PREVIOUS transaction ID. But without a full history of transaction IDs,
                                 // we can just set it to null or leave it. Leaving it is what the greedy fallback does too.
                                 if ($inst->repayment_transaction_id === $transaction->id) {
                                     $inst->repayment_transaction_id = null;

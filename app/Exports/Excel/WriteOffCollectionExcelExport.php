@@ -135,7 +135,7 @@ class WriteOffCollectionExcelExport
             $spreadsheet->addSheet($sheet);
             $sheet->setShowGridlines(false);
 
-            $filterInfo = "Period: $fDate - $tDate | Currency: $sheetName";
+            $filterInfo = "Recovery Period: $fDate - $tDate | As of: $tDate | Currency: $sheetName";
 
             // 1. Title area & Logo
             $drawing = new Drawing();

@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\ArrearReportResource;
 use App\Models\Loan;
-use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class ArrearReportController extends Controller
 {
@@ -13,6 +13,8 @@ class ArrearReportController extends Controller
     {
         $officerId = $request->query('officer_id');
         $currency = $request->query('currency');
+        $search = trim((string) $request->query('search', ''));
+        $status = trim((string) $request->query('status', 'all'));
         $fromDateStr = $request->query('from_date');
         $toDateStr = $request->query('to_date');
         $reportType = $request->query('report_type', 'under30');
@@ -32,7 +34,7 @@ class ArrearReportController extends Controller
                 $q->withTrashed()->select('id', 'first_name', 'last_name', 'phone');
             },
             'officer:id,name',
-            'collaterals:id,loan_id,type,description'
+            'collaterals:id,loan_id,type,description',
         ])
             ->select([
                 'id',
@@ -49,16 +51,16 @@ class ArrearReportController extends Controller
                 'aging',
                 'locked_aging',
                 'accumulated_penalty',
-                'penalty_rate'
+                'penalty_rate',
             ])
             ->where('status', 'active')
             // Only get loans with overdue payments or due today or with unpaid penalties
             ->where(function ($q) use ($refDateStr) {
                 $q->whereHas('payments', function ($pQuery) use ($refDateStr) {
                     $pQuery->where('payment_date', '<=', $refDateStr)
-                        ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)');
+                        ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)');
                 })
-                ->orWhere('accumulated_penalty', '>', 0.01);
+                    ->orWhere('accumulated_penalty', '>', 0.01);
             });
 
         if ($officerId && $officerId !== 'all') {
@@ -75,24 +77,31 @@ class ArrearReportController extends Controller
             'calculated_late_since_date' => \App\Models\Payment::select('payment_date')
                 ->whereColumn('loan_id', 'loans.id')
                 ->where('payment_date', '<=', $refDateStr)
-                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
+                ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)')
                 ->orderBy('payment_date', 'asc')
                 ->limit(1),
 
             // Total Outstanding Principal
-            'calculated_outstanding' => \App\Models\Payment::selectRaw('SUM(principal_amount - GREATEST(0, total_paid - interest_amount))')
+            'calculated_outstanding' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, principal_amount - GREATEST(0, GREATEST(0, total_paid - COALESCE(fee_paid, 0)) - interest_amount)))')
                 ->whereColumn('loan_id', 'loans.id'),
 
             // Arrear Principal (Total unpaid principal for past due installments)
-            'arrear_principal' => \App\Models\Payment::selectRaw('SUM(principal_amount - GREATEST(0, total_paid - interest_amount))')
+            'arrear_principal' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, principal_amount - GREATEST(0, GREATEST(0, total_paid - COALESCE(fee_paid, 0)) - interest_amount)))')
                 ->whereColumn('loan_id', 'loans.id')
                 ->where('payment_date', '<=', $refDateStr)
-                ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)'),
+                ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'),
 
             // Arrear Interest
-            'arrear_interest' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, interest_amount - total_paid))')
+            'arrear_interest' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, interest_amount - GREATEST(0, total_paid - COALESCE(fee_paid, 0))))')
                 ->whereColumn('loan_id', 'loans.id')
-                ->where('payment_date', '<=', $refDateStr),
+                ->where('payment_date', '<=', $refDateStr)
+                ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'),
+
+            // Arrear monthly fee (installment fee still unpaid as of the report date)
+            'arrear_fee' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, COALESCE(fee_amount, 0) - COALESCE(fee_paid, 0)))')
+                ->whereColumn('loan_id', 'loans.id')
+                ->where('payment_date', '<=', $refDateStr)
+                ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'),
 
             // Penalty
             'arrear_penalty' => \App\Models\Payment::selectRaw('SUM(penalty_amount)')
@@ -119,13 +128,13 @@ class ArrearReportController extends Controller
         $filtered = $loans->filter(function ($loan) use ($referenceDate, $reportType, $fromDate) {
             $arrearDateStr = $loan->calculated_late_since_date ?? $loan->late_since_date;
 
-            if (!$arrearDateStr && (float)$loan->accumulated_penalty > 0) {
+            if (! $arrearDateStr && (float) $loan->accumulated_penalty > 0) {
                 $days = $loan->locked_aging ?? $loan->aging ?? 0;
                 $arrearDateStr = $referenceDate->copy()->subDays($days)->toDateString();
                 $loan->calculated_late_since_date = $arrearDateStr;
             }
 
-            if (!$arrearDateStr) {
+            if (! $arrearDateStr) {
                 return false;
             }
 
@@ -133,6 +142,12 @@ class ArrearReportController extends Controller
 
             if ($reportType === 'all') {
                 return true;
+            }
+
+            // Period reports use From Date as the lower bound. Due-today rows are
+            // intentionally retained and will be displayed with Aging = 0.
+            if ($fromDate && $arrearDate->lt($fromDate->copy()->startOfDay())) {
+                return false;
             }
 
             $aging = abs($referenceDate->diffInDays($arrearDate));
@@ -146,19 +161,46 @@ class ArrearReportController extends Controller
 
         $mappedData = ArrearReportResource::collection($filtered)->resolve($request);
 
-        if (!$paginate) {
+        if ($search !== '') {
+            $searchText = mb_strtolower($search, 'UTF-8');
+            $searchNumber = str_replace([',', ' '], '', $searchText);
+            $searchFields = ['loan_no', 'name', 'village', 'commune'];
+
+            $mappedData = array_values(array_filter($mappedData, function (array $item) use ($searchText, $searchNumber, $searchFields) {
+                foreach ($searchFields as $field) {
+                    if (str_contains(mb_strtolower((string) ($item[$field] ?? ''), 'UTF-8'), $searchText)) {
+                        return true;
+                    }
+                }
+
+                $amountValue = (float) ($item['disb_amount'] ?? 0);
+                $amount = str_replace(',', '', number_format($amountValue, 2, '.', ','));
+
+                return $searchNumber !== '' && str_contains($amount, $searchNumber);
+            }));
+        }
+
+        if ($status !== '' && strtolower($status) !== 'all') {
+            $mappedData = array_values(array_filter(
+                $mappedData,
+                fn (array $item) => strcasecmp((string) ($item['status'] ?? ''), $status) === 0
+            ));
+        }
+
+        if (! $paginate) {
             return $mappedData;
         }
 
         $grandTotals = [];
         foreach ($mappedData as $item) {
             $curr = strtoupper(explode(' ', (string) ($item['currency'] ?? 'USD'))[0]);
-            if (!isset($grandTotals[$curr])) {
+            if (! isset($grandTotals[$curr])) {
                 $grandTotals[$curr] = [
                     'disb_amount' => 0,
                     'outstanding' => 0,
                     'arrear_amount' => 0,
                     'arrear_interest' => 0,
+                    'arrear_fee' => 0,
                     'penalty_due' => 0,
                     'penalty_paid' => 0,
                 ];
@@ -167,6 +209,7 @@ class ArrearReportController extends Controller
             $grandTotals[$curr]['outstanding'] += (float) ($item['outstanding'] ?? 0);
             $grandTotals[$curr]['arrear_amount'] += (float) ($item['arrear_amount'] ?? 0);
             $grandTotals[$curr]['arrear_interest'] += (float) ($item['arrear_interest'] ?? 0);
+            $grandTotals[$curr]['arrear_fee'] += (float) ($item['arrear_fee'] ?? 0);
             $grandTotals[$curr]['penalty_due'] += (float) ($item['penalty_due'] ?? 0);
             $grandTotals[$curr]['penalty_paid'] += (float) ($item['penalty_paid'] ?? 0);
         }
@@ -183,8 +226,8 @@ class ArrearReportController extends Controller
                 'current_page' => $page,
                 'last_page' => $lastPage > 0 ? $lastPage : 1,
                 'total' => $totalRecords,
-                'grand_totals' => $grandTotals
-            ]
+                'grand_totals' => $grandTotals,
+            ],
         ]);
     }
 
@@ -205,7 +248,8 @@ class ArrearReportController extends Controller
             }
         }
 
-        $export = new \App\Exports\Excel\ArrearAllExcelExport();
+        $export = new \App\Exports\Excel\ArrearAllExcelExport;
+
         return $export->download($data, $request, $toDateStr, $currency, $officerName);
     }
 
@@ -213,7 +257,7 @@ class ArrearReportController extends Controller
     {
         $request->merge([
             'report_type' => 'under30',
-            'paginate' => false
+            'paginate' => false,
         ]);
         $data = $this->index($request);
 
@@ -229,7 +273,8 @@ class ArrearReportController extends Controller
             }
         }
 
-        $export = new \App\Exports\Excel\ArrearUnder30ExcelExport();
+        $export = new \App\Exports\Excel\ArrearUnder30ExcelExport;
+
         return $export->download($data, $request, $toDateStr, $currency, $officerName);
     }
 }

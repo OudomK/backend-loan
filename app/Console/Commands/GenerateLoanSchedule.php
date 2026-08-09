@@ -4,8 +4,7 @@ namespace App\Console\Commands;
 
 use App\Models\Loan;
 use App\Models\Payment;
-use App\Services\BalloonPaymentCalculator;
-use App\Services\LoanCalculator;
+use App\Services\LoanScheduleService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -30,7 +29,7 @@ class GenerateLoanSchedule extends Command
     /**
      * Execute the console command.
      */
-    public function handle(LoanCalculator $calculator): int
+    public function handle(LoanScheduleService $scheduleService): int
     {
         $loanId = $this->argument('loan_id');
 
@@ -63,82 +62,42 @@ class GenerateLoanSchedule extends Command
                     continue;
                 }
 
-                if ($loan->repayment_method === 'Balloon') {
-                    $loanData = [
-                        'amount' => (float) $loan->amount,
-                        'interest_rate' => (float) $loan->interest_rate,
-                        'duration_months' => (int) $loan->duration_months,
-                        'start_date' => (string) $loan->start_date,
-                        'currency' => (string) ($loan->currency ?? 'USD'),
-                    ];
+                $schedule = $scheduleService->generate([
+                    'amount' => (float) $loan->amount,
+                    'interest_rate' => (float) $loan->interest_rate,
+                    'duration_months' => (int) $loan->duration_months,
+                    'repayment_method' => (string) $loan->repayment_method,
+                    'start_date' => (string) $loan->start_date,
+                    'currency' => (string) ($loan->currency ?? 'USD'),
+                    'admin_fee' => (float) ($loan->admin_fee ?? 0),
+                    'admin_fee_type' => (string) ($loan->admin_fee_type ?? 'one_time'),
+                ]);
 
-                    $schedule = BalloonPaymentCalculator::generateSchedule(
-                        $loanData,
-                        'interest_only'
-                    );
+                if (empty($schedule)) {
+                    $this->warn("No schedule generated for loan {$loan->id}");
+                    continue;
+                }
 
-                    if (empty($schedule)) {
-                        $this->warn("No schedule generated for loan {$loan->id}");
-                        continue;
-                    }
+                $loan->update([
+                    'monthly_payment' => $schedule[0]['payment'] ?? 0,
+                ]);
 
-                    // Reference monthly payment from first row
-                    $loan->update([
-                        'monthly_payment' => $schedule[0]['total_paid'] ?? 0,
+                foreach ($schedule as $row) {
+                    $paymentDate = $this->normalizeDateString($row['date'] ?? null);
+
+                    Payment::create([
+                        'loan_id' => $loan->id,
+                        'payment_number' => $row['period'],
+                        'principal_amount' => $row['principal'],
+                        'interest_amount' => $row['interest'],
+                        'fee_amount' => $row['fee'] ?? 0,
+                        'outstanding_balance' => $row['balance'] ?? null,
+                        'total_due' => round(($row['principal'] ?? 0) + ($row['interest'] ?? 0) + ($row['fee'] ?? 0), 2),
+                        'penalty_amount' => 0,
+                        'total_paid' => 0,
+                        'payment_date' => $paymentDate,
+                        'payment_method' => 'Cash',
                     ]);
-
-                    foreach ($schedule as $row) {
-                        $paymentDate = $this->normalizeDateString($row['payment_date'] ?? null);
-
-                        Payment::create([
-                            'loan_id' => $loan->id,
-                            'payment_number' => $row['payment_number'],
-                            'principal_amount' => $row['principal_amount'],
-                            'interest_amount' => $row['interest_amount'],
-                            'fee_amount' => $row['fee_amount'] ?? 0,
-                            'total_due' => round(($row['principal_amount'] ?? 0) + ($row['interest_amount'] ?? 0) + ($row['fee_amount'] ?? 0), 2),
-                            'penalty_amount' => $row['penalty_amount'] ?? 0,
-                            'total_paid' => 0,
-                            'payment_date' => $paymentDate,
-                            'payment_method' => 'Cash',
-                        ]);
-                    }
-                } else {
-                    $schedule = $calculator->calculateLoanWithDates(
-                        $loan->amount,
-                        $loan->interest_rate,
-                        $loan->duration_months,
-                        $loan->repayment_method,
-                        $loan->start_date,
-                        $loan->currency ?? 'USD'
-                    );
-
-                    if (empty($schedule)) {
-                        $this->warn("No schedule generated for loan {$loan->id}");
-                        continue;
-                    }
-
-                    // Reference monthly payment from first row
-                    $loan->update([
-                        'monthly_payment' => $schedule[0]['payment'] ?? 0,
-                    ]);
-
-                    foreach ($schedule as $row) {
-                        $paymentDate = $this->normalizeDateString($row['date'] ?? null);
-
-                        Payment::create([
-                            'loan_id' => $loan->id,
-                            'payment_number' => $row['period'],
-                            'principal_amount' => $row['principal'],
-                            'interest_amount' => $row['interest'],
-                            'fee_amount' => $row['fee'] ?? 0,
-                            'total_due' => round(($row['principal'] ?? 0) + ($row['interest'] ?? 0) + ($row['fee'] ?? 0), 2),
-                            'penalty_amount' => 0,
-                            'total_paid' => 0,
-                            'payment_date' => $paymentDate,
-                            'payment_method' => 'Cash',
-                        ]);
-                    }
                 }
             } catch (\Throwable $e) {
                 $this->error("Error for loan {$loan->id}: " . $e->getMessage());
@@ -184,4 +143,3 @@ class GenerateLoanSchedule extends Command
         }
     }
 }
-

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
+use App\Models\LoanApproval;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -27,6 +28,7 @@ class QualityPortfolioController extends Controller
         $combinations = Loan::with(['officer', 'product'])
             ->select('loan_officer_id', 'product_id', 'currency')
             ->whereNotNull('loan_officer_id')
+            ->whereNotIn('status', LoanApproval::nonReportableStatuses())
             ->when($currency !== 'all', function ($query) use ($currency) {
                 $query->where('currency', $currency);
             })
@@ -47,15 +49,16 @@ class QualityPortfolioController extends Controller
                 // Get loans for this officer/product/currency combination.
                 $baseQuery = Loan::query()->where('loan_officer_id', $officer->id)
                     ->where('product_id', $combo->product_id)
-                    ->where('currency', $comboCurrency);
+                    ->where('currency', $comboCurrency)
+                    ->whereNotIn('status', LoanApproval::nonReportableStatuses());
 
                 // --- Skip if no loans exist for this combo ---
                 if ((clone $baseQuery)->count() === 0)
                     continue;
 
                 // --- 1. No. Disb & Disb. Amount ---
-                $oldDisb = (clone $baseQuery)->where('start_date', '<', $fromDateStr)->where('status', '!=', 'pending');
-                $newDisb = (clone $baseQuery)->whereBetween('start_date', [$fromDateStr, $toDateStr])->where('status', '!=', 'pending');
+                $oldDisb = (clone $baseQuery)->where('start_date', '<', $fromDateStr);
+                $newDisb = (clone $baseQuery)->whereBetween('start_date', [$fromDateStr, $toDateStr]);
 
                 $oldDisbCount = $oldDisb->count();
                 $newDisbCount = $newDisb->count();
@@ -75,7 +78,7 @@ class QualityPortfolioController extends Controller
                     ->where('product_id', $combo->product_id)
                     ->where('currency', $comboCurrency)
                     ->where('start_date', '<=', $toDateStr)
-                    ->where('status', '!=', 'pending')
+                    ->whereNotIn('status', LoanApproval::nonReportableStatuses())
                     ->where(function ($query) use ($toDateStr) {
                         $query->whereNull('written_off_at')
                             ->orWhereDate('written_off_at', '>', $toDateStr);
@@ -91,7 +94,8 @@ class QualityPortfolioController extends Controller
                 $transactions = RepaymentTransaction::query()->whereHas('loan', function ($q) use ($officer, $combo, $comboCurrency) {
                     $q->where('loan_officer_id', $officer->id)
                         ->where('product_id', $combo->product_id)
-                        ->where('currency', $comboCurrency);
+                        ->where('currency', $comboCurrency)
+                        ->whereNotIn('status', LoanApproval::nonReportableStatuses());
                 })->whereBetween('transaction_date', [$fromDateStr, $toDateStr])->get();
 
                 $collectedPrincipal = $transactions->sum('principal_paid') ?? 0;
@@ -104,9 +108,7 @@ class QualityPortfolioController extends Controller
                 }) ?? 0;
                 $recovery = $transactions->where('repayment_type', 'Recovery')->sum('amount_paid') ?? 0;
 
-                $loanIds = (clone $baseQuery)
-                    ->where('status', '!=', 'pending')
-                    ->pluck('id');
+                $loanIds = (clone $baseQuery)->pluck('id');
                 $duePayments = \App\Models\Payment::whereIn('loan_id', $loanIds)
                     ->whereBetween('payment_date', [$fromDateStr, $toDateStr])
                     ->get();
@@ -141,7 +143,7 @@ class QualityPortfolioController extends Controller
                             - (float) ($transaction->withdrawn_prepayment ?? 0);
                     });
 
-                    $currentOS = max(0, (float) $loan->amount - $principalPaidAtEnd);
+                    $currentOS = max(0, $loan->getBasePrincipalForOS() - $principalPaidAtEnd);
                     if ($currentOS <= 0.01) {
                         continue;
                     }

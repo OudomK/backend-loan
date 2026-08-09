@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 class InactiveLoanReportController extends Controller
@@ -11,6 +12,7 @@ class InactiveLoanReportController extends Controller
     {
         $officerId = $request->query('officer_id');
         $currency = $request->query('currency');
+        $search = trim((string) $request->query('search', ''));
         $fromDate = $request->query('from_date');
         $toDate = $request->query('to_date');
 
@@ -20,10 +22,16 @@ class InactiveLoanReportController extends Controller
             'borrower' => function ($q) {
                 $q->withTrashed();
             },
-            'officer',
-            'disburseOfficer',
+            'officer' => function ($q) {
+                $q->withTrashed();
+            },
+            'disburseOfficer' => function ($q) {
+                $q->withTrashed();
+            },
             'collaterals',
-            'product',
+            'product' => function ($q) {
+                $q->withTrashed();
+            },
         ])
             ->whereIn('status', $statuses);
 
@@ -31,7 +39,7 @@ class InactiveLoanReportController extends Controller
             $query->where('loan_officer_id', $officerId);
         }
         if ($currency && $currency !== 'all') {
-            $query->where('currency', 'LIKE', $currency . '%');
+            $query->where('currency', 'LIKE', $currency.'%');
         }
 
         $query->addSelect([
@@ -39,9 +47,9 @@ class InactiveLoanReportController extends Controller
                 ->whereColumn('loan_id', 'loans.id')
                 ->orderBy('transaction_date', 'desc')
                 ->limit(1),
-            'total_principal_paid' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, LEAST(principal_amount, total_paid - interest_amount)))')
+            'total_principal_paid' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, LEAST(principal_amount, GREATEST(0, total_paid - COALESCE(fee_paid, 0)) - interest_amount)))')
                 ->whereColumn('loan_id', 'loans.id'),
-            'total_interest_paid' => \App\Models\Payment::selectRaw('SUM(LEAST(interest_amount, total_paid))')
+            'total_interest_paid' => \App\Models\Payment::selectRaw('SUM(GREATEST(0, LEAST(interest_amount, GREATEST(0, total_paid - COALESCE(fee_paid, 0)))))')
                 ->whereColumn('loan_id', 'loans.id'),
         ]);
 
@@ -51,15 +59,18 @@ class InactiveLoanReportController extends Controller
 
         if ($fromDate || $toDate) {
             $loans = $loans->filter(function ($loan) use ($fromDate, $toDate) {
-                if (!$loan->last_payment_date) {
+                $inactiveDate = $this->inactiveDate($loan);
+
+                if (! $inactiveDate) {
                     return false;
                 }
-                if ($fromDate && $loan->last_payment_date < $fromDate) {
+                if ($fromDate && $inactiveDate < Carbon::parse($fromDate)->toDateString()) {
                     return false;
                 }
-                if ($toDate && $loan->last_payment_date > $toDate) {
+                if ($toDate && $inactiveDate > Carbon::parse($toDate)->toDateString()) {
                     return false;
                 }
+
                 return true;
             });
         }
@@ -68,13 +79,17 @@ class InactiveLoanReportController extends Controller
             $borrower = $loan->borrower;
             $officer = $loan->officer;
             $product = $loan->product;
-            $inactiveDate = $loan->last_payment_date;
+            $inactiveDate = $this->inactiveDate($loan);
+            $paymentFrequency = \App\Support\FormatHelper::effectivePaymentFrequency(
+                $loan->payment_frequency,
+                $loan->repayment_method
+            );
 
             return [
                 'disbursement_date' => $loan->start_date,
                 'loan_code' => \App\Support\FormatHelper::formatLoanCode((string) $loan->loan_code),
                 'client_code' => $borrower?->customer_code ?? '',
-                'client_name' => $borrower ? ($borrower->first_name . ' ' . $borrower->last_name) : '',
+                'client_name' => $borrower ? ($borrower->first_name.' '.$borrower->last_name) : '',
                 'village_name' => $borrower?->village ?? '',
                 'commune_name' => $borrower?->commune ?? '',
                 'district_name' => $borrower?->district ?? '',
@@ -82,15 +97,15 @@ class InactiveLoanReportController extends Controller
                 'disbursement_amount' => $loan->amount,
                 'currency_code' => $loan->currency,
                 'interest_rate' => $loan->interest_rate,
-                'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $loan->payment_frequency),
+                'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $paymentFrequency),
                 'term' => $loan->duration_months,
-                'tenor' => $this->tenorLabel($loan->payment_frequency),
+                'tenor' => $this->tenorLabel($paymentFrequency),
                 'payment_method' => \App\Support\FormatHelper::formatPaymentMethod((string) $loan->repayment_method),
-                'payment_frequency' => $loan->payment_frequency,
+                'payment_frequency' => $paymentFrequency,
                 'loan_cycle' => $loan->loan_cycle,
                 'refinance_amount' => $loan->refinanced_amount ?? 0,
                 'admin_fee' => $loan->admin_fee,
-                'processing_fee' => 0,
+                'processing_fee' => $loan->processingFeeAmount(),
                 'refinance_fee' => $loan->refinance_fee,
                 'loan_product' => $product ? $product->name : 'General Loan',
                 'product_name' => $product ? $product->name : 'General Loan',
@@ -103,20 +118,48 @@ class InactiveLoanReportController extends Controller
                 'inactive_date' => $inactiveDate,
                 'write_off_amount' => $loan->write_off_balance ?? 0,
             ];
-        })->filter()->values()->toArray();
+        })->filter()->values();
+
+        if ($search !== '') {
+            $searchText = mb_strtolower($search, 'UTF-8');
+            $searchNumber = str_replace([',', ' '], '', $searchText);
+            $searchFields = [
+                'loan_code',
+                'client_name',
+                'village_name',
+                'commune_name',
+                'district_name',
+                'province_name',
+            ];
+
+            $data = $data->filter(function (array $item) use ($searchText, $searchNumber, $searchFields) {
+                foreach ($searchFields as $field) {
+                    if (str_contains(mb_strtolower((string) ($item[$field] ?? ''), 'UTF-8'), $searchText)) {
+                        return true;
+                    }
+                }
+
+                $amountValue = (float) ($item['disbursement_amount'] ?? 0);
+                $amount = str_replace(',', '', number_format($amountValue, 2, '.', ','));
+
+                return $searchNumber !== '' && str_contains($amount, $searchNumber);
+            })->values();
+        }
+
+        $data = $data->toArray();
 
         $paginate = filter_var($request->query('paginate', 'true'), FILTER_VALIDATE_BOOLEAN);
         $page = (int) $request->query('page', 1);
         $limit = (int) $request->query('limit', 50);
 
-        if (!$paginate) {
+        if (! $paginate) {
             return response()->json($data);
         }
 
         $grandTotals = [];
         foreach ($data as $item) {
             $curr = strtoupper(explode(' ', (string) ($item['currency_code'] ?? 'USD'))[0]);
-            if (!isset($grandTotals[$curr])) {
+            if (! isset($grandTotals[$curr])) {
                 $grandTotals[$curr] = [
                     'disbursement_amount' => 0,
                     'outstanding_amount' => 0,
@@ -144,8 +187,8 @@ class InactiveLoanReportController extends Controller
                 'current_page' => $page,
                 'last_page' => $lastPage > 0 ? $lastPage : 1,
                 'total' => $totalRecords,
-                'grand_totals' => $grandTotals
-            ]
+                'grand_totals' => $grandTotals,
+            ],
         ]);
     }
 
@@ -153,6 +196,7 @@ class InactiveLoanReportController extends Controller
     {
         $officerId = $request->query('officer_id');
         $currency = $request->query('currency');
+        $search = $request->query('search');
         $fromDate = $request->query('from_date');
         $toDate = $request->query('to_date');
 
@@ -160,9 +204,10 @@ class InactiveLoanReportController extends Controller
         $originalRequest = new Request([
             'officer_id' => $officerId,
             'currency' => $currency,
+            'search' => $search,
             'from_date' => $fromDate,
             'to_date' => $toDate,
-            'paginate' => 'false'
+            'paginate' => 'false',
         ]);
 
         $response = $this->index($originalRequest);
@@ -176,7 +221,8 @@ class InactiveLoanReportController extends Controller
             }
         }
 
-        $exporter = new \App\Exports\Excel\InactiveLoanExcelExport();
+        $exporter = new \App\Exports\Excel\InactiveLoanExcelExport;
+
         return $exporter->download($data, $request, $fromDate, $toDate, $officerName);
     }
 
@@ -193,5 +239,14 @@ class InactiveLoanReportController extends Controller
             'bi-monthly', 'bimonthly', 'semi-monthly' => 'Semi-Monthly',
             default => $normalized !== '' ? ucwords(str_replace(['_', '-'], ' ', $normalized)) : '',
         };
+    }
+
+    private function inactiveDate(Loan $loan): ?string
+    {
+        $date = $loan->status === 'written_off' && $loan->written_off_at
+            ? $loan->written_off_at
+            : $loan->last_payment_date;
+
+        return $date ? Carbon::parse($date)->toDateString() : null;
     }
 }

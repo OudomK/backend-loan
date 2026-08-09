@@ -19,6 +19,16 @@ class SystemUiPermissionSeeder extends Seeder
             'ui:customer_management:view',
             'ui:loan_application',
             'ui:loan_application:view',
+            'ui:pending_approvals',
+            'ui:pending_approvals:view',
+            'ui:pending_approvals:check',
+            'ui:pending_approvals:verify',
+            'ui:pending_approvals:approve',
+            'ui:pending_approvals:reject',
+            'check_loan',
+            'verify_loan',
+            'approve_loan',
+            'reject_loan',
             'ui:credit_menu',
             'ui:credit_menu:view',
             'ui:operation_menu',
@@ -56,6 +66,7 @@ class SystemUiPermissionSeeder extends Seeder
         ];
 
         foreach ([
+            'customer_history',
             'customer_management',
             'loan_application',
             'borrowing',

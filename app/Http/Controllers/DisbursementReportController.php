@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
+use App\Models\LoanApproval;
 use App\Models\LoanOfficer;
 use App\Models\RepaymentTransaction;
 use Illuminate\Http\Request;
@@ -27,6 +28,7 @@ class DisbursementReportController extends Controller
         $combinations = Loan::with('officer.employee')
             ->select('loan_officer_id', 'currency')
             ->whereNotNull('loan_officer_id')
+            ->whereNotIn('status', LoanApproval::nonReportableStatuses())
             ->when($officerId && $officerId !== 'all', function ($q) use ($officerId) {
                 $q->where('loan_officer_id', $officerId);
             })
@@ -41,7 +43,10 @@ class DisbursementReportController extends Controller
             if (!$officer || !$currency) continue;
 
             // --- Disbursement Section ---
-            $disbQuery = Loan::query()->where('loan_officer_id', $officer->id)->where('currency', $currency);
+            $disbQuery = Loan::query()
+                ->where('loan_officer_id', $officer->id)
+                ->where('currency', $currency)
+                ->whereNotIn('status', LoanApproval::nonReportableStatuses());
 
             $oldDisb = (clone $disbQuery)->where('start_date', '<', $fromDateStr);
             $newDisb = (clone $disbQuery)->whereBetween('start_date', [$fromDateStr, $toDateStr]);
@@ -64,7 +69,7 @@ class DisbursementReportController extends Controller
                 ->where('loan_officer_id', $officer->id)
                 ->where('currency', $currency)
                 ->where('start_date', '<=', $toDateStr)
-                ->where('status', '!=', 'pending')
+                ->whereNotIn('status', LoanApproval::nonReportableStatuses())
                 ->where(function ($query) use ($toDateStr) {
                     $query->whereNull('written_off_at')
                         ->orWhereDate('written_off_at', '>', $toDateStr);
@@ -94,7 +99,7 @@ class DisbursementReportController extends Controller
                         - (float) ($transaction->withdrawn_prepayment ?? 0);
                 });
 
-                $currentLoanOS = max(0, (float) $loan->amount - $principalPaidAtEnd);
+                $currentLoanOS = max(0, $loan->getBasePrincipalForOS() - $principalPaidAtEnd);
                 if ($currentLoanOS <= 0.01) {
                     continue;
                 }
@@ -171,7 +176,9 @@ class DisbursementReportController extends Controller
 
             // --- Portfolio Mutation Section ---
             $transactions = RepaymentTransaction::query()->whereHas('loan', function ($q) use ($officer, $currency) {
-                $q->where('loan_officer_id', $officer->id)->where('currency', $currency);
+                $q->where('loan_officer_id', $officer->id)
+                    ->where('currency', $currency)
+                    ->whereNotIn('status', LoanApproval::nonReportableStatuses());
             })->whereBetween('transaction_date', [$fromDateStr, $toDateStr])->get();
 
             $principalCollected = $transactions->sum('principal_paid');
@@ -187,12 +194,14 @@ class DisbursementReportController extends Controller
 
             // --- Due Section (Payments scheduled within the period) ---
             $duePayments = \App\Models\Payment::whereHas('loan', function ($q) use ($officer, $currency) {
-                $q->where('loan_officer_id', $officer->id)->where('currency', $currency);
+                $q->where('loan_officer_id', $officer->id)
+                    ->where('currency', $currency)
+                    ->whereNotIn('status', LoanApproval::nonReportableStatuses());
             })->whereBetween('payment_date', [$fromDateStr, $toDateStr])->get();
 
             $principalDue = $duePayments->sum('principal_amount');
             $interestDue  = $duePayments->sum('interest_amount');
-            $feeDue       = 0; // no fee column on payments table
+            $feeDue       = $duePayments->sum('fee_amount');
 
             // --- Write-Off Section ---
             $woCurLoans = Loan::query()->where('loan_officer_id', $officer->id)
