@@ -2,8 +2,7 @@
 
 namespace App\Livewire;
 
-use App\Services\BalloonPaymentCalculator;
-use App\Services\LoanCalculator;
+use App\Services\LoanScheduleService;
 use Carbon\Carbon;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -72,9 +71,38 @@ class ScheduleCalculator extends Component
             $this->repayment_method = $customerInfo['repayment_method'] ?? '';
         }
 
+        if ($this->isSplitRepaymentMethod($this->repayment_method)) {
+            $this->payment_frequency = 'Biweekly';
+            $this->first_repayment_date = $this->splitFirstRepaymentDate($this->loan_date);
+        }
+
         if (empty($this->first_repayment_date)) {
             $this->first_repayment_date = Carbon::now()->addMonth()->toDateString();
         }
+    }
+
+    private function isSplitRepaymentMethod(?string $method): bool
+    {
+        return LoanScheduleService::isSplitMethod($method);
+    }
+
+    private function splitFirstRepaymentDate(string $loanDate): string
+    {
+        $date = Carbon::parse($loanDate ?: Carbon::now()->toDateString());
+
+        if ($date->day <= 15) {
+            return $date->day(26)->toDateString();
+        }
+
+        return $date->addMonthNoOverflow()->day(11)->toDateString();
+    }
+
+    private function monthlyFirstRepaymentDate(string $loanDate, int $paymentDay = 11): string
+    {
+        $date = Carbon::parse($loanDate ?: Carbon::now()->toDateString())->addMonthNoOverflow();
+        $paymentDay = max(1, min($paymentDay, $date->daysInMonth));
+
+        return $date->day($paymentDay)->toDateString();
     }
 
     public function updatedLoanProductId(string $value)
@@ -92,24 +120,25 @@ class ScheduleCalculator extends Component
 
     public function updatedRepaymentMethod(string $value)
     {
-        if (in_array($value, ['fixed_daily'])) {
-            $this->payment_frequency = 'Daily';
-        } elseif (in_array($value, ['fixed_weekly'])) {
-            $this->payment_frequency = 'Weekly';
-        } else {
-            $this->payment_frequency = 'Monthly';
-        }
+        $this->payment_frequency = LoanScheduleService::displayPaymentFrequency(
+            $value,
+            $this->payment_frequency
+        );
 
         $loanDate = Carbon::parse($this->loan_date ?: Carbon::now()->toDateString());
         
         if ($value === 'fixed_daily') {
-            $this->first_repayment_date = $loanDate->addDay()->toDateString();
+            $this->first_repayment_date = $loanDate->toDateString();
         } elseif ($value === 'fixed_weekly') {
-            $this->first_repayment_date = $loanDate->addWeek()->toDateString();
-        } elseif (in_array($value, ['fixed_15days_70_30', 'fixed_15days_50_50'])) {
-            $this->first_repayment_date = $loanDate->addDays(15)->toDateString();
+            $this->first_repayment_date = $loanDate->addDays(6)->toDateString();
+        } elseif ($value === 'fixed_biweekly') {
+            $this->first_repayment_date = $loanDate->addDays(13)->toDateString();
+        } elseif ($this->isSplitRepaymentMethod($value)) {
+            $this->first_repayment_date = $this->splitFirstRepaymentDate($loanDate->toDateString());
+        } elseif ($value === 'Balloon') {
+            $this->first_repayment_date = $loanDate->addMonthNoOverflow()->toDateString();
         } else {
-            $this->first_repayment_date = $loanDate->addMonth()->toDateString();
+            $this->first_repayment_date = $this->monthlyFirstRepaymentDate($loanDate->toDateString());
         }
     }
 
@@ -119,57 +148,33 @@ class ScheduleCalculator extends Component
             $this->amount = str_replace(',', '', $this->amount);
         }
 
+        $this->payment_frequency = LoanScheduleService::displayPaymentFrequency(
+            $this->repayment_method,
+            $this->payment_frequency
+        );
+
+        if ($this->isSplitRepaymentMethod($this->repayment_method)) {
+            // Keep the standalone Web calculator aligned with the App/API:
+            // the term is in months, the frequency label is Biweekly, and the
+            // two fixed collection days are 11 and 26.
+            $this->payment_frequency = 'Biweekly';
+            $this->first_repayment_date = $this->splitFirstRepaymentDate($this->loan_date);
+        }
+
         $this->validate();
 
-        $loanData = [
+        $scheduleService = app(LoanScheduleService::class);
+        $this->schedule = $scheduleService->generate([
             'amount' => (float) $this->amount,
             'interest_rate' => (float) $this->interest_rate,
             'duration_months' => (int) $this->duration_months,
             'start_date' => $this->loan_date,
             'currency' => $this->currency,
-        ];
-
-        $calculator = new LoanCalculator();
-
-        if ($this->repayment_method === 'Balloon' || $this->repayment_method === 'negotiable') {
-            $scheduleRaw = BalloonPaymentCalculator::generateSchedule(
-                $loanData,
-                'interest_only',
-                null,
-                null,
-                0,
-                'one_time',
-                $this->first_repayment_date ?: null
-            );
-
-            // Map keys from Balloon format to Standard format
-            $this->schedule = array_map(function ($item) {
-                return [
-                    'installment_no' => $item['payment_number'] ?? 0,
-                    'date' => $item['payment_date'] ?? '',
-                    'principal' => $item['principal_amount'] ?? 0,
-                    'interest' => $item['interest_amount'] ?? 0,
-                    'payment' => $item['total_paid'] ?? 0,
-                    'balance' => $item['remaining_balance'] ?? 0,
-                ];
-            }, $scheduleRaw);
-        } else {
-            // Note: Duration type (Days/Years) could be handled here if backend supports it.
-            // For now, calculateLoanWithDates assumes duration is what the method is based on (e.g. months for linear_monthly)
-            $this->schedule = $calculator->calculateLoanWithDates(
-                (float) $loanData['amount'],
-                (float) $loanData['interest_rate'],
-                (int) $loanData['duration_months'],
-                (string) $this->repayment_method,
-                (string) $loanData['start_date'],
-                (string) $this->currency,
-                0,
-                'one_time',
-                null,
-                null,
-                $this->first_repayment_date ?: null
-            );
-        }
+            'repayment_method' => $this->repayment_method,
+            'admin_fee' => 0,
+            'admin_fee_type' => 'one_time',
+            'first_repayment_date' => $this->first_repayment_date ?: null,
+        ]);
 
         $qrImagePath = null;
         if (!empty($this->qr_type) && is_numeric($this->qr_type)) {
@@ -197,20 +202,22 @@ class ScheduleCalculator extends Component
 
         // Save current input to display on schedule sheet
         $durationSuffix = ' ខែ';
-        switch (strtolower($this->payment_frequency)) {
-            case 'daily':
-                $durationSuffix = ' ថ្ងៃ';
-                break;
-            case 'weekly':
-                $durationSuffix = ' សប្តាហ៍';
-                break;
-            case 'bi-weekly':
-            case 'biweekly':
-                $durationSuffix = ' កន្លះខែ';
-                break;
-            case 'monthly':
-                $durationSuffix = ' ខែ';
-                break;
+        if (!$this->isSplitRepaymentMethod($this->repayment_method)) {
+            switch (strtolower($this->payment_frequency)) {
+                case 'daily':
+                    $durationSuffix = ' ថ្ងៃ';
+                    break;
+                case 'weekly':
+                    $durationSuffix = ' សប្តាហ៍';
+                    break;
+                case 'bi-weekly':
+                case 'biweekly':
+                    $durationSuffix = ' កន្លះខែ';
+                    break;
+                case 'term':
+                    $durationSuffix = ' លើក';
+                    break;
+            }
         }
 
         $productName = 'Personal Loan';

@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Loan;
 use App\Services\LoanApprovalService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class LoanApprovalApiController extends Controller
 {
@@ -21,10 +20,7 @@ class LoanApprovalApiController extends Controller
      */
     public function getPendingApprovals(Request $request)
     {
-        $user = Auth::user();
-        if (!$user) {
-            $user = \App\Models\User::first();
-        }
+        $user = $request->user();
 
         $allowedStatuses = [];
 
@@ -37,12 +33,30 @@ class LoanApprovalApiController extends Controller
         if ($user && $user->can('approve_loan')) {
             $allowedStatuses[] = 'pending_approval';
         }
+        if ($user && $user->can('reject_loan')) {
+            $allowedStatuses = array_merge($allowedStatuses, [
+                'pending_check',
+                'pending_verify',
+                'pending_approval',
+            ]);
+        }
+
+        $allowedStatuses = array_values(array_unique($allowedStatuses));
 
         if (empty($allowedStatuses)) {
             return response()->json([]);
         }
 
-        $loans = Loan::with(['borrower', 'coBorrower', 'guarantor', 'officer', 'product'])
+        $loans = Loan::with([
+            'borrower',
+            'coBorrower',
+            'guarantor',
+            'officer',
+            'product',
+            'approvals.user',
+            'collaterals',
+            'payments' => fn ($query) => $query->orderBy('payment_number'),
+        ])
             ->whereIn('status', $allowedStatuses)
             ->orderBy('id', 'desc')
             ->get();
@@ -57,16 +71,12 @@ class LoanApprovalApiController extends Controller
     {
         $request->validate([
             'action' => 'required|in:check,verify,approve,reject,resubmit',
-            'comments' => 'nullable|string',
+            'comments' => 'required_if:action,reject|nullable|string|max:2000',
         ]);
 
         $loan = Loan::findOrFail($id);
         
-        // Use an existing user if auth fails (for local testing without strict auth token)
-        $user = Auth::user();
-        if (!$user) {
-            $user = \App\Models\User::first();
-        }
+        $user = $request->user();
 
         if (!$user) {
             return response()->json(['error' => 'Unauthenticated'], 401);
@@ -99,7 +109,7 @@ class LoanApprovalApiController extends Controller
                     if (!$user->can('reject_loan')) {
                         return response()->json(['error' => 'You do not have permission to reject loans.'], 403);
                     }
-                    $this->approvalService->reject($loan, $user, $comments);
+                    $this->approvalService->reject($loan, $user, (string) $comments);
                     break;
                 case 'resubmit':
                     if (!$user->can('check_loan')) { // same as check for resubmit

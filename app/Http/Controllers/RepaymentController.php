@@ -68,6 +68,7 @@ class RepaymentController extends Controller
                 'loan_officer_id' => (string) $loan->loan_officer_id,
                 'village' => (string) optional($loan->borrower)->village,
                 'commune' => (string) optional($loan->borrower)->commune,
+                'district' => (string) optional($loan->borrower)->district,
                 'province' => (string) optional($loan->borrower)->province,
             ];
         })->filter()->values()->all();
@@ -110,32 +111,37 @@ class RepaymentController extends Controller
 
             $symbol = str_contains((string) $loan->currency, 'KHR') ? '៛' : '$';
 
-            foreach ($overduePayments as $payment) {
-                $dueAmount = ($payment->principal_amount + $payment->interest_amount + ($payment->fee_amount ?? 0)) - $payment->total_paid;
-                $dpd = (int) $today->diffInDays(Carbon::parse($payment->payment_date));
-
-                $overdueRows->push([
-                    'id' => (string) $loan->id,
-                    'name' => $loan->borrower
-                        ? ($loan->borrower->first_name . ' ' . $loan->borrower->last_name)
-                        : 'Unknown (Deleted)',
-                    'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
-                    'payment_date' => Carbon::parse($payment->payment_date)->format('Y-m-d'),
-                    'amount' => $symbol . number_format($dueAmount, 2),
-                    'principal' => (string) number_format($payment->principal_amount, 2),
-                    'loan_amount' => (string) $loan->amount,
-                    'interest' => (string) number_format($payment->interest_amount, 2),
-                    'installment_no' => (string) $payment->payment_number,
-                    'dpd' => (string) $dpd,
-                    'symbol' => $symbol,
-                    'loan_officer_id' => (string) $loan->loan_officer_id,
-                    'village' => (string) optional($loan->borrower)->village,
-                    'commune' => (string) optional($loan->borrower)->commune,
-                    'province' => (string) optional($loan->borrower)->province,
-                ]);
+            $firstOverduePayment = $overduePayments->first();
+            if (! $firstOverduePayment) {
+                continue;
             }
-        }
 
+            $dueAmount = $overduePayments->sum(function (Payment $payment): float {
+                return max(0, (float) $payment->principal_amount + (float) $payment->interest_amount
+                    + (float) ($payment->fee_amount ?? 0) - (float) $payment->total_paid);
+            });
+
+            $overdueRows->push([
+                'id' => (string) $loan->id,
+                'name' => $loan->borrower
+                    ? ($loan->borrower->first_name . ' ' . $loan->borrower->last_name)
+                    : 'Unknown (Deleted)',
+                'code' => $loan->loan_code ?? ('L-' . str_pad((string) $loan->id, 5, '0', STR_PAD_LEFT)),
+                'payment_date' => Carbon::parse($firstOverduePayment->payment_date)->format('Y-m-d'),
+                'amount' => $symbol . number_format($dueAmount, 2),
+                'principal' => (string) number_format($firstOverduePayment->principal_amount, 2),
+                'loan_amount' => (string) $loan->amount,
+                'interest' => (string) number_format($firstOverduePayment->interest_amount, 2),
+                'installment_no' => (string) $firstOverduePayment->payment_number,
+                'dpd' => (string) $loan->currentAging($today),
+                'symbol' => $symbol,
+                'loan_officer_id' => (string) $loan->loan_officer_id,
+                'village' => (string) optional($loan->borrower)->village,
+                'commune' => (string) optional($loan->borrower)->commune,
+                'district' => (string) optional($loan->borrower)->district,
+                'province' => (string) optional($loan->borrower)->province,
+            ]);
+        }
         return $overdueRows->values()->all();
     }
 
@@ -232,6 +238,7 @@ class RepaymentController extends Controller
                 'loan_officer_id' => (string) $loan->loan_officer_id,
                 'village' => (string) optional($loan->borrower)->village,
                 'commune' => (string) optional($loan->borrower)->commune,
+                'district' => (string) optional($loan->borrower)->district,
                 'province' => (string) optional($loan->borrower)->province,
                 'status' => (string) $loan->status,
             ];
@@ -269,7 +276,11 @@ class RepaymentController extends Controller
             'fee_paid_so_far' => round($feePaidSoFar, 2),
             'accumulated_penalty' => round($accumulatedPenalty, 2),
             'late_since_date' => $loan ? $loan->late_since_date : null,
+            'penalty_late_since_date' => $loan ? $loan->penalty_late_since_date : null,
             'locked_aging' => $loan ? (int) $loan->locked_aging : 0,
+            'penalty_due' => $loan ? $loan->currentPenaltyDue() : 0.0,
+            'penalty_rate' => $loan ? $loan->resolvePenaltyRate() : 0.0,
+            'current_period_penalty_credits' => $loan ? $loan->currentPeriodPenaltyCredits() : 0.0,
         ]);
     }
 

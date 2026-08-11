@@ -56,6 +56,18 @@ class LoanApproval extends Model
     }
 
     /**
+     * Loan statuses that must not be treated as disbursed portfolio records.
+     */
+    public static function nonReportableStatuses(): array
+    {
+        return [
+            'pending',
+            ...self::pendingStatuses(),
+            self::STATUS_REJECTED,
+        ];
+    }
+
+    /**
      * Human-readable labels for each status.
      */
     public static function statusLabels(): array

@@ -26,11 +26,19 @@ class WriteOffReportController extends Controller
         $toDateTime = $toDate->toDateTimeString();
 
         $query = Loan::with([
-            'borrower',
-            'officer',
-            'disburseOfficer',
+            'borrower' => function ($query) {
+                $query->withTrashed();
+            },
+            'officer' => function ($query) {
+                $query->withTrashed();
+            },
+            'disburseOfficer' => function ($query) {
+                $query->withTrashed();
+            },
             'collaterals',
-            'product',
+            'product' => function ($query) {
+                $query->withTrashed();
+            },
             'transactions' => function ($query) use ($toDateTime) {
                 $query->where('transaction_date', '<=', $toDateTime)
                     ->orderBy('transaction_date', 'asc');
@@ -79,6 +87,10 @@ class WriteOffReportController extends Controller
 
                 $currentWriteOffBalance = max(0, $writeOffAmount - $recoveryAmount);
                 $borrowerName = trim((string) (($loan->borrower->last_name ?? '') . ' ' . ($loan->borrower->first_name ?? '')));
+                $paymentFrequency = \App\Support\FormatHelper::effectivePaymentFrequency(
+                    $loan->payment_frequency,
+                    $loan->repayment_method
+                );
 
                 $reportData[] = [
                     'written_off_date' => $loan->written_off_at,
@@ -94,9 +106,9 @@ class WriteOffReportController extends Controller
                     'amount' => (float) ($loan->amount ?? 0),
                     'currency' => $loan->currency,
                     'rate' => (float) ($loan->interest_rate ?? 0),
-                    'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $loan->payment_frequency),
+                    'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $paymentFrequency),
                     'term' => (int) ($loan->duration_months ?? 0),
-                    'tenor' => $this->tenorLabel($loan->payment_frequency),
+                    'tenor' => $this->tenorLabel($paymentFrequency),
                     'payment_method' => \App\Support\FormatHelper::formatPaymentMethod((string) ($loan->repayment_method ?? '')),
                     'loan_cycle' => (int) ($loan->loan_cycle ?? 1),
                     'refinance_fee' => (float) ($loan->refinance_fee ?? 0),
@@ -120,7 +132,54 @@ class WriteOffReportController extends Controller
             }
         }
 
-        return response()->json($reportData);
+        $paginate = filter_var($request->query('paginate', 'true'), FILTER_VALIDATE_BOOLEAN);
+        $page = (int) $request->query('page', 1);
+        $limit = (int) $request->query('limit', 50);
+
+        if (!$paginate) {
+            return response()->json([
+                'success' => true,
+                'data' => $reportData,
+            ]);
+        }
+
+        $grandTotals = [];
+        foreach ($reportData as $item) {
+            $curr = strtoupper(explode(' ', (string) ($item['currency'] ?? 'USD'))[0]);
+            if (!isset($grandTotals[$curr])) {
+                $grandTotals[$curr] = [
+                    'amount' => 0,
+                    'amount_write_off' => 0,
+                    'write_off_balance' => 0,
+                    'principal_collected' => 0,
+                    'interest_collected' => 0,
+                    'recovery_amount' => 0,
+                ];
+            }
+            $grandTotals[$curr]['amount'] += (float) ($item['amount'] ?? 0);
+            $grandTotals[$curr]['amount_write_off'] += (float) ($item['amount_write_off'] ?? 0);
+            $grandTotals[$curr]['write_off_balance'] += (float) ($item['write_off_balance'] ?? 0);
+            $grandTotals[$curr]['principal_collected'] += (float) ($item['principal_collected'] ?? 0);
+            $grandTotals[$curr]['interest_collected'] += (float) ($item['interest_collected'] ?? 0);
+            $grandTotals[$curr]['recovery_amount'] += (float) ($item['recovery_amount'] ?? 0);
+        }
+
+        $totalRecords = count($reportData);
+        $lastPage = (int) ceil($totalRecords / $limit);
+        $offset = ($page - 1) * $limit;
+
+        $paginatedData = array_slice($reportData, $offset, $limit);
+
+        return response()->json([
+            'success' => true,
+            'data' => $paginatedData,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage > 0 ? $lastPage : 1,
+                'total' => $totalRecords,
+                'grand_totals' => $grandTotals
+            ]
+        ]);
     }
 
     private function principalComponent(mixed $transaction): float
@@ -147,8 +206,9 @@ class WriteOffReportController extends Controller
 
     public function exportExcel(Request $request)
     {
+        $request->merge(['paginate' => 'false']);
         $response = $this->index($request);
-        $data = json_decode($response->getContent(), true);
+        $data = json_decode($response->getContent(), true)['data'] ?? [];
 
         $fromDateInput = $request->query('from_date');
         $toDateInput = $request->query('to_date');

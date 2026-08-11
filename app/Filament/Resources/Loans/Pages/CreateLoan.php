@@ -5,9 +5,7 @@ namespace App\Filament\Resources\Loans\Pages;
 use App\Filament\Resources\Loans\LoanResource;
 use App\Models\Borrower;
 use App\Models\Loan;
-use App\Services\BalloonPaymentCalculator;
-
-use App\Services\LoanCalculator;
+use App\Services\LoanScheduleService;
 use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
@@ -36,6 +34,10 @@ class CreateLoan extends CreateRecord
 
         $data['admin_fee'] = (float) ($data['admin_fee'] ?? 0);
         $data['admin_fee_type'] = $data['admin_fee_type'] ?? 'one_time';
+        $data['payment_frequency'] = LoanScheduleService::canonicalPaymentFrequency(
+            (string) ($data['repayment_method'] ?? ''),
+            $data['payment_frequency'] ?? null
+        );
 
         if (isset($data['amount'], $data['interest_rate']) && $data['amount'] !== '' && $data['interest_rate'] !== '') {
             $data['monthly_interest'] = round(((float) $data['amount'] * (float) $data['interest_rate']) / 100, 2);
@@ -121,99 +123,48 @@ class CreateLoan extends CreateRecord
 
     private function generateSchedule(Loan $loan): void
     {
-        if ($loan->repayment_method === 'Balloon') {
-            $loanData = [
-                'amount' => (float) $loan->amount,
-                'interest_rate' => (float) $loan->interest_rate,
-                'duration_months' => (int) $loan->duration_months,
-                'start_date' => (string) $loan->start_date,
-                'currency' => (string) $loan->currency,
-            ];
+        $schedule = app(LoanScheduleService::class)->generate([
+            'amount' => (float) $loan->amount,
+            'interest_rate' => (float) $loan->interest_rate,
+            'duration_months' => (int) $loan->duration_months,
+            'repayment_method' => (string) $loan->repayment_method,
+            'start_date' => (string) $loan->start_date,
+            'currency' => (string) ($loan->currency ?? 'USD'),
+            'admin_fee' => (float) ($loan->admin_fee ?? 0),
+            'admin_fee_type' => (string) ($loan->admin_fee_type ?: 'one_time'),
+            'pay_day_1' => isset($this->data['pay_day_1']) ? (int) $this->data['pay_day_1'] : null,
+            'pay_day_2' => isset($this->data['pay_day_2']) ? (int) $this->data['pay_day_2'] : null,
+        ]);
 
-            $schedule = BalloonPaymentCalculator::generateSchedule(
-                $loanData,
-                'interest_only',
-                null,
-                isset($this->data['pay_day_1']) ? (int) $this->data['pay_day_1'] : null,
-                (float) ($loan->admin_fee ?? 0),
-                (string) ($loan->admin_fee_type ?: 'one_time')
-            );
+        if (empty($schedule)) {
+            return;
+        }
 
-            if (empty($schedule)) {
-                return;
+        $loan->update([
+            'monthly_payment' => (float) ($schedule[0]['payment'] ?? 0),
+        ]);
+
+        foreach ($schedule as $item) {
+            $paymentDate = $this->normalizeScheduleDate((string) ($item['date'] ?? ''));
+            if ($paymentDate === null) {
+                continue;
             }
 
-            $loan->update([
-                'monthly_payment' => (float) ($schedule[0]['total_paid'] ?? 0),
+            $principalAmt = (float) ($item['principal'] ?? 0);
+            $interestAmt = (float) ($item['interest'] ?? 0);
+            $feeAmt = (float) ($item['fee'] ?? 0);
+
+            $loan->payments()->create([
+                'payment_number' => (int) ($item['period'] ?? 0),
+                'principal_amount' => $principalAmt,
+                'interest_amount' => $interestAmt,
+                'fee_amount' => $feeAmt,
+                'outstanding_balance' => isset($item['balance']) ? (float) $item['balance'] : (isset($item['remaining_balance']) ? (float) $item['remaining_balance'] : (isset($item['outstanding_balance']) ? (float) $item['outstanding_balance'] : null)),
+                'penalty_amount' => 0,
+                'total_paid' => 0,
+                'payment_date' => $paymentDate,
+                'payment_method' => 'Cash',
             ]);
-
-            foreach ($schedule as $payment) {
-                $paymentDate = $this->normalizeScheduleDate((string) ($payment['payment_date'] ?? ''));
-                if ($paymentDate === null) {
-                    continue;
-                }
-
-                $principalAmt = (float) ($payment['principal_amount'] ?? 0);
-                $interestAmt = (float) ($payment['interest_amount'] ?? 0);
-                $feeAmt = (float) ($payment['fee_amount'] ?? 0);
-
-                $loan->payments()->create([
-                    'payment_number' => (int) ($payment['payment_number'] ?? 0),
-                    'principal_amount' => $principalAmt,
-                    'interest_amount' => $interestAmt,
-                    'fee_amount' => $feeAmt,
-                    'outstanding_balance' => isset($payment['balance']) ? (float) $payment['balance'] : (isset($payment['remaining_balance']) ? (float) $payment['remaining_balance'] : (isset($payment['outstanding_balance']) ? (float) $payment['outstanding_balance'] : null)),
-                    'penalty_amount' => (float) ($payment['penalty_amount'] ?? 0),
-                    'total_paid' => 0,
-                    'payment_date' => $paymentDate,
-                    'payment_method' => 'Cash',
-                ]);
-            }
-        } else {
-            /** @var LoanCalculator $calculator */
-            $calculator = app(LoanCalculator::class);
-
-            $schedule = $calculator->calculateLoanWithDates(
-                (float) $loan->amount,
-                (float) $loan->interest_rate,
-                (int) $loan->duration_months,
-                (string) $loan->repayment_method,
-                (string) $loan->start_date,
-                (string) ($loan->currency ?? 'USD'),
-                (float) ($loan->admin_fee ?? 0),
-                (string) ($loan->admin_fee_type ?: 'one_time')
-            );
-
-            if (empty($schedule)) {
-                return;
-            }
-
-            $loan->update([
-                'monthly_payment' => (float) ($schedule[0]['payment'] ?? 0),
-            ]);
-
-            foreach ($schedule as $item) {
-                $paymentDate = $this->normalizeScheduleDate((string) ($item['date'] ?? ''));
-                if ($paymentDate === null) {
-                    continue;
-                }
-
-                $principalAmt = (float) ($item['principal'] ?? 0);
-                $interestAmt = (float) ($item['interest'] ?? 0);
-                $feeAmt = (float) ($item['fee'] ?? 0);
-
-                $loan->payments()->create([
-                    'payment_number' => (int) ($item['period'] ?? 0),
-                    'principal_amount' => $principalAmt,
-                    'interest_amount' => $interestAmt,
-                    'fee_amount' => $feeAmt,
-                    'outstanding_balance' => isset($item['balance']) ? (float) $item['balance'] : (isset($item['remaining_balance']) ? (float) $item['remaining_balance'] : (isset($item['outstanding_balance']) ? (float) $item['outstanding_balance'] : null)),
-                    'penalty_amount' => 0,
-                    'total_paid' => 0,
-                    'payment_date' => $paymentDate,
-                    'payment_method' => 'Cash',
-                ]);
-            }
         }
 
         $lastPaymentDate = $loan->payments()->max('payment_date');

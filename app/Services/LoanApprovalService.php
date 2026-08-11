@@ -14,7 +14,8 @@ class LoanApprovalService
      */
     public function submit(Loan $loan, User $user, ?string $comments = null): Loan
     {
-        return DB::transaction(function () use ($loan, $user, $comments) {
+        return DB::transaction(function () use ($loan, $user, $comments): Loan {
+            $loan = $this->lockLoan($loan);
             $fromStatus = $loan->status;
 
             $loan->update([
@@ -40,11 +41,13 @@ class LoanApprovalService
      */
     public function check(Loan $loan, User $user, ?string $comments = null): Loan
     {
-        if (!$loan->canBeChecked()) {
-            throw new \InvalidArgumentException("Loan #{$loan->id} cannot be checked. Current status: {$loan->status}");
-        }
+        return DB::transaction(function () use ($loan, $user, $comments): Loan {
+            $loan = $this->lockLoan($loan);
+            if (!$loan->canBeChecked()) {
+                throw new \InvalidArgumentException("Loan #{$loan->id} cannot be checked. Current status: {$loan->status}");
+            }
+            $this->ensureDifferentActor($loan, $user, ['submitted_by'], 'check');
 
-        return DB::transaction(function () use ($loan, $user, $comments) {
             $loan->update([
                 'status' => LoanApproval::STATUS_PENDING_VERIFY,
                 'checked_by' => $user->id,
@@ -68,11 +71,13 @@ class LoanApprovalService
      */
     public function verify(Loan $loan, User $user, ?string $comments = null): Loan
     {
-        if (!$loan->canBeVerified()) {
-            throw new \InvalidArgumentException("Loan #{$loan->id} cannot be verified. Current status: {$loan->status}");
-        }
+        return DB::transaction(function () use ($loan, $user, $comments): Loan {
+            $loan = $this->lockLoan($loan);
+            if (!$loan->canBeVerified()) {
+                throw new \InvalidArgumentException("Loan #{$loan->id} cannot be verified. Current status: {$loan->status}");
+            }
+            $this->ensureDifferentActor($loan, $user, ['submitted_by', 'checked_by'], 'verify');
 
-        return DB::transaction(function () use ($loan, $user, $comments) {
             $loan->update([
                 'status' => LoanApproval::STATUS_PENDING_APPROVAL,
                 'verified_by' => $user->id,
@@ -96,11 +101,23 @@ class LoanApprovalService
      */
     public function approve(Loan $loan, User $user, ?string $comments = null): Loan
     {
-        if (!$loan->canBeApproved()) {
-            throw new \InvalidArgumentException("Loan #{$loan->id} cannot be approved. Current status: {$loan->status}");
-        }
+        return DB::transaction(function () use ($loan, $user, $comments): Loan {
+            $loan = $this->lockLoan($loan);
+            if (!$loan->canBeApproved()) {
+                throw new \InvalidArgumentException("Loan #{$loan->id} cannot be approved. Current status: {$loan->status}");
+            }
+            if (!$loan->payments()->exists()) {
+                throw new \InvalidArgumentException(
+                    "Loan #{$loan->id} cannot be approved without a saved repayment schedule."
+                );
+            }
+            $this->ensureDifferentActor(
+                $loan,
+                $user,
+                ['submitted_by', 'checked_by', 'verified_by'],
+                'approve'
+            );
 
-        return DB::transaction(function () use ($loan, $user, $comments) {
             $loan->update([
                 'status' => LoanApproval::STATUS_APPROVED, // 'active'
                 'approved_by' => $user->id,
@@ -122,13 +139,14 @@ class LoanApprovalService
     /**
      * Reject a loan (can happen at any pending stage).
      */
-    public function reject(Loan $loan, User $user, string $reason, ?string $comments = null): Loan
+    public function reject(Loan $loan, User $user, string $reason): Loan
     {
-        if (!$loan->canBeRejected()) {
-            throw new \InvalidArgumentException("Loan #{$loan->id} cannot be rejected. Current status: {$loan->status}");
-        }
+        return DB::transaction(function () use ($loan, $user, $reason): Loan {
+            $loan = $this->lockLoan($loan);
+            if (!$loan->canBeRejected()) {
+                throw new \InvalidArgumentException("Loan #{$loan->id} cannot be rejected. Current status: {$loan->status}");
+            }
 
-        return DB::transaction(function () use ($loan, $user, $reason, $comments) {
             $fromStatus = $loan->status;
 
             $loan->update([
@@ -141,7 +159,7 @@ class LoanApprovalService
                 'action' => LoanApproval::ACTION_REJECTED,
                 'from_status' => $fromStatus,
                 'to_status' => LoanApproval::STATUS_REJECTED,
-                'comments' => $comments ?? $reason,
+                'comments' => $reason,
             ]);
 
             return $loan->fresh();
@@ -153,14 +171,16 @@ class LoanApprovalService
      */
     public function resubmit(Loan $loan, User $user, ?string $comments = null): Loan
     {
-        if (!$loan->canBeResubmitted()) {
-            throw new \InvalidArgumentException("Loan #{$loan->id} cannot be resubmitted. Current status: {$loan->status}");
-        }
+        return DB::transaction(function () use ($loan, $user, $comments): Loan {
+            $loan = $this->lockLoan($loan);
+            if (!$loan->canBeResubmitted()) {
+                throw new \InvalidArgumentException("Loan #{$loan->id} cannot be resubmitted. Current status: {$loan->status}");
+            }
 
-        return DB::transaction(function () use ($loan, $user, $comments) {
             $loan->update([
                 'status' => LoanApproval::STATUS_PENDING_CHECK,
                 'rejection_reason' => null,
+                'submitted_by' => $user->id,
                 'checked_by' => null,
                 'checked_at' => null,
                 'verified_by' => null,
@@ -179,5 +199,30 @@ class LoanApprovalService
 
             return $loan->fresh();
         });
+    }
+
+    private function lockLoan(Loan $loan): Loan
+    {
+        return Loan::query()->whereKey($loan->getKey())->lockForUpdate()->firstOrFail();
+    }
+
+    /**
+     * Enforce maker/checker separation for the sequential approval stages.
+     *
+     * @param  array<int, string>  $actorColumns
+     */
+    private function ensureDifferentActor(
+        Loan $loan,
+        User $user,
+        array $actorColumns,
+        string $action
+    ): void {
+        foreach ($actorColumns as $column) {
+            if ($loan->{$column} !== null && (int) $loan->{$column} === (int) $user->id) {
+                throw new \InvalidArgumentException(
+                    "The same user cannot {$action} this loan after participating in an earlier approval stage."
+                );
+            }
+        }
     }
 }

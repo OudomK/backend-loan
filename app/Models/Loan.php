@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * @property int $id
@@ -36,7 +36,9 @@ use Spatie\Activitylog\LogOptions;
  */
 class Loan extends Model
 {
-    use SoftDeletes, LogsActivity;
+    use LogsActivity, SoftDeletes;
+
+    protected $appends = ['print_schedule'];
 
     public function getActivitylogOptions(): LogOptions
     {
@@ -86,6 +88,7 @@ class Loan extends Model
         'locked_aging',
         'accumulated_penalty',
         'late_since_date',
+        'penalty_late_since_date',
         'monthly_interest',
         'reschedule_fee',
         'rescheduled_at',
@@ -216,20 +219,37 @@ class Loan extends Model
 
     public function getBasePrincipalForOS(): float
     {
-        $firstPayment = $this->payments->first();
-        if ($firstPayment && $firstPayment->outstanding_balance !== null && (float)$firstPayment->outstanding_balance > 0) {
-            $os = (float)$firstPayment->outstanding_balance;
-            $princ = (float)$firstPayment->principal_amount;
+        // The persisted contract principal is the OS source of truth. Automatic
+        // schedule recalculation must never inflate the customer's debt. When an
+        // authorized user edits schedule principal, LoanController synchronizes
+        // this amount in the same transaction.
+        return max(0, (float) $this->amount);
+    }
 
-            // If the outstanding_balance exactly matches the loan amount, it was saved as the starting balance.
-            if (abs($os - (float)$this->amount) < 0.01) {
-                return $os;
-            }
+    /**
+     * Return the upfront administrative fee as an amount.
+     *
+     * admin_fee is stored as a percentage. Monthly fees belong to individual
+     * installments and therefore are not an upfront processing fee.
+     */
+    public function processingFeeAmount(): float
+    {
+        $feePercent = max(0, (float) ($this->admin_fee ?? 0));
+        $feeType = trim((string) ($this->admin_fee_type ?? '')) ?: 'one_time';
 
-            return $os + $princ;
+        if ($feePercent <= 0 || $feeType === 'monthly') {
+            return 0.0;
         }
-        $totalSchedulePrincipal = (float) $this->payments->sum('principal_amount');
-        return $totalSchedulePrincipal > 0 ? $totalSchedulePrincipal : (float)$this->amount;
+
+        $baseAmount = $feeType === 'capitalized_upfront'
+            ? (float) ($this->disbursed_amount ?? 0)
+            : (float) ($this->amount ?? 0);
+
+        if ($baseAmount <= 0) {
+            $baseAmount = (float) ($this->amount ?? 0);
+        }
+
+        return round($baseAmount * $feePercent / 100, 2);
     }
 
     public function updateAging(): void
@@ -240,70 +260,166 @@ class Loan extends Model
             ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'
             : 'total_paid < (principal_amount + interest_amount - 0.01)';
 
-        // Check if there's any unpaid past due installment
-        $hasUnpaidRows = \App\Models\Payment::where('loan_id', $this->id)
+        // Row-level aging follows the oldest installment that is still overdue.
+        // Loan-level aging follows the continuous penalty period and must not
+        // move backwards when an older overdue installment is settled.
+        $earliestArrear = \App\Models\Payment::where('loan_id', $this->id)
             ->where('payment_date', '<', $today->toDateString())
             ->whereRaw($arrearExpression)
-            ->exists();
+            ->orderBy('payment_date', 'asc')
+            ->first();
 
-        // Calculate the end date for aging calculation
-        $endDate = $today;
-        if (!$hasUnpaidRows) {
-            $lastTxDate = \App\Models\RepaymentTransaction::where('loan_id', $this->id)->max('transaction_date');
-            if ($lastTxDate) {
-                $parsed = \Carbon\Carbon::parse($lastTxDate)->startOfDay();
-                if ($parsed->lt($today)) {
-                    $endDate = $parsed;
-                }
-            }
-        }
+        if (! $earliestArrear) {
+            $penaltyBalance = $this->currentPenaltyDue($today);
+            $continuousAging = $this->currentAging($today);
 
-        // Calculate current late days based on the end date
-        $currentLateDays = 0;
-        if ($this->late_since_date) {
-            $earliestDate = \Carbon\Carbon::parse($this->late_since_date)->startOfDay();
-            if ($endDate->gt($earliestDate)) {
-                $currentLateDays = (int) abs($endDate->diffInDays($earliestDate, false));
-            }
-        }
-
-        $totalAging = $this->locked_aging + $currentLateDays;
-
-        if (!$hasUnpaidRows) {
-            // Installments paid. Lock the aging.
-            if ($this->late_since_date) {
+            if ($penaltyBalance > 0.01) {
                 $this->update([
-                    'locked_aging' => $totalAging,
                     'late_since_date' => null,
-                    'aging' => $totalAging
+                    'penalty_late_since_date' => null,
+                    'aging' => $continuousAging,
+                    'locked_aging' => $continuousAging,
+                    'accumulated_penalty' => $penaltyBalance,
                 ]);
-            } else {
-                $this->update([
-                    'aging' => $this->locked_aging
-                ]);
-            }
-        } else {
-            // Still late (either owes installments OR owes penalty)
-            if (!$this->late_since_date) {
-                // Determine when it first became late
-                $earliestArrear = \App\Models\Payment::where('loan_id', $this->id)
-                    ->where('payment_date', '<', $today->toDateString())
-                    ->whereRaw($arrearExpression)
-                    ->orderBy('payment_date', 'asc')
-                    ->first();
-                if ($earliestArrear) {
-                    $this->update(['late_since_date' => $earliestArrear->payment_date]);
 
-                    // Recalculate currentLateDays since late_since_date just changed
-                    $earliestDate = \Carbon\Carbon::parse($earliestArrear->payment_date)->startOfDay();
-                    if ($endDate->gt($earliestDate)) {
-                        $currentLateDays = (int) abs($endDate->diffInDays($earliestDate, false));
-                    }
-                }
+                return;
             }
 
-            $this->update(['aging' => $this->locked_aging + $currentLateDays]);
+            $this->update([
+                'late_since_date' => null,
+                'penalty_late_since_date' => null,
+                'aging' => 0,
+                'locked_aging' => 0,
+                'accumulated_penalty' => 0,
+            ]);
+
+            return;
         }
+
+        $earliestDate = \Carbon\Carbon::parse($earliestArrear->payment_date)->startOfDay();
+        $penaltyStartDate = $this->penalty_late_since_date
+            ? \Carbon\Carbon::parse($this->penalty_late_since_date)->startOfDay()
+            : $earliestDate;
+        $continuousLateDays = $today->gt($penaltyStartDate)
+            ? (int) abs($today->diffInDays($penaltyStartDate))
+            : 0;
+        $loanAging = max($continuousLateDays, (int) ($this->locked_aging ?? 0));
+
+        $updates = [
+            'late_since_date' => $earliestDate->toDateString(),
+            'aging' => $loanAging,
+            'locked_aging' => (float) ($this->accumulated_penalty ?? 0) > 0.01
+                ? (int) ($this->locked_aging ?? 0)
+                : 0,
+        ];
+
+        // Penalty uses its own anchor so moving schedule aging to a newer row
+        // cannot erase or double-count an already active penalty period.
+        if (! $this->penalty_late_since_date) {
+            $updates['penalty_late_since_date'] = $earliestDate->toDateString();
+        }
+
+        $this->update($updates);
+    }
+
+    /**
+     * Return the loan-level aging used by live screens.
+     */
+    public function currentAging(?\Carbon\Carbon $referenceDate = null): int
+    {
+        $referenceDate = ($referenceDate ?? \Carbon\Carbon::today())->copy()->startOfDay();
+
+        $lockedAging = max(0, (int) ($this->locked_aging ?? 0));
+        $agingStartDate = $this->penalty_late_since_date ?? $this->late_since_date;
+
+        if (! $agingStartDate) {
+            return $lockedAging;
+        }
+
+        $lateSinceDate = \Carbon\Carbon::parse($agingStartDate)->startOfDay();
+        $currentLateDays = $referenceDate->gt($lateSinceDate)
+            ? (int) abs($referenceDate->diffInDays($lateSinceDate))
+            : 0;
+
+        return max($currentLateDays, $lockedAging);
+    }
+
+    /**
+     * Return the daily penalty locked onto this loan when it was created.
+     */
+    public function resolvePenaltyRate(): float
+    {
+        if ($this->penalty_rate !== null) {
+            return (float) $this->penalty_rate;
+        }
+
+        $settingKey = $this->currency === 'KHR'
+            ? 'default_penalty_khr'
+            : 'default_penalty_usd';
+        $defaultRate = $this->currency === 'KHR' ? 10000.0 : 2.5;
+
+        return (float) (Setting::where('key', $settingKey)->value('value') ?? $defaultRate);
+    }
+
+    /**
+     * Resolve aging at a report reference date without using row-level values on live screens.
+     */
+    public function agingAt(\Carbon\Carbon $referenceDate, ?string $arrearDate = null, bool $hasArrears = false): int
+    {
+        $referenceDate = $referenceDate->copy()->startOfDay();
+
+        if (! $arrearDate) {
+            return 0;
+        }
+
+        $arrearDate = \Carbon\Carbon::parse($arrearDate)->startOfDay();
+        $aging = $referenceDate->gt($arrearDate)
+            ? (int) abs($referenceDate->diffInDays($arrearDate))
+            : 0;
+
+        return $aging;
+    }
+
+    /**
+     * Return penalty payments and waivers made during the active late period.
+     */
+    public function currentPeriodPenaltyCredits(?\Carbon\Carbon $referenceDate = null): float
+    {
+        $penaltySinceDate = $this->penalty_late_since_date ?? $this->late_since_date;
+        if (! $penaltySinceDate) {
+            return 0.0;
+        }
+
+        $referenceDate = ($referenceDate ?? \Carbon\Carbon::today())->copy()->startOfDay();
+
+        return (float) $this->transactions()
+            ->whereDate('transaction_date', '>=', $penaltySinceDate)
+            ->whereDate('transaction_date', '<=', $referenceDate->toDateString())
+            ->sum(\Illuminate\Support\Facades\DB::raw('penalty_paid + waived_amount'));
+    }
+
+    /**
+     * Calculate the outstanding penalty for this loan at a given date.
+     *
+     * accumulated_penalty is the frozen balance from completed late periods.
+     */
+    public function currentPenaltyDue(?\Carbon\Carbon $referenceDate = null): float
+    {
+        $referenceDate = ($referenceDate ?? \Carbon\Carbon::today())->copy()->startOfDay();
+        $frozenPenalty = max(0, (float) ($this->accumulated_penalty ?? 0));
+        $penaltySinceDate = $this->penalty_late_since_date ?? $this->late_since_date;
+
+        if (! $penaltySinceDate) {
+            return round($frozenPenalty, 2);
+        }
+
+        $lateSinceDate = \Carbon\Carbon::parse($penaltySinceDate)->startOfDay();
+        $currentLateDays = $referenceDate->gt($lateSinceDate)
+            ? (int) abs($referenceDate->diffInDays($lateSinceDate))
+            : 0;
+        $currentPenalty = $currentLateDays * $this->resolvePenaltyRate();
+
+        return round(max(0, $frozenPenalty + $currentPenalty - $this->currentPeriodPenaltyCredits($referenceDate)), 2);
     }
 
     /**
@@ -327,7 +443,7 @@ class Loan extends Model
             + (float) $this->transactions()->sum('prepayment_paid')
             + (float) $this->transactions()->sum('paid_off_amount')
             - (float) $this->transactions()->sum('withdrawn_prepayment');
-        $outstandingPrincipal = round($this->amount - $totalPrincipalPaid, 0);
+        $outstandingPrincipal = round((float) $this->amount - $totalPrincipalPaid, 2);
 
         if ($outstandingPrincipal <= 0) {
             $deletedPayments = Payment::where('loan_id', $this->id)
@@ -361,13 +477,32 @@ class Loan extends Model
             ->orderBy('payment_number', 'asc')
             ->get();
 
+        $retainedPayments = Payment::where('loan_id', $this->id)
+            ->where('payment_number', '<=', $lastPaidNumber)
+            ->get();
+
+        $unpaidPrincipalInRetainedRows = $retainedPayments->sum(function (Payment $payment): float {
+            $paidToPrincipalAndInterest = max(
+                0,
+                (float) $payment->total_paid - (float) ($payment->fee_paid ?? 0)
+            );
+            $interestPaid = min((float) $payment->interest_amount, $paidToPrincipalAndInterest);
+            $principalPaid = min(
+                (float) $payment->principal_amount,
+                max(0, $paidToPrincipalAndInterest - $interestPaid)
+            );
+
+            return max(0, (float) $payment->principal_amount - $principalPaid);
+        });
+
         if ($futurePayments->isEmpty()) {
             $this->update(['monthly_payment' => 0]);
+
             return;
         }
 
         // 3. Calculate Ratio and update future installments in place
-        // This preserves complex schedules (like 15-day, custom skips, and balloon setups) 
+        // This preserves complex schedules (like 15-day, custom skips, and balloon setups)
         // by scaling the remaining principal and interest instead of naive recreation.
         $scheduledRemainingPrincipal = $futurePayments->sum('principal_amount');
 
@@ -391,31 +526,38 @@ class Loan extends Model
             return;
         }
 
-        $ratio = $outstandingPrincipal / $scheduledRemainingPrincipal;
-        $currentBalance = $outstandingPrincipal;
+        // Partially paid retained rows may still contain unpaid principal. Do not
+        // allocate that amount again into future rows, otherwise every partial or
+        // prepayment can progressively inflate both principal and interest.
+        $futurePrincipalTarget = max(
+            0,
+            round($outstandingPrincipal - $unpaidPrincipalInRetainedRows, 2)
+        );
+        $ratio = $futurePrincipalTarget / $scheduledRemainingPrincipal;
+        $currentBalance = $futurePrincipalTarget;
         $newMonthlyPayment = 0;
 
         foreach ($futurePayments as $index => $payment) {
             /** @var \App\Models\Payment $payment */
             $isLast = ($index === $futurePayments->count() - 1);
 
-            $newInterest = round($payment->interest_amount * $ratio, 0);
+            $newInterest = round($payment->interest_amount * $ratio, 2);
 
             if ($isLast) {
                 // Absorb any rounding differences in the final payment
                 $newPrincipal = $currentBalance;
             } else {
-                $newPrincipal = round($payment->principal_amount * $ratio, 0);
+                $newPrincipal = round($payment->principal_amount * $ratio, 2);
             }
 
             if ($index === 0) {
                 // Approximate new monthly payment based on the first upcoming adjusted installment
-                $newMonthlyPayment = round($newPrincipal + $newInterest + $payment->fee_amount, 0);
+                $newMonthlyPayment = round($newPrincipal + $newInterest + $payment->fee_amount, 2);
             }
 
             $payment->principal_amount = $newPrincipal;
             $payment->interest_amount = $newInterest;
-            $payment->total_due = round($newPrincipal + $newInterest + ($payment->fee_amount ?? 0), 0);
+            $payment->total_due = round($newPrincipal + $newInterest + ($payment->fee_amount ?? 0), 2);
             $payment->save();
 
             $currentBalance -= $newPrincipal;
@@ -429,6 +571,8 @@ class Loan extends Model
                 'orphaned_payments_reset' => $orphanedPaymentsReset,
                 'updated_installments' => $futurePayments->count(),
                 'outstanding_principal' => $outstandingPrincipal,
+                'unpaid_principal_in_retained_rows' => round($unpaidPrincipalInRetainedRows, 2),
+                'future_principal_target' => round($futurePrincipalTarget, 2),
                 'monthly_payment' => $newMonthlyPayment,
             ])
             ->log('Recalculated future loan schedule');
@@ -437,5 +581,20 @@ class Loan extends Model
     public function modifications()
     {
         return $this->hasMany(LoanModification::class);
+    }
+
+    public function getPrintScheduleAttribute()
+    {
+        if (! $this->relationLoaded('payments') || $this->payments->isEmpty()) {
+            return [];
+        }
+
+        $paymentsArray = $this->payments->toArray();
+
+        return \App\Services\LoanCalculator::formatScheduleForPrint(
+            $paymentsArray,
+            $this->repayment_method ?? '',
+            (float) ($this->amount ?? 0)
+        );
     }
 }

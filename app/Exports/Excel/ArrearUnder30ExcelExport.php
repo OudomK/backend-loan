@@ -5,31 +5,31 @@ namespace App\Exports\Excel;
 use App\Models\Setting;
 use Illuminate\Http\Request;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ArrearUnder30ExcelExport
 {
     public function download(array $data, Request $request, ?string $reportDate, ?string $currency, ?string $officerName)
     {
-        $spreadsheet = new Spreadsheet();
+        $spreadsheet = new Spreadsheet;
         $sheet = $spreadsheet->getActiveSheet();
-        
+
         // Hide default gridlines
         $sheet->setShowGridlines(false);
 
         $excelFont = Setting::where('key', 'excel_export_font')->value('value') ?? 'Khmer OS Siemreap';
         $spreadsheet->getDefaultStyle()->getFont()->setName($excelFont)->setSize(8);
 
-        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? "ប្រាក់ រហ័ស ហ្វាយនែន ម.ក";
-        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? "Quick Fund Finance Plc.";
-        $reportTitle = "Loan In Arrear Period (Under 30 Days)";
+        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? 'ប្រាក់ រហ័ស ហ្វាយនែន ម.ក';
+        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? 'Quick Fund Finance Plc.';
+        $reportTitle = 'Loan In Arrear Period (Under 30 Days)';
 
         $normalizedCurrency = strtoupper($currency);
-        
+
         $usdData = array_filter($data, function ($item) {
             return str_contains(strtoupper($item['currency'] ?? ''), 'USD');
         });
@@ -42,7 +42,7 @@ class ArrearUnder30ExcelExport
             'font' => ['bold' => true],
             'fill' => [
                 'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['rgb' => 'D3D3D3']
+                'startColor' => ['rgb' => 'D3D3D3'],
             ],
             'borders' => [
                 'allBorders' => [
@@ -51,7 +51,7 @@ class ArrearUnder30ExcelExport
             ],
             'alignment' => [
                 'vertical' => Alignment::VERTICAL_CENTER,
-            ]
+            ],
         ];
 
         $dataStyle = [
@@ -62,11 +62,11 @@ class ArrearUnder30ExcelExport
             ],
             'alignment' => [
                 'vertical' => Alignment::VERTICAL_CENTER,
-            ]
+            ],
         ];
 
         // 1. Title area & Logo
-        $drawing = new Drawing();
+        $drawing = new Drawing;
         $drawing->setName('Logo');
         $drawing->setDescription('Logo');
         $logoPath = public_path('images/logo.jpg');
@@ -97,66 +97,70 @@ class ArrearUnder30ExcelExport
         $sheet->getStyle('A3')->getFont()->setSize(11);
         $sheet->getStyle('A3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
-        $asAt = $reportDate ? \Carbon\Carbon::parse($reportDate)->format('d/m/Y') : "";
-        $filterInfo = "As At: $asAt , Currency: " . ($normalizedCurrency == 'ALL' ? 'ALL' : $normalizedCurrency) . " , CO: $officerName";
+        $asAt = $reportDate ? \Carbon\Carbon::parse($reportDate)->format('d/m/Y') : '';
+        $filterInfo = "As At: $asAt , Currency: ".($normalizedCurrency == 'ALL' ? 'ALL' : $normalizedCurrency)." , CO: $officerName";
         $sheet->mergeCells("A4:{$highestCol}4");
         $sheet->setCellValue('A4', $filterInfo);
         $sheet->getStyle('A4')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         $sheet->getStyle('A4')->getFont()->setSize(10);
 
         $headers = [
-            "Arrear Date", "Loan No.", "Name", "Co-Borrower", "Guarantor",
-            "Gender", "Phone", "CB Phone", "GU Phone",
-            "C.O", "Village", "Commune", "Last Payment Date", "Aging",
-            "Types of Collateral", "Number", "Date Disb.",
-            "Disb. Amount", "OutStanding", "Arrear Amount", "Penalty Due", "Penalty Paid", "Status"
+            'Arrear Date', 'Loan No.', 'Installment No.', 'Name', 'Co-Borrower', 'Guarantor',
+            'Gender', 'Phone', 'CB Phone', 'GU Phone',
+            'C.O', 'Village', 'Commune', 'Last Payment Date', 'Aging',
+            'Types of Collateral', 'Number', 'Date Disb.',
+            'Disb. Amount', 'OutStanding', 'Arrear Amount', 'Arrear Interest', 'Arrear Fee',
+            'Penalty Due', 'Penalty Paid', 'Status',
         ];
-        
+
         $keys = [
-            'arrear_date', 'loan_no', 'name', 'coborrower', 'guarantor',
+            'arrear_date', 'loan_no', 'installment_no', 'name', 'coborrower', 'guarantor',
             'gender', 'phone', 'coborrower_phone', 'guarantor_phone',
             'co', 'village', 'commune', 'last_payment_date', 'aging',
             'types_of_collateral', 'number', 'date_disbursement',
-            'disb_amount', 'outstanding', 'arrear_amount', 'penalty_due', 'penalty_paid', 'status'
+            'disb_amount', 'outstanding', 'arrear_amount', 'arrear_interest', 'arrear_fee',
+            'penalty_due', 'penalty_paid', 'status',
         ];
 
-        $numericKeys = ['disb_amount', 'outstanding', 'arrear_amount', 'penalty_due', 'penalty_paid'];
+        $numericKeys = ['disb_amount', 'outstanding', 'arrear_amount', 'arrear_interest', 'arrear_fee', 'penalty_due', 'penalty_paid'];
 
         $row = 7;
 
         $sections = [
             'USD' => $usdData,
-            'KHR' => $khrData
+            'KHR' => $khrData,
         ];
 
         foreach ($sections as $curr => $sectionData) {
             if ($normalizedCurrency === 'ALL' || $normalizedCurrency === $curr) {
                 // Section Header
-                $sheet->setCellValue('A' . $row, $curr);
-                $sheet->setCellValue('B' . $row, count($sectionData));
-                $sheet->getStyle('A' . $row . ':B' . $row)->applyFromArray($headerStyle);
+                $sheet->setCellValue('A'.$row, $curr);
+                $sheet->setCellValue('B'.$row, count($sectionData));
+                $sheet->getStyle('A'.$row.':B'.$row)->applyFromArray($headerStyle);
                 $row++;
 
                 // Table Headers
                 $colIndex = 1;
                 foreach ($headers as $header) {
                     $columnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
-                    $sheet->setCellValue($columnLetter . $row, $header);
+                    $sheet->setCellValue($columnLetter.$row, $header);
                     $colIndex++;
                 }
-                $sheet->getStyle('A' . $row . ':W' . $row)->applyFromArray($headerStyle);
+                $sheet->getStyle('A'.$row.':Z'.$row)->applyFromArray($headerStyle);
                 $sheet->getRowDimension($row)->setRowHeight(50);
                 $row++;
 
                 // Data Rows
                 $totals = array_fill_keys($numericKeys, 0);
+                $countedLoanTotals = [];
 
                 foreach ($sectionData as $item) {
+                    $loanId = (string) ($item['loan_id'] ?? '');
                     $colIndex = 1;
                     foreach ($keys as $key) {
                         $columnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
                         $value = $item[$key] ?? '-';
-                        
+
                         if (in_array($key, ['arrear_date', 'last_payment_date', 'date_disbursement'])) {
                             if ($value !== '-' && $value) {
                                 $value = \Carbon\Carbon::parse($value)->format('d/m/Y');
@@ -164,73 +168,76 @@ class ArrearUnder30ExcelExport
                         }
 
                         if (in_array($key, ['phone', 'coborrower_phone', 'guarantor_phone'])) {
-                            if ($value !== '-' && !empty($value)) {
+                            if ($value !== '-' && ! empty($value)) {
                                 $cleanPhone = str_replace([' ', '-'], '', $value);
                                 if (strlen($cleanPhone) >= 9) {
-                                    $value = substr($cleanPhone, 0, 3) . ' ' . substr($cleanPhone, 3, 3) . ' ' . substr($cleanPhone, 6);
+                                    $value = substr($cleanPhone, 0, 3).' '.substr($cleanPhone, 3, 3).' '.substr($cleanPhone, 6);
                                 }
                             }
                         }
 
                         if (in_array($key, $numericKeys)) {
                             $floatVal = (float) $value;
-                            $totals[$key] += $floatVal;
-                            $sheet->setCellValue($columnLetter . $row, $floatVal);
-                            $sheet->getStyle($columnLetter . $row)->getNumberFormat()->setFormatCode('#,##0.00');
-                        } elseif (in_array($key, ['aging', 'number']) && is_numeric($value)) {
-                            $sheet->setCellValueExplicit($columnLetter . $row, $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC);
+                            if (! in_array($key, ['disb_amount', 'outstanding']) || ! isset($countedLoanTotals[$loanId])) {
+                                $totals[$key] += $floatVal;
+                            }
+                            $sheet->setCellValue($columnLetter.$row, $floatVal);
+                            $sheet->getStyle($columnLetter.$row)->getNumberFormat()->setFormatCode('#,##0.00');
+                        } elseif (in_array($key, ['installment_no', 'aging', 'number']) && is_numeric($value)) {
+                            $sheet->setCellValueExplicit($columnLetter.$row, $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC);
                         } else {
                             if ($key === 'status') {
                                 $value = strtoupper($value);
                             }
                             // Store phone numbers and other text with standard setCellValue to avoid strict TYPE_STRING warning if formatted with spaces
-                            if (in_array($key, ['phone', 'coborrower_phone', 'guarantor_phone']) || !is_numeric($value)) {
-                                $sheet->setCellValueExplicit($columnLetter . $row, (string) $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                            if (in_array($key, ['phone', 'coborrower_phone', 'guarantor_phone']) || ! is_numeric($value)) {
+                                $sheet->setCellValueExplicit($columnLetter.$row, (string) $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                             } else {
-                                $sheet->setCellValue($columnLetter . $row, $value);
+                                $sheet->setCellValue($columnLetter.$row, $value);
                             }
                         }
 
                         if (in_array($key, ['gender', 'aging', 'types_of_collateral', 'number', 'status'])) {
-                            $sheet->getStyle($columnLetter . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                            $sheet->getStyle($columnLetter.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
                         }
-                        
+
                         $colIndex++;
                     }
-                    $sheet->getStyle('A' . $row . ':W' . $row)->applyFromArray($dataStyle);
+                    $countedLoanTotals[$loanId] = true;
+                    $sheet->getStyle('A'.$row.':Z'.$row)->applyFromArray($dataStyle);
                     $row++;
                 }
 
                 // Totals Row
-                $sheet->mergeCells('A' . $row . ':Q' . $row);
-                $sheet->setCellValue('A' . $row, 'Total');
-                $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->mergeCells('A'.$row.':R'.$row);
+                $sheet->setCellValue('A'.$row, 'Total');
+                $sheet->getStyle('A'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
                 $colIndex = 1;
                 foreach ($keys as $key) {
                     $columnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
                     if (in_array($key, $numericKeys)) {
-                        $sheet->setCellValue($columnLetter . $row, $totals[$key]);
-                        $sheet->getStyle($columnLetter . $row)->getNumberFormat()->setFormatCode('#,##0.00');
+                        $sheet->setCellValue($columnLetter.$row, $totals[$key]);
+                        $sheet->getStyle($columnLetter.$row)->getNumberFormat()->setFormatCode('#,##0.00');
                     }
                     $colIndex++;
                 }
-                
-                // Only style A to V (W is status, no total needed)
-                $sheet->getStyle('A' . $row . ':V' . $row)->applyFromArray($headerStyle);
+
+                // Status has no total.
+                $sheet->getStyle('A'.$row.':Y'.$row)->applyFromArray($headerStyle);
                 $row += 2; // Add spacer between tables
             }
         }
 
         // Auto-size columns
-        for ($colIndex = 1; $colIndex <= 23; $colIndex++) {
+        for ($colIndex = 1; $colIndex <= 26; $colIndex++) {
             $columnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
             $sheet->getColumnDimension($columnLetter)->setAutoSize(true);
         }
 
         // Output to browser
         $writer = new Xlsx($spreadsheet);
-        $fileName = "Loan_in_Arrear_Period_Under_30_" . date('Ymd_His') . ".xlsx";
+        $fileName = 'Loan_in_Arrear_Period_Under_30_'.date('Ymd_His').'.xlsx';
 
         return response()->streamDownload(function () use ($writer) {
             $writer->save('php://output');

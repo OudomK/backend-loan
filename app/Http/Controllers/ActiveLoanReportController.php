@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
-use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class ActiveLoanReportController extends Controller
 {
@@ -12,6 +12,8 @@ class ActiveLoanReportController extends Controller
     {
         $officerId = $request->query('officer_id');
         $currency = $request->query('currency');
+        $accountRating = $request->query('account_rating');
+        $search = trim((string) $request->query('search', ''));
         $fromDateStr = $request->query('from_date');
         $toDateStr = $request->query('to_date') ?? $request->query('report_date');
 
@@ -27,10 +29,16 @@ class ActiveLoanReportController extends Controller
             'borrower' => function ($q) {
                 $q->withTrashed();
             },
-            'officer',
-            'disburseOfficer',
+            'officer' => function ($q) {
+                $q->withTrashed();
+            },
+            'disburseOfficer' => function ($q) {
+                $q->withTrashed();
+            },
             'collaterals',
-            'product',
+            'product' => function ($q) {
+                $q->withTrashed();
+            },
             'payments' => function ($query) {
                 $query->orderBy('payment_date', 'asc');
             },
@@ -47,12 +55,21 @@ class ActiveLoanReportController extends Controller
         if ($refDateStr) {
             $query->where('start_date', '<=', $refDateStr);
         }
+        if ($fromDateStr) {
+            $query->where('start_date', '>=', $fromDateStr);
+        }
+
+        // A live Active Loan view must not include loans already completed or paid off.
+        // Historical reports keep the broader candidate set and reconstruct status at $refDate.
+        if ($refDate->isSameDay(Carbon::today())) {
+            $query->whereIn('status', ['active', 'arrear']);
+        }
 
         if ($officerId && $officerId !== 'all') {
             $query->where('loan_officer_id', $officerId);
         }
         if ($currency && $currency !== 'all') {
-            $query->where('currency', 'LIKE', $currency . '%');
+            $query->where('currency', 'LIKE', $currency.'%');
         }
 
         $loans = $query->orderBy('borrower_id', 'desc')
@@ -73,7 +90,7 @@ class ActiveLoanReportController extends Controller
             });
 
             $outstanding = max(0, $loan->getBasePrincipalForOS() - $principalPaid);
-            
+
             $hasPayOff = $transactionsAtDate->contains('repayment_type', 'Pay Off');
 
             if ($outstanding <= 0.01 || $hasPayOff) {
@@ -103,27 +120,33 @@ class ActiveLoanReportController extends Controller
 
             foreach ($paymentsBeforeRefDate as $payment) {
                 $installmentDue = (float) ($payment->principal_amount ?? 0)
-                    + (float) ($payment->interest_amount ?? 0);
+                    + (float) ($payment->interest_amount ?? 0)
+                    + (float) ($payment->fee_amount ?? 0);
 
                 $totalDueBeforeRefDate += $installmentDue;
                 $cumulativeDue += $installmentDue;
 
-                if (!$earliestArrearDate && ($cumulativeDue - $scheduledPaidAtDate) > 0.01) {
+                if (! $earliestArrearDate && ($cumulativeDue - $scheduledPaidAtDate) > 0.01) {
                     $earliestArrearDate = $payment->payment_date;
                 }
             }
 
             $overdueAmount = max(0, $totalDueBeforeRefDate - $scheduledPaidAtDate);
-            $agingDays = $earliestArrearDate
-                ? (int) abs($refDate->diffInDays(Carbon::parse($earliestArrearDate)))
-                : 0;
+            $agingDays = $loan->agingAt($refDate, $earliestArrearDate, $overdueAmount > 0.01);
 
             $collateralType = $loan->collaterals->isNotEmpty() ? $loan->collaterals->first()->type : '';
+            $paymentFrequency = \App\Support\FormatHelper::effectivePaymentFrequency(
+                $loan->payment_frequency,
+                $loan->repayment_method
+            );
+            $termFrequency = in_array($loan->repayment_method, ['fixed_15days_70_30', 'fixed_15days_50_50'], true)
+                ? 'monthly'
+                : $paymentFrequency;
             $firstRepaymentDate = optional($loan->payments->first())->payment_date
-                ?? $this->fallbackScheduleDate($loan->start_date, 1, $loan->payment_frequency);
+                ?? $this->fallbackScheduleDate($loan->start_date, 1, $termFrequency);
             $maturityDate = $loan->maturity_date
                 ?? optional($loan->payments->last())->payment_date
-                ?? $this->fallbackScheduleDate($loan->start_date, (int) $loan->duration_months, $loan->payment_frequency);
+                ?? $this->fallbackScheduleDate($loan->start_date, (int) $loan->duration_months, $termFrequency);
             $lastPaymentDate = $transactionsAtDate->max('transaction_date');
             $loanProduct = $product ? $product->name : 'General Loan';
             $isRescheduled = $transactionsAtDate->contains(function ($transaction) {
@@ -133,7 +156,7 @@ class ActiveLoanReportController extends Controller
             return [
                 'disbursement_date' => $loan->start_date,
                 'loan_code' => \App\Support\FormatHelper::formatLoanCode((string) $loan->loan_code),
-                'client_name' => $borrower ? ($borrower->first_name . ' ' . $borrower->last_name) : '',
+                'client_name' => $borrower ? ($borrower->first_name.' '.$borrower->last_name) : '',
                 'village_name' => $borrower?->village ?? '',
                 'commune_name' => $borrower?->commune ?? '',
                 'district_name' => $borrower?->district ?? '',
@@ -141,12 +164,12 @@ class ActiveLoanReportController extends Controller
                 'disbursement_amount' => $loan->amount,
                 'currency_code' => $loan->currency,
                 'interest_rate' => $loan->interest_rate,
-                'processing_fee' => 0,
-                'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $loan->payment_frequency),
+                'processing_fee' => $loan->processingFeeAmount(),
+                'monthly_interest_rate' => \App\Support\FormatHelper::calculateMonthlyRate(($loan->interest_rate ?? 0), $paymentFrequency),
                 'term' => $loan->duration_months,
-                'tenor' => $this->tenorLabel($loan->payment_frequency),
+                'tenor' => $this->tenorLabel($paymentFrequency),
                 'payment_method' => \App\Support\FormatHelper::formatPaymentMethod((string) $loan->repayment_method),
-                'payment_frequency' => $loan->payment_frequency,
+                'payment_frequency' => $paymentFrequency,
                 'loan_cycle' => $loan->loan_cycle,
                 'refinance_amount' => $loan->refinanced_amount ?? 0,
                 'restructure' => $isRescheduled ? 1 : 0,
@@ -170,19 +193,96 @@ class ActiveLoanReportController extends Controller
                 'last_payment_date' => $lastPaymentDate,
                 'account_status' => 'Active',
                 'account_rating' => $this->getAccountRating($agingDays),
-                'short_long_term' => $this->shortLongTermLabel((int) $loan->duration_months, $loan->payment_frequency),
+                'short_long_term' => $this->shortLongTermLabel((int) $loan->duration_months, $termFrequency),
                 'secure_loan_type' => $loan->collaterals->isNotEmpty() ? 'Secured' : 'Unsecured',
                 'provision_amount' => $outstanding * $this->getProvisionRate($agingDays),
             ];
         })->filter()->values();
 
-        return response()->json($data);
+        if ($accountRating && $accountRating !== 'all') {
+            $data = $data->where('account_rating', $accountRating)->values();
+        }
+
+        if ($search !== '') {
+            $searchText = mb_strtolower($search, 'UTF-8');
+            $searchNumber = str_replace([',', ' '], '', $searchText);
+            $searchFields = [
+                'loan_code',
+                'client_name',
+                'village_name',
+                'commune_name',
+                'district_name',
+                'province_name',
+            ];
+
+            $data = $data->filter(function (array $item) use ($searchText, $searchNumber, $searchFields) {
+                foreach ($searchFields as $field) {
+                    if (str_contains(mb_strtolower((string) ($item[$field] ?? ''), 'UTF-8'), $searchText)) {
+                        return true;
+                    }
+                }
+
+                $amountValue = (float) ($item['disbursement_amount'] ?? 0);
+                $amount = str_replace(',', '', number_format($amountValue, 2, '.', ','));
+
+                return $searchNumber !== '' && str_contains($amount, $searchNumber);
+            })->values();
+        }
+
+        $data = $data->toArray();
+
+        $paginate = filter_var($request->query('paginate', 'true'), FILTER_VALIDATE_BOOLEAN);
+        $page = (int) $request->query('page', 1);
+        $limit = (int) $request->query('limit', 50);
+
+        if (! $paginate) {
+            return response()->json($data);
+        }
+
+        $grandTotals = [];
+        foreach ($data as $item) {
+            $curr = strtoupper(explode(' ', (string) ($item['currency_code'] ?? 'USD'))[0]);
+            if (! isset($grandTotals[$curr])) {
+                $grandTotals[$curr] = [
+                    'disbursement_amount' => 0,
+                    'outstanding_amount' => 0,
+                    'principal_paid' => 0,
+                    'interest_paid' => 0,
+                    'overdue_amount' => 0,
+                    'provision_amount' => 0,
+                ];
+            }
+            $grandTotals[$curr]['disbursement_amount'] += (float) ($item['disbursement_amount'] ?? 0);
+            $grandTotals[$curr]['outstanding_amount'] += (float) ($item['outstanding_amount'] ?? 0);
+            $grandTotals[$curr]['principal_paid'] += (float) ($item['principal_paid'] ?? 0);
+            $grandTotals[$curr]['interest_paid'] += (float) ($item['interest_paid'] ?? 0);
+            $grandTotals[$curr]['overdue_amount'] += (float) ($item['overdue_amount'] ?? 0);
+            $grandTotals[$curr]['provision_amount'] += (float) ($item['provision_amount'] ?? 0);
+        }
+
+        $totalRecords = count($data);
+        $lastPage = (int) ceil($totalRecords / $limit);
+        $offset = ($page - 1) * $limit;
+
+        $paginatedData = array_slice($data, $offset, $limit);
+
+        return response()->json([
+            'data' => $paginatedData,
+            'meta' => [
+                'current_page' => $page,
+                'last_page' => $lastPage > 0 ? $lastPage : 1,
+                'total' => $totalRecords,
+                'grand_totals' => $grandTotals,
+            ],
+        ]);
     }
 
     public function exportExcel(Request $request)
     {
         $officerId = $request->query('officer_id');
         $currency = $request->query('currency');
+        $accountRating = $request->query('account_rating');
+        $search = $request->query('search');
         $fromDateStr = $request->query('from_date');
         $toDateStr = $request->query('to_date') ?? $request->query('report_date');
 
@@ -190,8 +290,11 @@ class ActiveLoanReportController extends Controller
         $originalRequest = new Request([
             'officer_id' => $officerId,
             'currency' => $currency,
+            'account_rating' => $accountRating,
+            'search' => $search,
             'from_date' => $fromDateStr,
             'to_date' => $toDateStr,
+            'paginate' => 'false',
         ]);
 
         $response = $this->index($originalRequest);
@@ -205,7 +308,8 @@ class ActiveLoanReportController extends Controller
             }
         }
 
-        $exporter = new \App\Exports\Excel\ActiveLoanExcelExport();
+        $exporter = new \App\Exports\Excel\ActiveLoanExcelExport;
+
         return $exporter->download($data, $request, $fromDateStr, $toDateStr, $officerName);
     }
 
@@ -223,6 +327,7 @@ class ActiveLoanReportController extends Controller
         if ($days <= 359) {
             return 'Doubtful';
         }
+
         return 'Loss';
     }
 
@@ -240,6 +345,7 @@ class ActiveLoanReportController extends Controller
         if ($days <= 359) {
             return 0.50;
         }
+
         return 1.00;
     }
 

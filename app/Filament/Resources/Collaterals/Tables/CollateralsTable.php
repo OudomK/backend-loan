@@ -78,7 +78,7 @@ class CollateralsTable
             ])
             ->filters([
                 SelectFilter::make('type')
-                    ->options(fn () => \App\Models\Collateral::distinct()->pluck('type', 'type')->toArray()),
+                    ->options(fn () => \App\Models\Collateral::whereNotNull('type')->where('type', '!=', '')->distinct()->pluck('type', 'type')->toArray()),
                 SelectFilter::make('status')
                     ->options([
                         'Held' => 'Held',

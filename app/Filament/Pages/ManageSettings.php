@@ -108,6 +108,7 @@ class ManageSettings extends Page implements HasForms
             'co_phone_display_mode' => $dbSettings['co_phone_display_mode'] ?? 'one_line',
             'co_phone_display_count' => $dbSettings['co_phone_display_count'] ?? '3',
             'excel_export_font' => $dbSettings['excel_export_font'] ?? 'Khmer OS Siemreap',
+            'require_loan_purpose' => $this->toBool($dbSettings['require_loan_purpose'] ?? true, true),
         ]);
     }
 
@@ -330,6 +331,12 @@ class ManageSettings extends Page implements HasForms
                 Section::make('Loan Configuration')
                     ->hidden(fn() => $this->activeTab !== 'loan_config')
                     ->schema([
+                        Toggle::make('require_loan_purpose')
+                            ->label('Require Loan Purpose')
+                            ->helperText('If ON, Loan Purpose is required in Loan Application. If OFF, it can be skipped.')
+                            ->default(true)
+                            ->inline(false)
+                            ->columnSpanFull(),
                         TextInput::make('default_interest_rate')
                             ->label('Default Interest Rate (%)')
                             ->numeric()

@@ -16,6 +16,10 @@ use Illuminate\Support\Facades\Cache;
 
 class DashboardStatsService
 {
+    public const DESKTOP_CACHE_KEY = 'desktop.dashboard.stats';
+
+    public const DESKTOP_CACHE_TTL = 5 * 60;
+
     public function calculateAndCacheAll(): void
     {
         $ttl = 60 * 60; // 1 hour, but cron will refresh every 5 mins
@@ -35,6 +39,129 @@ class DashboardStatsService
         $this->cacheTrends($exchangeRate, $ttl);
         $this->cacheParAgingBuckets($ttl);
         $this->cacheMonthlyPerformance($exchangeRate, $ttl);
+        $this->cacheDesktopStats(self::DESKTOP_CACHE_TTL);
+    }
+
+    public function getDesktopStats(bool $force = false): array
+    {
+        if (app()->environment('testing')) {
+            return $this->calculateDesktopStats();
+        }
+
+        if ($force) {
+            return $this->cacheDesktopStats(self::DESKTOP_CACHE_TTL);
+        }
+
+        return Cache::remember(
+            self::DESKTOP_CACHE_KEY,
+            self::DESKTOP_CACHE_TTL,
+            fn () => $this->calculateDesktopStats()
+        );
+    }
+
+    private function cacheDesktopStats(int $ttl): array
+    {
+        $stats = $this->calculateDesktopStats();
+        Cache::put(self::DESKTOP_CACHE_KEY, $stats, $ttl);
+
+        return $stats;
+    }
+
+    private function calculateDesktopStats(): array
+    {
+        $referenceDate = Carbon::today();
+        $exchangeRate = (float) (Setting::where('key', 'exchange_rate_khr_to_usd')->value('value')
+            ?? Setting::where('key', 'exchange_rate')->value('value')
+            ?? 4000);
+        $exchangeRate = max(1, $exchangeRate);
+
+        $totalCustomers = Borrower::count();
+        $activeCustomers = Borrower::whereHas('loans', fn ($query) => $query->where('status', 'active'))->count();
+        $inactiveCustomers = Borrower::whereHas('loans', fn ($query) => $query->where('status', '!=', 'pending'))
+            ->whereDoesntHave('loans', fn ($query) => $query->where('status', 'active'))
+            ->count();
+
+        $disbursedUSD = Loan::where('status', 'active')->where('currency', 'LIKE', 'USD%')->sum('amount');
+        $disbursedKHR = Loan::where('status', 'active')->where('currency', 'LIKE', 'KHR%')->sum('amount');
+        $disbursedAmount = $disbursedUSD + ($disbursedKHR / $exchangeRate);
+
+        $portfolioLoans = Loan::with([
+            'payments' => fn ($query) => $query->orderBy('payment_date', 'asc'),
+            'transactions' => fn ($query) => $query->where('transaction_date', '<=', $referenceDate->toDateString()),
+        ])->where('status', 'active')->get();
+
+        $outstandingUSD = 0.0;
+        $outstandingKHR = 0.0;
+        $overdueUSD = 0.0;
+        $overdueKHR = 0.0;
+        $parAmount = 0.0;
+        $portfolioQuality = [
+            'standard' => 0.0,
+            'special_mention' => 0.0,
+            'substandard' => 0.0,
+            'doubtful' => 0.0,
+            'loss' => 0.0,
+        ];
+
+        foreach ($portfolioLoans as $loan) {
+            $snapshot = $this->portfolioSnapshot($loan, $referenceDate);
+            $currentOS = $snapshot['outstanding'];
+            if ($currentOS <= 0.01) {
+                continue;
+            }
+
+            $isKhr = str_starts_with((string) $loan->currency, 'KHR');
+            $convertedOS = $isKhr ? $currentOS / $exchangeRate : $currentOS;
+            $aging = $snapshot['aging'];
+
+            if ($aging < 30) {
+                $portfolioQuality['standard'] += $convertedOS;
+            } elseif ($aging <= 89) {
+                $portfolioQuality['special_mention'] += $convertedOS;
+            } elseif ($aging <= 179) {
+                $portfolioQuality['substandard'] += $convertedOS;
+            } elseif ($aging <= 359) {
+                $portfolioQuality['doubtful'] += $convertedOS;
+            } else {
+                $portfolioQuality['loss'] += $convertedOS;
+            }
+
+            if ($isKhr) {
+                $outstandingKHR += $currentOS;
+                $overdueKHR += $snapshot['overdue_amount'];
+                if ($aging > 30) {
+                    $parAmount += $currentOS / $exchangeRate;
+                }
+            } else {
+                $outstandingUSD += $currentOS;
+                $overdueUSD += $snapshot['overdue_amount'];
+                if ($aging > 30) {
+                    $parAmount += $currentOS;
+                }
+            }
+        }
+
+        $outstandingAmount = $outstandingUSD + ($outstandingKHR / $exchangeRate);
+        $overdueAmount = $overdueUSD + ($overdueKHR / $exchangeRate);
+        $parRatio = $outstandingAmount > 0
+            ? round(($parAmount / $outstandingAmount) * 100, 2)
+            : 0;
+
+        foreach ($portfolioQuality as $key => $value) {
+            $portfolioQuality[$key] = round($value, 2);
+        }
+
+        return [
+            'total_customers' => $totalCustomers,
+            'active_customers' => $activeCustomers,
+            'inactive_customers' => $inactiveCustomers,
+            'disbursed_amount' => round($disbursedAmount, 2),
+            'outstanding_amount' => round($outstandingAmount, 2),
+            'overdue_amount' => round($overdueAmount, 2),
+            'par_amount' => round($parAmount, 2),
+            'par_ratio' => $parRatio,
+            'portfolio_quality' => $portfolioQuality,
+        ];
     }
 
     private function cacheCoreKpis(int $ttl): void
@@ -155,12 +282,12 @@ class DashboardStatsService
         ], $ttl);
 
         Cache::put('filament.stats.mtd_collections_split', [
-            'usd' => RepaymentTransaction::whereHas('loan', fn($q) => $q->where('currency', 'LIKE', 'USD%'))->whereMonth('transaction_date', now()->month)->whereYear('transaction_date', now()->year)->sum('amount_paid'),
-            'khr' => RepaymentTransaction::whereHas('loan', fn($q) => $q->where('currency', 'LIKE', 'KHR%'))->whereMonth('transaction_date', now()->month)->whereYear('transaction_date', now()->year)->sum('amount_paid'),
+            'usd' => RepaymentTransaction::whereHas('loan', fn ($q) => $q->where('currency', 'LIKE', 'USD%'))->whereMonth('transaction_date', now()->month)->whereYear('transaction_date', now()->year)->sum('amount_paid'),
+            'khr' => RepaymentTransaction::whereHas('loan', fn ($q) => $q->where('currency', 'LIKE', 'KHR%'))->whereMonth('transaction_date', now()->month)->whereYear('transaction_date', now()->year)->sum('amount_paid'),
         ], $ttl);
-        
-        Cache::put('filament.stats.mtd_expected_usd_split', Payment::whereHas('loan', fn($q) => $q->where('currency', 'LIKE', 'USD%'))->whereMonth('payment_date', now()->month)->whereYear('payment_date', now()->year)->sum('total_due'), $ttl);
-        Cache::put('filament.stats.mtd_expected_khr_split', Payment::whereHas('loan', fn($q) => $q->where('currency', 'LIKE', 'KHR%'))->whereMonth('payment_date', now()->month)->whereYear('payment_date', now()->year)->sum('total_due'), $ttl);
+
+        Cache::put('filament.stats.mtd_expected_usd_split', Payment::whereHas('loan', fn ($q) => $q->where('currency', 'LIKE', 'USD%'))->whereMonth('payment_date', now()->month)->whereYear('payment_date', now()->year)->sum('total_due'), $ttl);
+        Cache::put('filament.stats.mtd_expected_khr_split', Payment::whereHas('loan', fn ($q) => $q->where('currency', 'LIKE', 'KHR%'))->whereMonth('payment_date', now()->month)->whereYear('payment_date', now()->year)->sum('total_due'), $ttl);
     }
 
     private function cacheBorrowingAndCapital(int $ttl): void
@@ -192,27 +319,20 @@ class DashboardStatsService
 
     private function cacheParAgingBuckets(int $ttl): void
     {
-        $today = now()->toDateString();
         $agingLoans = Loan::where('status', 'active')
-            ->select('id')
-            ->addSelect([
-                'real_aging' => Payment::selectRaw('DATEDIFF(?, MIN(payment_date))', [$today])
-                    ->whereColumn('loan_id', 'loans.id')
-                    ->where('payment_date', '<', $today)
-                    ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
-            ])
+            ->select('id', 'locked_aging', 'late_since_date', 'penalty_late_since_date')
             ->get();
 
         $buckets = [
-            'Current'    => 0,
-            '1–30 days'  => 0,
+            'Current' => 0,
+            '1–30 days' => 0,
             '31–60 days' => 0,
             '61–90 days' => 0,
-            '90+ days'   => 0,
+            '90+ days' => 0,
         ];
 
         foreach ($agingLoans as $agingLoan) {
-            $aging = $agingLoan->real_aging ?? 0;
+            $aging = $agingLoan->currentAging();
             if ($aging <= 0) {
                 $buckets['Current']++;
             } elseif ($aging <= 30) {
@@ -302,7 +422,7 @@ class DashboardStatsService
             }
         }
 
-        return collect($monthlyData)->values()->map(fn($v) => round($v, 2))->all();
+        return collect($monthlyData)->values()->map(fn ($v) => round($v, 2))->all();
     }
 
     private function buildMonthlyCountSeries(Builder $query, string $dateColumn, int $months = 6): array
@@ -336,9 +456,9 @@ class DashboardStatsService
                 - (float) ($transaction->withdrawn_prepayment ?? 0);
         });
 
-        $outstanding = max(0, (float) $loan->amount - $principalPaid);
+        $outstanding = max(0, $loan->getBasePrincipalForOS() - $principalPaid);
         if ($outstanding <= 0.01) {
-            return ['outstanding' => 0.0, 'aging' => 0];
+            return ['outstanding' => 0.0, 'overdue_amount' => 0.0, 'aging' => 0];
         }
 
         $scheduledPaid = $transactionsAtDate->sum(function ($transaction) {
@@ -389,6 +509,7 @@ class DashboardStatsService
 
         return [
             'outstanding' => $outstanding,
+            'overdue_amount' => max(0, $cumulativeDue - $scheduledPaid),
             'aging' => $aging,
         ];
     }

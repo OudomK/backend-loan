@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
+use App\Models\LoanApproval;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -23,9 +24,9 @@ class LoanOutstandingParReportController extends Controller
             'transactions' => function ($query) use ($refDateTime) {
                 $query->where('transaction_date', '<=', $refDateTime);
             },
-        ])
+            ])
             ->where('start_date', '<=', $refDateStr)
-            ->where('status', '!=', 'pending')
+            ->whereNotIn('status', LoanApproval::nonReportableStatuses())
             ->where(function ($query) use ($refDateStr) {
                 $query->whereNull('written_off_at')
                     ->orWhereDate('written_off_at', '>', $refDateStr);
@@ -126,13 +127,7 @@ class LoanOutstandingParReportController extends Controller
             }
 
             $effectiveArrearDate = $earliestArrearDate ?? $earliestPrincipalArrearDate;
-
-            $agingDays = 0;
-            if ($effectiveArrearDate) {
-                $agingDays = abs($refDate->copy()->startOfDay()->diffInDays(
-                    Carbon::parse($effectiveArrearDate)->startOfDay()
-                ));
-            }
+            $agingDays = $loan->agingAt($refDate, $effectiveArrearDate, $effectiveArrearDate !== null);
 
             if ($agingDays > 0) {
                 if (str_contains($currency, 'USD')) {

@@ -2,127 +2,99 @@
 
 namespace App\Http\Resources;
 
-use App\Models\Setting;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Carbon\Carbon;
 
 class ArrearReportResource extends JsonResource
 {
     /**
-     * @var array<string, float>|null
-     */
-    private static ?array $penaltyRates = null;
-
-    /**
-     * Transform the resource into an array.
+     * Transform one unpaid installment into an arrears report row.
      *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
     {
-        /** @var \App\Models\Loan $this */
-        $borrower = $this->borrower;
+        /** @var \App\Models\Payment $this */
+        $loan = $this->loan;
+        $borrower = $loan?->borrower;
         $referenceDateStr = $request->query('to_date') ?? $request->query('report_date');
-        $referenceDate = $referenceDateStr ? Carbon::parse($referenceDateStr) : Carbon::today();
+        $referenceDate = ($referenceDateStr ? Carbon::parse($referenceDateStr) : Carbon::today())->startOfDay();
+        $arrearDate = Carbon::parse($this->payment_date)->startOfDay();
 
-        $arrearDate = $this->calculated_late_since_date ?? $this->late_since_date;
-        $aging = $arrearDate ? abs($referenceDate->diffInDays(Carbon::parse($arrearDate))) : 0;
-        $arrearPrincipal = (float) ($this->arrear_principal ?? 0);
-        $arrearInterest = (float) ($this->arrear_interest ?? 0);
-        $totalArrearDue = round($arrearPrincipal + $arrearInterest, 2);
-        $penaltyPaid = (float) ($this->penalty_paid_total ?? 0);
-        if (!$this->late_since_date) {
-            $penaltyDue = (float)($this->accumulated_penalty ?? 0);
-        } else {
-            $penaltyGross = 0;
-            if ($aging > 0) {
-                $penaltyGross = round($aging * $this->resolvePenaltyRate($this->resource), 2);
-            }
-            $penaltyDue = max(0, $penaltyGross - $penaltyPaid);
-        }
+        $feeAmount = (float) ($this->fee_amount ?? 0);
+        $feePaid = (float) ($this->fee_paid ?? 0);
+        $amountPaidAfterFee = max(0, (float) $this->total_paid - $feePaid);
+        $interestPaid = min((float) $this->interest_amount, $amountPaidAfterFee);
+        $principalPaid = max(0, $amountPaidAfterFee - (float) $this->interest_amount);
 
-        $status = 'Active';
-        if ($totalArrearDue <= 0.01) {
-            $status = 'OK';
-        } elseif (! empty($this->last_transaction_date) && $this->last_transaction_date !== '-') {
-            $status = 'Partial';
-        }
+        $arrearPrincipal = round(max(0, (float) $this->principal_amount - $principalPaid), 2);
+        $arrearInterest = round(max(0, (float) $this->interest_amount - $interestPaid), 2);
+        $arrearFee = round(max(0, $feeAmount - $feePaid), 2);
+        $aging = $referenceDate->gt($arrearDate)
+            ? (int) abs($referenceDate->diffInDays($arrearDate))
+            : 0;
+
+        $status = ((float) $this->total_paid > 0.001 || $feePaid > 0.001)
+            ? 'Partial'
+            : 'Active';
 
         return [
+            // Kept in the payload so totals can de-duplicate loan-level values.
+            'loan_id' => $loan?->id,
+            'payment_id' => $this->id,
+            'installment_no' => $this->payment_number,
             'branches' => 'Main Office',
-            'arrear_date' => $arrearDate,
-            'loan_no' => $this->loan_code,
+            'arrear_date' => $this->payment_date,
+            'loan_no' => $loan?->loan_code ?? '-',
             'cid' => $borrower?->customer_code ?? '-',
-            'name' => $borrower ? trim($borrower->first_name . ' ' . $borrower->last_name) : '-',
-            'coborrower' => $this->coBorrower ? $this->coBorrower->first_name . ' ' . $this->coBorrower->last_name : '-',
-            'guarantor' => $this->guarantor ? $this->guarantor->first_name . ' ' . $this->guarantor->last_name : '-',
+            'name' => $borrower ? trim($borrower->first_name.' '.$borrower->last_name) : '-',
+            'coborrower' => $loan?->coBorrower ? $loan->coBorrower->first_name.' '.$loan->coBorrower->last_name : '-',
+            'guarantor' => $loan?->guarantor ? $loan->guarantor->first_name.' '.$loan->guarantor->last_name : '-',
             'gender' => $borrower?->gender ?? '-',
             'phone' => $borrower?->phone ?? '-',
-            'coborrower_phone' => $this->coBorrower?->phone ?? '-',
-            'guarantor_phone' => $this->guarantor?->phone ?? '-',
-            'co' => $this->officer?->name ?? '-',
+            'coborrower_phone' => $loan?->coBorrower?->phone ?? '-',
+            'guarantor_phone' => $loan?->guarantor?->phone ?? '-',
+            'co' => $loan?->officer?->name ?? '-',
             'village' => $borrower?->village ?? '-',
             'commune' => $borrower?->commune ?? '-',
             'last_payment_date' => $this->last_transaction_date ?? '-',
             'aging' => $aging,
             'types_of_collateral' => $this->getCollateralTypeLabel(),
-            'number' => $this->collaterals->count(),
-            'date_disbursement' => $this->start_date,
-            'disb_amount' => $this->amount,
-            'outstanding' => $this->calculated_outstanding ?? 0,
+            'number' => $loan?->collaterals->count() ?? 0,
+            'date_disbursement' => $loan?->start_date,
+            'disb_amount' => (float) ($loan?->amount ?? 0),
+            'outstanding' => (float) ($this->calculated_outstanding ?? 0),
             'arrear_amount' => $arrearPrincipal,
             'arrear_interest' => $arrearInterest,
-            'arrear_fee' => 0,
-            'penalty_due' => $penaltyDue,
-            'penalty_paid' => $penaltyPaid,
+            'arrear_fee' => $arrearFee,
+            // The controller attaches loan-level penalty to the oldest visible
+            // unpaid installment only, preventing duplicate report totals.
+            'penalty_due' => 0.0,
+            'penalty_paid' => 0.0,
             'status' => $status,
-            'currency' => $this->currency,
+            'currency' => $loan?->currency ?? 'USD',
         ];
     }
 
-    /**
-     * Resolve the penalty rate from the loan or settings.
-     */
-    private function resolvePenaltyRate(\App\Models\Loan $loan): float
-    {
-        if ($loan->penalty_rate !== null) {
-            return (float) $loan->penalty_rate;
-        }
-
-        if (self::$penaltyRates === null) {
-            $settings = Setting::whereIn('key', ['default_penalty_usd', 'default_penalty_khr'])
-                ->pluck('value', 'key')
-                ->toArray();
-
-            self::$penaltyRates = [
-                'USD' => (float) ($settings['default_penalty_usd'] ?? 2.5),
-                'KHR' => (float) ($settings['default_penalty_khr'] ?? 10000),
-            ];
-        }
-
-        return $loan->currency === 'KHR'
-            ? self::$penaltyRates['KHR']
-            : self::$penaltyRates['USD'];
-    }
-
-    /**
-     * Collateral type label. If type is numeric (e.g. value stored by mistake), use description or '-'.
-     */
     private function getCollateralTypeLabel(): string
     {
-        $first = $this->collaterals->first();
-        if (!$first) {
+        $first = $this->loan?->collaterals->first();
+        if (! $first) {
             return '-';
         }
+
         $type = trim((string) $first->type);
         if ($type === '') {
             return '-';
         }
+
         if (is_numeric($type)) {
-            $desc = !empty(trim((string) ($first->description ?? ''))) ? trim($first->description) : null;
-            return $desc ?? '-';
+            $description = trim((string) ($first->description ?? ''));
+
+            return $description !== '' ? $description : '-';
         }
+
         return $type;
     }
 }

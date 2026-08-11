@@ -1,17 +1,13 @@
 <?php
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Route;
-
 use App\Http\Controllers\ActiveLoanReportController;
+use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\ArrearReportController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BorrowerController;
 use App\Http\Controllers\BorrowingController;
 use App\Http\Controllers\CapitalShareController;
 use App\Http\Controllers\CoBorrowerController;
-use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerExportController;
 use App\Http\Controllers\CustomerHistoryController;
 use App\Http\Controllers\CustomerImportController;
@@ -19,12 +15,11 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisbursementReportController;
 use App\Http\Controllers\DividendController;
 use App\Http\Controllers\EmployeeController;
-use App\Http\Controllers\Api\ExpenseController;
 use App\Http\Controllers\ExpenseCategoryController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\GuarantorController;
-use App\Http\Controllers\IncomeStatementController;
 use App\Http\Controllers\InactiveLoanReportController;
+use App\Http\Controllers\IncomeStatementController;
 use App\Http\Controllers\InterestIncomeReportController;
 use App\Http\Controllers\InvestorController;
 use App\Http\Controllers\LoanCollectionReportController;
@@ -44,16 +39,17 @@ use App\Http\Controllers\RepaymentScheduleReportController;
 use App\Http\Controllers\RescheduleRefinanceController;
 use App\Http\Controllers\RevenueCategoryController;
 use App\Http\Controllers\RevenueController;
-use App\Http\Controllers\SavingAccountController;
 use App\Http\Controllers\SaverController;
+use App\Http\Controllers\SavingAccountController;
 use App\Http\Controllers\WriteOffCollectionReportController;
-
 use App\Http\Controllers\WriteOffReportController;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Config;
+use Illuminate\Support\Facades\Route;
 
 // ——— Public routes (no auth) ———
 Route::post('/login', [AuthController::class, 'login']);
 Route::get('/translations', [\App\Http\Controllers\Api\TranslationController::class, 'index']);
-
 
 Route::get('/app/footer-user', function () {
     return response()->json([
@@ -76,10 +72,10 @@ Route::get('/app/settings', function () {
         $customFonts = $query
             ->orderBy('name')
             ->get(['key', 'name', 'file_path'])
-            ->map(fn($font) => [
+            ->map(fn ($font) => [
                 'key' => $font->key,
                 'name' => $font->name,
-                'url' => asset('storage/' . $font->file_path),
+                'url' => asset('storage/'.$font->file_path),
             ])
             ->values()
             ->all();
@@ -102,16 +98,17 @@ Route::get('/app/settings', function () {
 
         return $fallback;
     };
+
     return response()->json([
         'company_name' => $dbSettings['company_name'] ?? Config::get('app.company_name', 'Company Name'),
-        'company_logo' => isset($dbSettings['company_logo']) ? asset('storage/' . $dbSettings['company_logo']) : null,
+        'company_logo' => isset($dbSettings['company_logo']) ? asset('storage/'.$dbSettings['company_logo']) : null,
         'default_language' => $dbSettings['default_language'] ?? 'EN',
         'frontend_font_family' => $dbSettings['frontend_font_family'] ?? 'battambang',
         'pdf_export_font' => $dbSettings['pdf_export_font'] ?? ($dbSettings['frontend_font_family'] ?? 'noto_sans_khmer'),
         'print_schedule_font' => $dbSettings['print_schedule_font'] ?? ($dbSettings['pdf_export_font'] ?? ($dbSettings['frontend_font_family'] ?? 'noto_sans_khmer')),
         'custom_fonts' => $customFonts,
         'excel_export_font' => $dbSettings['excel_export_font'] ?? 'Khmer OS Siemreap',
-        'copyright_text' => $dbSettings['copyright_text'] ?? ('© ' . date('Y') . ' ' . Config::get('app.company_name')),
+        'copyright_text' => $dbSettings['copyright_text'] ?? ('© '.date('Y').' '.Config::get('app.company_name')),
         'exchange_rate' => $dbSettings['exchange_rate_khr_to_usd'] ?? $dbSettings['exchange_rate'] ?? 4000,
         'default_interest_rate' => $dbSettings['default_interest_rate'] ?? 1.5,
         'default_penalty_usd' => $dbSettings['default_penalty_usd'] ?? 2.5,
@@ -123,6 +120,7 @@ Route::get('/app/settings', function () {
         'co_phone_display_mode' => $dbSettings['co_phone_display_mode'] ?? 'one_line',
         'co_phone_display_count' => $dbSettings['co_phone_display_count'] ?? '3',
         'chart_max_amount' => $dbSettings['chart_max_amount'] ?? '',
+        'require_loan_purpose' => $toBool($dbSettings['require_loan_purpose'] ?? true, true),
     ]);
 });
 
@@ -154,6 +152,32 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
     });
 
+    Route::get('/debug-user', function (Request $request) {
+        $user = \App\Models\User::where('email', $request->query('email'))->first();
+        if (! $user) {
+            return response()->json(['error' => 'User not found']);
+        }
+
+        return response()->json([
+            'id' => $user->id,
+            'legacy_role' => $user->role,
+            'spatie_roles' => $user->roles->pluck('name'),
+            'effective_permissions' => $user->effectivePermissionNames(),
+            'can_view_any_user' => $user->can('ViewAny:User'),
+        ]);
+    });
+
+    Route::get('/debug-log', function () {
+        $logFile = storage_path('logs/laravel.log');
+        if (! file_exists($logFile)) {
+            return response('No log file found.', 404);
+        }
+        $lines = file($logFile);
+        $lastLines = array_slice($lines, -100);
+
+        return response(implode('', $lastLines), 200)->header('Content-Type', 'text/plain');
+    });
+
     Route::post('/customers/import', [CustomerImportController::class, 'import']);
     Route::get('/customers/import/template', [CustomerImportController::class, 'downloadTemplate']);
     Route::get('/customers/export', [CustomerExportController::class, 'export']);
@@ -171,16 +195,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('loan-officers', LoanOfficerController::class);
     Route::get('payment-qrs', [LoanController::class, 'getPaymentQrs']);
     Route::post('loans/preview-schedule', [LoanController::class, 'previewSchedule']);
+    Route::post('loans/recalculate-negotiable', [LoanController::class, 'recalculateNegotiableSchedule']);
     Route::get('loans/suggest-code', [LoanController::class, 'suggestCode']);
     Route::post('loans/{id}/write-off', [LoanController::class, 'writeOff']);
-
 
     // Loan Approvals
     Route::get('loans/pending-approvals', [\App\Http\Controllers\LoanApprovalApiController::class, 'getPendingApprovals']);
     Route::post('loans/{id}/approval-action', [\App\Http\Controllers\LoanApprovalApiController::class, 'performAction']);
 
     Route::apiResource('loans', LoanController::class);
-    Route::put('loans/{id}/schedule', [LoanController::class, 'updateSchedule']);
+    Route::put('loans/{id}/schedule', [LoanController::class, 'updateSchedule'])
+        ->middleware('permission:ui:customer_history:edit');
 
     Route::get('/repayments/due-list', [RepaymentController::class, 'getDueList'])->middleware('permission:ui:repayment:view');
     Route::get('/repayments/search', [RepaymentController::class, 'search'])->middleware('permission:ui:repayment:view');
@@ -192,10 +217,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/loan-operation/activity', [LoanOperationController::class, 'getRecentActivity']);
     Route::get('/loan-operation/export-excel', [LoanOperationController::class, 'exportExcel']);
 
-    Route::get('/loan-modification/search', [RescheduleRefinanceController::class, 'searchActiveLoans']);
-    Route::post('/loan-modification/reschedule', [RescheduleRefinanceController::class, 'reschedule']);
-    Route::post('/loan-modification/refinance', [RescheduleRefinanceController::class, 'refinance']);
-    Route::post('/loan-modification/preview', [RescheduleRefinanceController::class, 'previewModification']);
+    Route::get('/loan-modification/search', [RescheduleRefinanceController::class, 'searchActiveLoans'])
+        ->middleware('permission:ui:reschedule_refinance:view');
+    Route::post('/loan-modification/reschedule', [RescheduleRefinanceController::class, 'reschedule'])
+        ->middleware('permission:ui:reschedule_refinance:create');
+    Route::post('/loan-modification/refinance', [RescheduleRefinanceController::class, 'refinance'])
+        ->middleware('permission:ui:reschedule_refinance:create');
+    Route::post('/loan-modification/preview', [RescheduleRefinanceController::class, 'previewModification'])
+        ->middleware('permission:ui:reschedule_refinance:view');
 
     Route::get('customer-history/search', [CustomerHistoryController::class, 'search']);
     Route::get('customer-history/details', [CustomerHistoryController::class, 'getHistory']);
@@ -207,8 +236,6 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('saving-accounts/post-interest', [SavingAccountController::class, 'postInterest']);
     Route::get('saving-accounts/{account}/transactions', [SavingAccountController::class, 'getTransactions']);
     Route::post('saving-accounts/{account}/close', [SavingAccountController::class, 'closeAccount']);
-
-
 
     // Export Capital Share Routes
     Route::get('capital-shares/export-excel', [CapitalShareController::class, 'exportExcel']);
@@ -290,7 +317,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/reports/income-statement/export-excel', [IncomeStatementController::class, 'exportExcel']);
         Route::get('/reports/income-statement/export-pdf', [IncomeStatementController::class, 'exportPdf']);
     });
-
 
     Route::apiResource('payments', PaymentController::class);
 

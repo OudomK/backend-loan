@@ -42,8 +42,15 @@ class OverdueLoanResource extends Resource
         return static::getEloquentQuery()->count() > 0 ? 'danger' : 'gray';
     }
 
-    protected static ?string $recordTitleAttribute = 'loan_code';
+    public static function getGloballySearchableAttributes(): array
+    {
+        return ['loan.loan_code', 'loan.borrower.first_name', 'loan.borrower.last_name'];
+    }
 
+    public static function getGlobalSearchResultTitle(\Illuminate\Database\Eloquent\Model $record): string
+    {
+        return 'Overdue: ' . ($record->loan ? $record->loan->loan_code : $record->id);
+    }
     public static function form(Schema $schema): Schema
     {
         return OverdueLoanForm::configure($schema);
@@ -63,9 +70,15 @@ class OverdueLoanResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
+        $today = \Carbon\Carbon::today()->toDateString();
+
         return parent::getEloquentQuery()
-            ->where('payment_date', '<', \Carbon\Carbon::today())
+            ->where('payment_date', '<', $today)
             ->whereRaw('total_paid < (principal_amount + interest_amount - 0.01)')
+            ->whereRaw(
+                'payment_date = (SELECT MIN(candidate.payment_date) FROM payments AS candidate WHERE candidate.loan_id = payments.loan_id AND candidate.payment_date < ? AND candidate.total_paid < (candidate.principal_amount + candidate.interest_amount - 0.01))',
+                [$today]
+            )
             ->whereHas('loan', function ($query) {
                 $query->whereIn('status', ['active', 'arrear']);
             })

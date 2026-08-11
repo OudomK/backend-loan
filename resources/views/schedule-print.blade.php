@@ -478,6 +478,13 @@
                     $val = str_replace('.00', '', number_format((float) $amount, $isNoDecimal ? 0 : 2));
                     return $symbolInFront ? $currSymbol . ' ' . $val : $val . ' ' . $currSymbol;
                 };
+
+                $formatOutstandingBalance = function ($amount) use ($formatMoney) {
+                    if ($amount === null || $amount === '')
+                        return '-';
+
+                    return '-' . $formatMoney(abs((float) $amount));
+                };
             @endphp
 
             @if($isSplitMethod)
@@ -557,7 +564,7 @@
                                         {{ $formatMoney($payment2 ? $payment2['payment'] : 0) }}
                                     </td>
                                     <td>
-                                        {{ (float) $balance > 0 ? '-' . $formatMoney($balance) : $formatMoney($balance) }}
+                                        {{ $formatOutstandingBalance($balance) }}
                                     </td>
                                     <td>
 
@@ -628,7 +635,7 @@
                                     {{ $formatMoney($item['payment']) }}
                                 </td>
                                 <td>
-                                    {{ (float) $item['balance'] > 0 ? '-' . $formatMoney($item['balance']) : $formatMoney($item['balance']) }}
+                                    {{ $formatOutstandingBalance($item['balance']) }}
                                 </td>
                                 <td>
 
@@ -705,8 +712,7 @@
                     គឺ&#8203;តម្រូវឲ្យ&#8203;ទំនាក់ទំនង
                     និង&#8203;ពិភាក្សា&#8203;ជាមួយ&#8203;ភ្នាក់ងារ&#8203;ឥណទាន&#8203;ជាមុនសិន។</p>
 
-                <p style="font-size: 11px; line-height: 2; text-align: justify; margin: 8px 0 0 0;"><span
-                        style="font-weight: bold;">ចំណាំ៖</span>
+                <p style="font-size: 11px; line-height: 2; text-align: justify; margin: 8px 0 0 0;"><span>ចំណាំ៖</span>
                     ក្នុងករណី&#8203;មាន&#8203;ប្រធានស័ក្ក&#8203;ណាមួយ&#8203;កើតឡើង អតិថិជន&#8203;អាច&#8203;ទំនាក់ទំនង
                     និង&#8203;ពិភាក្សា&#8203;ជាមួយ&#8203;ភ្នាក់ងារ&#8203;ឥណទាន
                     ដើម្បី&#8203;ស្វែងរក&#8203;ដំណោះស្រាយ&#8203;សមរម្យ&#8203;ណាមួយ។</p>

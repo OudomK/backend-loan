@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\LoanApproval;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -39,10 +40,55 @@ class InterestIncomeReportController extends Controller
     public function index(Request $request)
     {
         try {
-            $data = $this->getReportData($request);
+            $data = $this->getReportData($request)->toArray();
+            
+            $paginate = filter_var($request->query('paginate', 'true'), FILTER_VALIDATE_BOOLEAN);
+            $page = (int) $request->query('page', 1);
+            $limit = (int) $request->query('limit', 50);
+
+            if (!$paginate) {
+                return response()->json([
+                    'success' => true,
+                    'data' => $data,
+                ]);
+            }
+
+            $grandTotals = [];
+            foreach ($data as $item) {
+                $curr = strtoupper(explode(' ', (string) ($item['currency'] ?? 'USD'))[0]);
+                if (!isset($grandTotals[$curr])) {
+                    $grandTotals[$curr] = [
+                        'interest_paid' => 0,
+                        'transaction_fee_paid' => 0,
+                        'penalty_paid' => 0,
+                        'admin_fee_paid' => 0,
+                        'fee_paid' => 0,
+                        'total' => 0,
+                    ];
+                }
+                $grandTotals[$curr]['interest_paid'] += (float) ($item['interest_paid'] ?? 0);
+                $grandTotals[$curr]['transaction_fee_paid'] += (float) ($item['transaction_fee_paid'] ?? 0);
+                $grandTotals[$curr]['penalty_paid'] += (float) ($item['penalty_paid'] ?? 0);
+                $grandTotals[$curr]['admin_fee_paid'] += (float) ($item['admin_fee_paid'] ?? 0);
+                $grandTotals[$curr]['fee_paid'] += (float) ($item['fee_paid'] ?? 0);
+                $grandTotals[$curr]['total'] += (float) ($item['total'] ?? 0);
+            }
+
+            $totalRecords = count($data);
+            $lastPage = (int) ceil($totalRecords / $limit);
+            $offset = ($page - 1) * $limit;
+
+            $paginatedData = array_slice($data, $offset, $limit);
+
             return response()->json([
                 'success' => true,
-                'data' => $data,
+                'data' => $paginatedData,
+                'meta' => [
+                    'current_page' => $page,
+                    'last_page' => $lastPage > 0 ? $lastPage : 1,
+                    'total' => $totalRecords,
+                    'grand_totals' => $grandTotals
+                ]
             ]);
         } catch (\Exception $e) {
             Log::error("Interest Income Report Error: " . $e->getMessage());
@@ -58,6 +104,7 @@ class InterestIncomeReportController extends Controller
     public function exportExcel(Request $request)
     {
         try {
+            $request->merge(['paginate' => 'false']);
             $data = $this->getReportData($request);
             $fromDateStr = $request->query('from_date');
             $toDateStr = $request->query('to_date');
@@ -122,7 +169,7 @@ class InterestIncomeReportController extends Controller
                 'borrowers.last_name',
                 'loan_products.name as product_name',
             ])
-            ->where('loans.status', '!=', 'pending')
+            ->whereNotIn('loans.status', LoanApproval::nonReportableStatuses())
             ->whereNull('loans.deleted_at');
 
         $query->addSelect([
@@ -191,6 +238,10 @@ class InterestIncomeReportController extends Controller
 
             $totalFee = $scheduledFeeCollected + $penaltyCollected + $adminFeeIncome;
             $totalCollected = $interestCollected + $totalFee;
+            $paymentFrequency = \App\Support\FormatHelper::effectivePaymentFrequency(
+                $loan->payment_frequency ?? null,
+                $loan->repayment_method ?? null
+            );
 
             return [
                 'disb_date' => $loan->disb_date,
@@ -201,7 +252,7 @@ class InterestIncomeReportController extends Controller
                 'currency' => $loan->currency ?? 'USD',
                 'interest_rate' => (double) ($loan->interest_rate ?? 0),
                 'term' => $loan->term ?? 0,
-                'payment_frequency' => str_replace('Biweekly', 'Bi-weekly', ucfirst(strtolower($loan->payment_frequency ?? 'Monthly'))),
+                'payment_frequency' => str_replace('Biweekly', 'Bi-weekly', ucfirst(strtolower($paymentFrequency ?: 'Monthly'))),
                 'repayment_method' => \App\Support\FormatHelper::formatPaymentMethod((string) ($loan->repayment_method ?? 'N/A')),
                 'product_name' => $loan->product_name ?? 'General Loan',
                 'collateral_type' => $loan->collateral_type ?? '',

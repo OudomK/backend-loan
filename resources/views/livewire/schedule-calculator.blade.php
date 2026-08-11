@@ -120,10 +120,21 @@
                                             let v = document.getElementById('repayment_method') ? document.getElementById('repayment_method').value : '';
                                             if (!v || !dateStr) return;
                                             let d = new Date(dateStr);
-                                            if (v === 'fixed_daily') d.setDate(d.getDate() + 1);
-                                            else if (v === 'fixed_weekly') d.setDate(d.getDate() + 7);
-                                            else if (v.includes('15days')) d.setDate(d.getDate() + 15);
-                                            else d.setMonth(d.getMonth() + 1);
+                                            if (v === 'fixed_daily') d.setDate(d.getDate());
+                                            else if (v === 'fixed_weekly') d.setDate(d.getDate() + 6);
+                                            else if (v === 'fixed_biweekly') d.setDate(d.getDate() + 13);
+                                            else if (v.includes('15days')) {
+                                                if (d.getDate() <= 15) d.setDate(26);
+                                                else {
+                                                    d.setMonth(d.getMonth() + 1);
+                                                    d.setDate(11);
+                                                }
+                                            }
+                                            else if (v === 'Balloon') d.setMonth(d.getMonth() + 1);
+                                            else {
+                                                d.setMonth(d.getMonth() + 1);
+                                                d.setDate(11);
+                                            }
                                             let formatted = d.toISOString().split('T')[0];
                                             @this.set('first_repayment_date', formatted);
                                             let firstRepaymentEl = document.getElementById('first_repayment_date');
@@ -197,7 +208,7 @@
                         </div>
                         <div>
                             <label class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">រយៈពេល
-                                (ខែ)</label>
+                                <span id="duration_unit_label">(Months)</span></label>
                             <input type="number" wire:model.defer="duration_months" id="duration_months"
                                 class="block w-full sm:text-sm border-slate-300 dark:border-slate-600 rounded-lg focus:ring-blue-500 focus:border-blue-500 dark:bg-slate-900 dark:text-white transition-colors py-2.5 border px-3"
                                 required>
@@ -206,11 +217,11 @@
                             <label
                                 class="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1.5">ប្រេកង់បង់ប្រាក់
                                 (Payment Freq.)</label>
-                            <select wire:model.defer="payment_frequency"
+                            <select wire:model.defer="payment_frequency" disabled
                                 class="block w-full py-2.5 px-3 text-base border-slate-300 dark:border-slate-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-lg border bg-slate-50 dark:bg-slate-800 dark:text-white"
                                 required>
                                 <option value="Monthly">Monthly</option>
-                                <option value="Bi-weekly">Bi-weekly</option>
+                                <option value="Biweekly">Biweekly</option>
                                 <option value="Weekly">Weekly</option>
                                 <option value="Daily">Daily</option>
                                 <option value="Term">Term</option>
@@ -243,11 +254,24 @@
                                     let v = $event.target.value;
                                     if (v === 'fixed_daily') {
                                         $wire.set('payment_frequency', 'Daily');
-                                    } else if (v.includes('weekly')) {
+                                    } else if (v === 'fixed_biweekly') {
+                                        $wire.set('payment_frequency', 'Biweekly');
+                                    } else if (v === 'fixed_weekly') {
                                         $wire.set('payment_frequency', 'Weekly');
+                                    } else if (v.includes('15days')) {
+                                        $wire.set('payment_frequency', 'Biweekly');
+                                    } else if (v === 'negotiable') {
+                                        $wire.set('payment_frequency', 'Term');
                                     } else {
                                         $wire.set('payment_frequency', 'Monthly');
                                     }
+
+                                    let durationUnit = '(Months)';
+                                    if (v === 'fixed_daily') durationUnit = '(Days)';
+                                    else if (v === 'fixed_weekly') durationUnit = '(Weeks)';
+                                    else if (v === 'fixed_biweekly') durationUnit = '(Bi-weeks)';
+                                    let durationUnitEl = document.getElementById('duration_unit_label');
+                                    if (durationUnitEl) durationUnitEl.textContent = durationUnit;
                                     
                                     let loanDateStr = document.getElementById('loan_date') ? document.getElementById('loan_date').value : '';
                                     if (!loanDateStr) {
@@ -255,13 +279,22 @@
                                     }
                                     let d = new Date(loanDateStr);
                                     if (v === 'fixed_daily') {
-                                        d.setDate(d.getDate() + 1);
+                                        d.setDate(d.getDate());
                                     } else if (v === 'fixed_weekly') {
-                                        d.setDate(d.getDate() + 7);
+                                        d.setDate(d.getDate() + 6);
+                                    } else if (v === 'fixed_biweekly') {
+                                        d.setDate(d.getDate() + 13);
                                     } else if (v.includes('15days')) {
-                                        d.setDate(d.getDate() + 15);
+                                        if (d.getDate() <= 15) d.setDate(26);
+                                        else {
+                                            d.setMonth(d.getMonth() + 1);
+                                            d.setDate(11);
+                                        }
+                                    } else if (v === 'Balloon') {
+                                        d.setMonth(d.getMonth() + 1);
                                     } else {
                                         d.setMonth(d.getMonth() + 1);
+                                        d.setDate(11);
                                     }
                                     let formatted = d.toISOString().split('T')[0];
                                     $wire.set('first_repayment_date', formatted);

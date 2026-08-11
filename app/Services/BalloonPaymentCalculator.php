@@ -2,27 +2,21 @@
 
 namespace App\Services;
 
+use App\Support\CurrencyRounding;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class BalloonPaymentCalculator
 {
-    private static function applyRounding(float $amount, string $currency = 'USD'): float
+    private static function roundInterest(float $amount, string $currency = 'USD'): float
     {
-        if (strpos($currency, 'KHR') !== false) {
-            $amountInt = (int) round($amount);
-            $remainder = $amountInt % 1000;
+        return CurrencyRounding::up($amount, $currency);
+    }
 
-            if ($remainder > 0 && $remainder < 500) {
-                return floor($amountInt / 1000) * 1000 + 500;
-            } elseif ($remainder >= 500) {
-                return ceil($amountInt / 1000) * 1000;
-            }
-
-            return (float) $amountInt;
-        }
-        return ceil($amount);
+    private static function exactAmount(float $amount): float
+    {
+        return round($amount, 2);
     }
     /**
      * Calculate Interest-Only Balloon Payment Schedule
@@ -48,7 +42,7 @@ class BalloonPaymentCalculator
     ): array {
         $schedule = [];
         $monthlyInterestRate = $annualRate / 100; // Treat as Monthly Rate (standard for this app)
-        $monthlyInterest = self::applyRounding($principal * $monthlyInterestRate, $currency);
+        $monthlyInterest = self::roundInterest($principal * $monthlyInterestRate, $currency);
 
         $startDateObj = Carbon::parse($startDate);
         $resolvedPaymentDay = max(1, min(31, $paymentDay ?? (int) $startDateObj->day));
@@ -68,7 +62,7 @@ class BalloonPaymentCalculator
 
             if ($month === 1) {
                 $daysFromStart = $startDateObj->diffInDays($paymentDate) + 1;
-                $currentInterest = self::applyRounding($principal * ($monthlyInterestRate / 30) * $daysFromStart, $currency);
+                $currentInterest = self::roundInterest($principal * ($monthlyInterestRate / 30) * $daysFromStart, $currency);
             } else {
                 $currentInterest = $monthlyInterest;
             }
@@ -79,7 +73,7 @@ class BalloonPaymentCalculator
             $feeAmount = 0;
             if ($adminFee > 0) {
                 if ($adminFeeType === 'monthly') {
-                    $feeAmount = self::applyRounding($totalFeeAmount / $durationMonths, $currency);
+                    $feeAmount = self::exactAmount($totalFeeAmount / $durationMonths);
                 }
             }
 
@@ -125,11 +119,11 @@ class BalloonPaymentCalculator
     ): array {
         $schedule = [];
         $monthlyInterestRate = $annualRate / 100; // Treat as Monthly Rate
-        $monthlyInterest = self::applyRounding($principal * $monthlyInterestRate, $currency);
+        $monthlyInterest = self::roundInterest($principal * $monthlyInterestRate, $currency);
 
         // Default monthly payment = 110% of interest (covers interest + small principal)
         if ($monthlyPayment === null) {
-            $monthlyPayment = self::applyRounding($monthlyInterest * 1.1, $currency);
+            $monthlyPayment = self::exactAmount($monthlyInterest * 1.1);
         }
 
         $remainingPrincipal = $principal;
@@ -152,9 +146,9 @@ class BalloonPaymentCalculator
             // Recalculate interest on remaining principal (pro-rated for first month)
             if ($month === 1) {
                 $daysFromStart = $startDateObj->diffInDays($paymentDate) + 1;
-                $interest = self::applyRounding($remainingPrincipal * ($monthlyInterestRate / 30) * $daysFromStart, $currency);
+                $interest = self::roundInterest($remainingPrincipal * ($monthlyInterestRate / 30) * $daysFromStart, $currency);
             } else {
-                $interest = self::applyRounding($remainingPrincipal * $monthlyInterestRate, $currency);
+                $interest = self::roundInterest($remainingPrincipal * $monthlyInterestRate, $currency);
             }
 
             $isFinalPayment = ($month === $durationMonths);
@@ -174,20 +168,20 @@ class BalloonPaymentCalculator
             $feeAmount = 0;
             if ($adminFee > 0) {
                 if ($adminFeeType === 'monthly') {
-                    $feeAmount = self::applyRounding($totalFeeAmount / $durationMonths, $currency);
+                    $feeAmount = self::exactAmount($totalFeeAmount / $durationMonths);
                 }
             }
 
             $schedule[] = [
                 'payment_number' => $month,
                 'payment_date' => $paymentDate->format('Y-m-d'),
-                'principal_amount' => self::applyRounding($principalPortion, $currency),
+                'principal_amount' => self::exactAmount($principalPortion),
                 'interest_amount' => $interest,
                 'fee_amount' => $feeAmount,
                 'penalty_amount' => 0,
-                'total_paid' => self::applyRounding($totalPayment + $feeAmount, $currency),
+                'total_paid' => self::exactAmount($totalPayment + $feeAmount),
                 'is_balloon' => $isFinalPayment,
-                'remaining_balance' => $isFinalPayment ? 0 : self::applyRounding($remainingPrincipal, $currency),
+                'remaining_balance' => $isFinalPayment ? 0 : self::exactAmount($remainingPrincipal),
             ];
         }
 

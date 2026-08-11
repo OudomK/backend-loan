@@ -4,19 +4,18 @@ namespace App\Http\Controllers;
 
 use App\Models\Borrower;
 use App\Models\Loan;
+use App\Services\LoanScheduleService;
+use App\Support\CurrencyRounding;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
-use App\Services\BalloonPaymentCalculator;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class LoanController extends Controller
 {
-    protected \App\Services\LoanCalculator $calculator;
-    public function __construct(\App\Services\LoanCalculator $calculator)
-    {
-        $this->calculator = $calculator;
-    }
+    public function __construct(private readonly LoanScheduleService $scheduleService) {}
 
     public function getPaymentQrs()
     {
@@ -28,8 +27,10 @@ class LoanController extends Controller
     {
         if (preg_match('#^\d{1,2}/\d{1,2}/\d{4}$#', $date)) {
             $parsed = Carbon::createFromFormat('d/m/Y', $date);
+
             return $parsed ? $parsed->format('Y-m-d') : $date;
         }
+
         return $date;
     }
 
@@ -49,12 +50,13 @@ class LoanController extends Controller
         $borrower = Borrower::withoutGlobalScopes()->find($borrowerId);
         $customerCode = $borrower ? trim($borrower->customer_code ?? '') : '';
         if ($customerCode === '') {
-            $customerCode = 'L' . str_pad((string) $borrowerId, 3, '0', STR_PAD_LEFT);
+            $customerCode = 'L'.str_pad((string) $borrowerId, 3, '0', STR_PAD_LEFT);
         }
         $cycle = Loan::where('borrower_id', $borrowerId)
             ->where('status', '!=', 'rejected')
             ->count() + 1;
-        $suggestedLoanCode = $customerCode . '-C' . $cycle;
+        $suggestedLoanCode = $customerCode.'-C'.$cycle;
+
         return response()->json([
             'cycle' => $cycle,
             'suggested_loan_code' => $suggestedLoanCode,
@@ -63,6 +65,9 @@ class LoanController extends Controller
 
     public function store(Request $request)
     {
+        $requirePurpose = \App\Models\Setting::where('key', 'require_loan_purpose')->value('value');
+        $requirePurpose = $requirePurpose === null ? true : filter_var($requirePurpose, FILTER_VALIDATE_BOOLEAN);
+
         $validated = $request->validate([
             'borrower_id' => 'required|exists:borrowers,id',
             'amount' => 'nullable|numeric',
@@ -72,7 +77,7 @@ class LoanController extends Controller
             'status' => 'required|in:pending,pending_check,pending_verify,pending_approval,active,completed,paid_off,rejected',
             'currency' => 'nullable|string',
             'repayment_method' => 'nullable|string',
-            'purpose' => 'required|string|max:255',
+            'purpose' => ($requirePurpose ? 'required' : 'nullable').'|string|max:255',
             'loan_code' => 'nullable|string',
             'payment_frequency' => 'nullable|string',
             'loan_officer_id' => 'nullable|exists:loan_officers,id',
@@ -104,6 +109,11 @@ class LoanController extends Controller
             'guarantor_id.exists' => 'អ្នកធានាមិនត្រឹមត្រូវ។',
         ]);
 
+        $validated['payment_frequency'] = LoanScheduleService::canonicalPaymentFrequency(
+            (string) ($validated['repayment_method'] ?? ''),
+            $validated['payment_frequency'] ?? null
+        );
+
         $requestedAmount = (float) ($validated['amount'] ?? 0);
         $adminFeePercent = (float) ($request->input('admin_fee') ?? $validated['admin_fee'] ?? 0);
         $adminFeeValue = ($requestedAmount * $adminFeePercent) / 100;
@@ -118,7 +128,11 @@ class LoanController extends Controller
             $validated['amount'] = $requestedAmount; // Schedule runs on requested amount
         } elseif ($feeType === 'capitalized_upfront') {
             $validated['disbursed_amount'] = $requestedAmount;
-            $validated['amount'] = round($requestedAmount + $adminFeeValue, 2); // Schedule runs on higher amount
+            $validated['amount'] = $this->scheduleService->calculateSchedulePrincipal(
+                $requestedAmount,
+                $adminFeePercent,
+                $feeType
+            );
         } else {
             $validated['disbursed_amount'] = $requestedAmount;
             $validated['amount'] = $requestedAmount;
@@ -169,23 +183,23 @@ class LoanController extends Controller
             if (isset($validated['collaterals'])) {
                 foreach ($validated['collaterals'] as $collateralData) {
                     // Only save if type or value is provided
-                    if (!empty($collateralData['type']) || !empty($collateralData['value'])) {
+                    if (! empty($collateralData['type']) || ! empty($collateralData['value'])) {
                         $loan->collaterals()->create($collateralData);
                     }
                 }
             }
 
             $requiresSchedule =
-                !empty($validated['amount']) &&
-                !empty($validated['interest_rate']) &&
-                !empty($validated['duration_months']) &&
-                !empty($validated['repayment_method']) &&
-                !empty($validated['start_date']);
+                ! empty($validated['amount']) &&
+                ! empty($validated['interest_rate']) &&
+                ! empty($validated['duration_months']) &&
+                ! empty($validated['repayment_method']) &&
+                ! empty($validated['start_date']);
 
             // Calculate schedule if essential data is provided
             if ($requiresSchedule) {
                 // Handle Negotiable (Custom Schedule)
-                if ($validated['repayment_method'] === 'negotiable' && !empty($validated['custom_schedule'])) {
+                if ($validated['repayment_method'] === 'negotiable' && ! empty($validated['custom_schedule'])) {
                     $schedule = $validated['custom_schedule'];
 
                     // Use the first payment as monthly reference (though it varies)
@@ -204,66 +218,12 @@ class LoanController extends Controller
                             'payment_method' => 'Cash',
                         ]);
                     }
-                }
-                // Use Balloon calculator for Balloon repayment method
-                else if ($validated['repayment_method'] === 'Balloon') {
-                    $loanData = [
-                        'amount' => $validated['amount'],
-                        'interest_rate' => $validated['interest_rate'],
-                        'duration_months' => $validated['duration_months'],
-                        'start_date' => $validated['start_date'],
-                        'currency' => $validated['currency'] ?? 'USD',
-                    ];
-
-                    // Generate interest-only balloon schedule by default
-                    $schedule = BalloonPaymentCalculator::generateSchedule(
-                        $loanData,
-                        'interest_only',
-                        null,
-                        $validated['pay_day_1'] ?? null,
-                        $validated['admin_fee'] ?? 0,
-                        $validated['admin_fee_type'] ?? 'one_time'
-                    );
-
-                    if (!empty($schedule)) {
-                        // Update monthly payment reference (first payment)
-                        $loan->update(['monthly_payment' => $schedule[0]['total_paid'] ?? 0]);
-
-                        // Save schedule as payments
-                        foreach ($schedule as $payment) {
-                            $loan->payments()->create([
-                                'payment_number' => $payment['payment_number'],
-                                'principal_amount' => $payment['principal_amount'],
-                                'interest_amount' => $payment['interest_amount'],
-                                'fee_amount' => (float) ($payment['fee_amount'] ?? 0),
-                                'outstanding_balance' => isset($payment['remaining_balance']) ? (float) $payment['remaining_balance'] : (isset($payment['outstanding_balance']) ? (float) $payment['outstanding_balance'] : (isset($payment['balance']) ? (float) $payment['balance'] : null)),
-                                'penalty_amount' => (float) ($payment['penalty_amount'] ?? 0),
-                                'total_paid' => 0,
-                                'payment_date' => $payment['payment_date'],
-                                'payment_method' => 'Cash',
-                            ]);
-                        }
-                    }
                 } else {
-                    // Use existing calculator for other repayment methods
-                    $schedule = $this->calculator->calculateLoanWithDates(
-                        $validated['amount'],
-                        $validated['interest_rate'],
-                        $validated['duration_months'],
-                        $validated['repayment_method'],
-                        $validated['start_date'],
-                        $validated['currency'] ?? 'USD',
-                        $validated['admin_fee'] ?? 0,
-                        $validated['admin_fee_type'] ?? 'one_time',
-                        $validated['pay_day_1'] ?? null,
-                        $validated['pay_day_2'] ?? null,
-                    );
+                    $schedule = $this->scheduleService->generate($validated);
 
-                    if (!empty($schedule)) {
-                        // Update monthly payment reference
+                    if (! empty($schedule)) {
                         $loan->update(['monthly_payment' => $schedule[0]['payment'] ?? 0]);
 
-                        // Save schedule as payments
                         foreach ($schedule as $item) {
                             $loan->payments()->create([
                                 'payment_number' => $item['period'],
@@ -287,10 +247,12 @@ class LoanController extends Controller
             }
 
             DB::commit();
+
             return response()->json($loan->load(['borrower', 'coBorrower', 'guarantor', 'officer', 'collaterals', 'payments', 'product', 'paymentQr']), 201);
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error("Loan create failed: " . $e->getMessage());
+            Log::error('Loan create failed: '.$e->getMessage());
+
             return response()->json([
                 'error' => 'Create loan failed.',
                 'message' => $e->getMessage(),
@@ -314,64 +276,188 @@ class LoanController extends Controller
         ]);
 
         try {
-            if ($validated['repayment_method'] === 'Balloon') {
-                $loanData = [
-                    'amount' => $validated['amount'],
-                    'interest_rate' => $validated['interest_rate'],
-                    'duration_months' => $validated['duration_months'],
-                    'start_date' => $validated['start_date'],
-                    'currency' => $validated['currency'] ?? 'USD',
-                ];
-                // Generate interest-only balloon schedule by default
-                $scheduleRaw = BalloonPaymentCalculator::generateSchedule(
-                    $loanData,
-                    'interest_only',
-                    null,
-                    $validated['pay_day_1'] ?? null,
-                    $validated['admin_fee'] ?? 0,
-                    $validated['admin_fee_type'] ?? 'one_time'
-                );
+            $feeType = (string) ($validated['admin_fee_type'] ?? 'one_time');
+            $scheduleAmount = $this->scheduleService->calculateSchedulePrincipal(
+                (float) $validated['amount'],
+                (float) ($validated['admin_fee'] ?? 0),
+                $feeType
+            );
 
-                // Map to format expected by frontend
-                $schedule = array_map(function ($item) {
-                    return [
-                        'period' => $item['payment_number'],
-                        'date' => $item['payment_date'],
-                        'principal' => $item['principal_amount'],
-                        'interest' => $item['interest_amount'],
-                        'payment' => $item['total_paid'],
-                        'balance' => $item['remaining_balance'] ?? 0,
-                        'is_balloon' => $item['is_balloon'] ?? false,
-                    ];
-                }, $scheduleRaw);
-            } else {
-                $scheduleAmount = (float) $validated['amount'];
-                $feeType = $validated['admin_fee_type'] ?? 'one_time';
-                if ($feeType === 'capitalized_upfront') {
-                    $adminFeePercent = (float) ($validated['admin_fee'] ?? 0);
-                    $adminFeeValue = ($scheduleAmount * $adminFeePercent) / 100;
-                    $scheduleAmount += $adminFeeValue;
-                }
+            $schedule = $this->scheduleService->generate([
+                ...$validated,
+                'amount' => $scheduleAmount,
+                'admin_fee_type' => $feeType,
+            ]);
 
-                $schedule = $this->calculator->calculateLoanWithDates(
-                    $scheduleAmount,
-                    $validated['interest_rate'],
-                    $validated['duration_months'],
-                    // For negotiable, default to fixed_monthly as a starting point
-                    $validated['repayment_method'] === 'negotiable' ? 'fixed_monthly' : $validated['repayment_method'],
-                    $validated['start_date'],
-                    $validated['currency'] ?? 'USD',
-                    $validated['admin_fee'] ?? 0,
-                    $feeType,
-                    $validated['pay_day_1'] ?? null,
-                    $validated['pay_day_2'] ?? null,
-                );
-            }
+            $printSchedule = \App\Services\LoanCalculator::formatScheduleForPrint(
+                $schedule,
+                $validated['repayment_method'],
+                $scheduleAmount
+            );
 
-            return response()->json($schedule);
+            return response()->json([
+                'schedule' => $schedule,
+                'print_schedule' => $printSchedule,
+            ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 422);
         }
+    }
+
+    /**
+     * Recalculate a Negotiable schedule on the server side.
+     *
+     * Accepts the current schedule rows (with locked flags), the chosen
+     * calculation type (annuity / linear / flat), and loan parameters.
+     * Returns the recalculated schedule with proper currency-aware rounding.
+     */
+    public function recalculateNegotiableSchedule(Request $request)
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:0',
+            'interest_rate' => 'required|numeric|min:0',
+            'currency' => 'nullable|string',
+            'calc_type' => 'required|string|in:annuity,linear,flat',
+            'start_date' => 'nullable|date',
+            'schedule' => 'required|array|min:1',
+            'schedule.*.period' => 'required|integer',
+            'schedule.*.date' => 'required|string',
+            'schedule.*.principal' => 'required|numeric',
+            'schedule.*.interest' => 'required|numeric',
+            'schedule.*.fee' => 'nullable|numeric',
+            'schedule.*.payment' => 'required|numeric',
+            'schedule.*.locked' => 'required|boolean',
+        ]);
+
+        $principal = (float) $validated['amount'];
+        $rate = (float) $validated['interest_rate'];
+        $currency = $validated['currency'] ?? 'USD';
+        $calcType = $validated['calc_type'];
+        $rows = $validated['schedule'];
+        $startDate = ! empty($validated['start_date'])
+            ? new \DateTime($validated['start_date'])
+            : null;
+
+        // Only interest rounds upward; principal/payment keep exact 2 decimals.
+        $roundFn = fn ($amount) => round((float) $amount, 2);
+        $roundInterest = fn ($amount) => CurrencyRounding::up((float) $amount, $currency);
+        $roundScheduledPrincipal = $roundFn;
+
+        // ------ Parse first payment date for pro-rata interest ------
+        $firstPaymentDate = null;
+        $daysFromStart = null;
+        if ($startDate && ! empty($rows[0]['date'])) {
+            $rawDate = $rows[0]['date'];
+            // Support both dd/MM/yyyy and yyyy-MM-dd formats
+            if (preg_match('#^\d{1,2}/\d{1,2}/\d{4}$#', $rawDate)) {
+                $firstPaymentDate = \DateTime::createFromFormat('d/m/Y', $rawDate);
+            } else {
+                $firstPaymentDate = new \DateTime($rawDate);
+            }
+            if ($firstPaymentDate) {
+                $daysFromStart = $startDate->diff($firstPaymentDate)->days + 1; // +1 inclusive
+            }
+        }
+
+        // ------ Gather locked / unlocked info ------
+        $sumLockedPrincipal = 0;
+        $unlockedCount = 0;
+        $lastUnlockedIndex = -1;
+
+        foreach ($rows as $i => $row) {
+            if (! empty($row['locked'])) {
+                $sumLockedPrincipal += (float) $row['principal'];
+            } else {
+                $unlockedCount++;
+                $lastUnlockedIndex = $i;
+            }
+        }
+
+        $remainingPrincipal = max(0, $principal - $sumLockedPrincipal);
+        $monthlyRate = $rate / 100;
+
+        // ------ Compute PMT / per-period principal ------
+        $pmt = 0;
+        $unlockedPrincipalPer = 0;
+
+        if ($unlockedCount > 0) {
+            if ($calcType === 'annuity') {
+                if ($monthlyRate > 0) {
+                    $factor = pow(1 + $monthlyRate, $unlockedCount);
+                    $pmt = $remainingPrincipal * ($monthlyRate * $factor) / ($factor - 1);
+                } else {
+                    $pmt = $remainingPrincipal / $unlockedCount;
+                }
+            } else {
+                $unlockedPrincipalPer = $remainingPrincipal / $unlockedCount;
+            }
+        }
+
+        // ------ Build result schedule ------
+        $outstanding = $principal;
+        $result = [];
+
+        foreach ($rows as $i => $row) {
+            $newPrincipal = (float) $row['principal'];
+            $fee = (float) ($row['fee'] ?? 0);
+
+            // Interest — first period uses pro-rata based on actual days
+            if ($i === 0 && $daysFromStart !== null) {
+                // Pro-rata first period interest: rate/30 * daysFromStart
+                if ($calcType === 'flat') {
+                    $newInterest = $roundInterest($principal * ($monthlyRate / 30) * $daysFromStart);
+                } else {
+                    $newInterest = $roundInterest($outstanding * ($monthlyRate / 30) * $daysFromStart);
+                }
+            } else {
+                if ($calcType === 'flat') {
+                    $newInterest = $roundInterest($principal * $monthlyRate);
+                } else {
+                    $newInterest = $roundInterest($outstanding * $monthlyRate);
+                }
+            }
+
+            // Principal (only recalculate unlocked rows)
+            if (empty($row['locked'])) {
+                if ($i === $lastUnlockedIndex) {
+                    $newPrincipal = $outstanding; // zero-out
+                } elseif ($calcType === 'annuity') {
+                    // For first period with pro-rata, use standard PMT for principal split
+                    $roundedPmt = $roundFn($pmt);
+                    if ($i === 0 && $daysFromStart !== null) {
+                        // Use standard monthly interest (not pro-rata) for principal calculation
+                        $standardInterest = $roundInterest($outstanding * $monthlyRate);
+                        $newPrincipal = $roundedPmt - $standardInterest;
+                    } else {
+                        $newPrincipal = $roundedPmt - $newInterest;
+                    }
+                    if ($newPrincipal < 0) {
+                        $newPrincipal = 0;
+                    }
+                } else {
+                    $newPrincipal = $roundScheduledPrincipal($unlockedPrincipalPer);
+                }
+            }
+
+            $payment = $roundFn($newPrincipal + $newInterest + $fee);
+
+            $outstanding -= $newPrincipal;
+            if ($outstanding < 0.01) {
+                $outstanding = 0;
+            }
+
+            $result[] = [
+                'period' => $row['period'],
+                'date' => $row['date'],
+                'principal' => $newPrincipal,
+                'interest' => $newInterest,
+                'fee' => $fee,
+                'payment' => $payment,
+                'balance' => $outstanding,
+            ];
+        }
+
+        return response()->json(['schedule' => $result]);
     }
 
     public function show(Loan $loan)
@@ -384,12 +470,16 @@ class LoanController extends Controller
             'collaterals',
             'payments',
             'product',
-            'paymentQr'
+            'paymentQr',
         ]));
     }
 
     public function update(Request $request, Loan $loan)
     {
+        $this->assertCycleIsEditable($loan);
+        $requirePurpose = \App\Models\Setting::where('key', 'require_loan_purpose')->value('value');
+        $requirePurpose = $requirePurpose === null ? true : filter_var($requirePurpose, FILTER_VALIDATE_BOOLEAN);
+
         $validated = $request->validate([
             'borrower_id' => 'sometimes|required|exists:borrowers,id',
             'amount' => 'sometimes|required|numeric',
@@ -398,7 +488,7 @@ class LoanController extends Controller
             'monthly_payment' => 'sometimes|required|numeric',
             'start_date' => 'sometimes|required|date',
             'status' => 'sometimes|required|in:pending,active,completed,paid_off',
-            'purpose' => 'sometimes|required|string|max:255',
+            'purpose' => 'sometimes|'.($requirePurpose ? 'required' : 'nullable').'|string|max:255',
             'admin_fee' => 'nullable|numeric',
             'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
@@ -409,18 +499,22 @@ class LoanController extends Controller
         ]);
 
         $loan->update($validated);
+
         return response()->json($loan->load(['borrower', 'coBorrower', 'guarantor']));
     }
 
     public function destroy(Loan $loan)
     {
+        $this->assertCycleIsEditable($loan);
         $loan->delete();
+
         return response()->json(null, 204);
     }
 
     public function writeOff(Request $request, int $id)
     {
         $loan = Loan::findOrFail($id);
+        $this->assertCycleIsEditable($loan);
 
         $validated = $request->validate([
             'written_off_at' => 'required|date',
@@ -450,40 +544,133 @@ class LoanController extends Controller
         return response()->json(['message' => 'Loan successfully written off.', 'loan' => $loan]);
     }
 
+    private function applyRounding(float $amount, string $currency): float
+    {
+        return round($amount, 2);
+    }
+
+    private function assertCycleIsEditable(Loan $loan): void
+    {
+        if (in_array($loan->status, ['rescheduled', 'refinanced'], true)) {
+            throw ValidationException::withMessages([
+                'loan' => 'A closed rescheduled/refinanced cycle is read-only.',
+            ]);
+        }
+    }
+
     public function updateSchedule(Request $request, int $id)
     {
         $loan = Loan::findOrFail($id);
+        if ($loan->status !== 'active') {
+            throw ValidationException::withMessages([
+                'loan' => 'Only an active loan cycle can have its schedule edited.',
+            ]);
+        }
 
         $validated = $request->validate([
-            'payments' => 'required|array',
-            'payments.*.id' => 'required|exists:payments,id',
-            'payments.*.payment_date' => 'required|date',
-            'payments.*.principal_amount' => 'required|numeric',
-            'payments.*.interest_amount' => 'required|numeric',
-            'payments.*.fee_amount' => 'required|numeric',
-            'payments.*.outstanding_balance' => 'nullable|numeric',
-            'payments.*.balance' => 'nullable|numeric',
-            'payments.*.remaining_balance' => 'nullable|numeric',
+            'payments' => 'required|array|min:1',
+            'payments.*' => 'required|array',
+            'payments.*.id' => [
+                'required',
+                'integer',
+                Rule::exists('payments', 'id')->where(
+                    fn ($query) => $query->where('loan_id', $loan->id)
+                ),
+            ],
+            'payments.*.payment_date' => 'sometimes|required|date',
+            'payments.*.principal_amount' => 'sometimes|required|numeric|min:0',
+            'payments.*.interest_amount' => 'sometimes|required|numeric|min:0',
+            'payments.*.fee_amount' => 'sometimes|required|numeric|min:0',
+            'payments.*.outstanding_balance' => 'sometimes|required|numeric|min:0',
+            'payments.*.balance' => 'sometimes|required|numeric|min:0',
+            'payments.*.remaining_balance' => 'sometimes|required|numeric|min:0',
         ]);
 
-        DB::transaction(function () use ($loan, $validated) {
+        $editableFields = [
+            'payment_date',
+            'principal_amount',
+            'interest_amount',
+            'fee_amount',
+            'outstanding_balance',
+            'balance',
+            'remaining_balance',
+        ];
+        foreach ($validated['payments'] as $index => $paymentData) {
+            if (array_intersect($editableFields, array_keys($paymentData)) === []) {
+                throw ValidationException::withMessages([
+                    "payments.{$index}" => 'At least one schedule field must be provided.',
+                ]);
+            }
+        }
+
+        $principalWasEdited = collect($validated['payments'])
+            ->contains(fn (array $paymentData): bool => array_key_exists('principal_amount', $paymentData));
+
+        DB::transaction(function () use ($loan, $validated, $principalWasEdited) {
             foreach ($validated['payments'] as $paymentData) {
-                // Ensure the payment belongs to this loan
-                $payment = $loan->payments()->find($paymentData['id']);
-                if ($payment) {
-                    $principal = (float) $paymentData['principal_amount'];
-                    $interest = (float) $paymentData['interest_amount'];
-                    $fee = (float) $paymentData['fee_amount'];
-                    
-                    $payment->update([
-                        'payment_date' => $paymentData['payment_date'],
-                        'principal_amount' => $principal,
-                        'interest_amount' => $interest,
-                        'fee_amount' => $fee,
-                        'total_due' => $principal + $interest + $fee,
-                        'outstanding_balance' => isset($paymentData['outstanding_balance']) ? (float) $paymentData['outstanding_balance'] : (isset($paymentData['balance']) ? (float) $paymentData['balance'] : (isset($paymentData['remaining_balance']) ? (float) $paymentData['remaining_balance'] : null)),
+                $payment = $loan->payments()->findOrFail($paymentData['id']);
+                $currency = $loan->currency ?? 'USD';
+                $updates = [];
+
+                if (array_key_exists('payment_date', $paymentData)) {
+                    $updates['payment_date'] = $paymentData['payment_date'];
+                }
+                if (array_key_exists('principal_amount', $paymentData)) {
+                    $updates['principal_amount'] = $this->applyRounding(
+                        (float) $paymentData['principal_amount'],
+                        $currency
+                    );
+                }
+                if (array_key_exists('interest_amount', $paymentData)) {
+                    $updates['interest_amount'] = CurrencyRounding::up(
+                        (float) $paymentData['interest_amount'],
+                        $currency
+                    );
+                }
+                if (array_key_exists('fee_amount', $paymentData)) {
+                    $updates['fee_amount'] = $this->applyRounding(
+                        (float) $paymentData['fee_amount'],
+                        $currency
+                    );
+                }
+
+                foreach (['outstanding_balance', 'balance', 'remaining_balance'] as $balanceKey) {
+                    if (array_key_exists($balanceKey, $paymentData)) {
+                        $updates['outstanding_balance'] = $this->applyRounding(
+                            (float) $paymentData[$balanceKey],
+                            $currency
+                        );
+                        break;
+                    }
+                }
+
+                if ($updates !== []) {
+                    $payment->update($updates);
+                }
+            }
+
+            if ($principalWasEdited) {
+                $contractPrincipal = round((float) $loan->payments()->sum('principal_amount'), 2);
+                $principalMovement = (float) $loan->transactions()
+                    ->selectRaw(
+                        'COALESCE(SUM(COALESCE(principal_paid, 0) + COALESCE(prepayment_paid, 0) '
+                        .' + COALESCE(paid_off_amount, 0) - COALESCE(withdrawn_prepayment, 0)), 0) AS aggregate'
+                    )
+                    ->value('aggregate');
+
+                if ($contractPrincipal + 0.001 < $principalMovement) {
+                    throw ValidationException::withMessages([
+                        'payments' => 'Schedule principal cannot be lower than principal already paid.',
                     ]);
                 }
+
+                $loan->update([
+                    'amount' => $contractPrincipal,
+                    'monthly_interest' => round(
+                        $contractPrincipal * (float) $loan->interest_rate / 100,
+                        2
+                    ),
+                ]);
             }
         });
 

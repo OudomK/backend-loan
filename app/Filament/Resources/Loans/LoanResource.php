@@ -58,7 +58,6 @@ class LoanResource extends Resource
     public static function getRelations(): array
     {
         return [
-            \App\Filament\Resources\Loans\RelationManagers\CollateralsRelationManager::class,
             \App\Filament\Resources\Loans\RelationManagers\ModificationsRelationManager::class,
             \App\Filament\Resources\Loans\RelationManagers\ApprovalsRelationManager::class,
         ];
