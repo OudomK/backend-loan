@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 /**
  * @property int $id
@@ -18,10 +18,14 @@ use Spatie\Activitylog\LogOptions;
  * @property float $total_paid
  * @property string $payment_date
  * @property string $payment_method
+ * @property string|null $settled_at
+ * @property string|null $settled_due_date
+ * @property int|null $settled_days_variance
+ * @property string|null $settlement_source
  */
 class Payment extends Model
 {
-    use SoftDeletes, LogsActivity;
+    use LogsActivity, SoftDeletes;
 
     protected static function booted()
     {
@@ -53,6 +57,10 @@ class Payment extends Model
         'payment_date',
         'payment_method',
         'repayment_transaction_id',
+        'settled_at',
+        'settled_due_date',
+        'settled_days_variance',
+        'settlement_source',
     ];
 
     public function loan(): \Illuminate\Database\Eloquent\Relations\BelongsTo

@@ -211,7 +211,10 @@ class CustomerHistoryController extends Controller
         $scheduleOnTimeLabel = "0";
         $paymentOnTimeLabel = "0";
 
-        if (!$isFullyPaid && $isOverdue && $dDate) {
+        if ($isFullyPaid && $p->settled_days_variance !== null) {
+            $scheduleOnTimeLabel = (string) ((int) $p->settled_days_variance);
+            $paymentOnTimeLabel = $scheduleOnTimeLabel;
+        } elseif (!$isFullyPaid && $isOverdue && $dDate) {
             $diff = (int) $dDate->diffInDays($nDate, false);
             $scheduleOnTimeLabel = "-$diff";
         } elseif ($isFullyPaid && $payDate && $dDate) {
@@ -244,6 +247,10 @@ class CustomerHistoryController extends Controller
             'repayment_transaction_id' => $p->repayment_transaction_id,
             'repayment_type' => $repaymentType,
             'transaction_date' => $p->repayment_transaction_id ? ($txMap[$p->repayment_transaction_id]?->transaction_date ?? null) : null,
+            'settled_at' => $p->settled_at,
+            'settled_due_date' => $p->settled_due_date,
+            'settled_days_variance' => $p->settled_days_variance,
+            'settlement_source' => $p->settlement_source,
             'schedule_on_time_label' => $scheduleOnTimeLabel,
             'payment_on_time_label' => $paymentOnTimeLabel,
             'outstanding_balance' => $currentOS,

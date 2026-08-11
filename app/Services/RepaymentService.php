@@ -11,6 +11,10 @@ use Illuminate\Support\Facades\DB;
 
 class RepaymentService
 {
+    public function __construct(
+        private readonly PaymentSettlementTimingService $settlementTimingService
+    ) {}
+
     /**
      * @param  array<string, mixed>  $validated
      * @return array{transaction: RepaymentTransaction, loan: Loan}
@@ -45,6 +49,7 @@ class RepaymentService
             $penaltyDue = $loan->currentPenaltyDue(
                 Carbon::parse($validated['transaction_date'])->startOfDay()
             );
+            $agingBeforePayment = $loan->currentAging(Carbon::today());
 
             if (($penaltyAmountToPay + $waivedAmount) > $penaltyDue + 0.001) {
                 throw new \RuntimeException('Penalty pay and waiver cannot be greater than the penalty due.');
@@ -84,6 +89,8 @@ class RepaymentService
             } else {
                 $totalToDistribute = round($principalInterestAmount + $feePaid, 2);
             }
+            $isPenaltyOnlyPayment = $totalToDistribute <= 0.001
+                && ($cashPenaltyPaid + $waivedAmount) > 0.001;
 
             $installmentDueExpression = $usesInstallmentFee
                 ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0))'
@@ -102,11 +109,13 @@ class RepaymentService
             $arrearExpr = $usesInstallmentFee
                 ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'
                 : 'total_paid < (principal_amount + interest_amount - 0.01)';
-            if ($installments->isEmpty() && $validated['repayment_type'] !== 'Withdraw') {
+            if ($installments->isEmpty()
+                && $validated['repayment_type'] !== 'Withdraw'
+                && ! $isPenaltyOnlyPayment) {
                 throw new \RuntimeException('No unpaid installments found for this loan.');
             }
 
-            if ($validated['repayment_type'] === 'Normal') {
+            if ($validated['repayment_type'] === 'Normal' && ! $isPenaltyOnlyPayment) {
                 $firstInst = $installments->first();
                 $dueForFirstPI = ($firstInst->principal_amount + $firstInst->interest_amount + ($usesInstallmentFee ? $firstInst->fee_amount : 0)) - $firstInst->total_paid;
 
@@ -183,6 +192,7 @@ class RepaymentService
             $totalPrepaymentGenerated = 0.0;
             $totalPenaltyPaid = $cashPenaltyPaid;
             $lastUpdatedInst = null;
+            $touchedPaymentIds = [];
             $now = Carbon::now();
 
             /** @var Payment|null $firstInst */
@@ -222,6 +232,7 @@ class RepaymentService
                     $inst->total_paid = round($existingTotalPaid + $feeApplied, 2);
                     $inst->save();
                     $lastUpdatedInst = $inst;
+                    $touchedPaymentIds[] = $inst->id;
 
                     if ($feeApplied > 0) {
                         \App\Models\PaymentAllocation::create([
@@ -273,6 +284,7 @@ class RepaymentService
                 $inst->updated_at = $now;
                 $inst->save();
                 $lastUpdatedInst = $inst;
+                $touchedPaymentIds[] = $inst->id;
 
                 if ($appliedToThisRow > 0) {
                     \App\Models\PaymentAllocation::create([
@@ -370,6 +382,7 @@ class RepaymentService
             }
 
             $loan->updateAging();
+            $loan->refresh();
 
             $hasOverdueRowsAfterPayment = Payment::where('loan_id', $loan->id)
                 ->where('payment_date', '<', Carbon::today()->toDateString())
@@ -377,14 +390,22 @@ class RepaymentService
                 ->exists();
 
             if (! $hasOverdueRowsAfterPayment) {
-                // The late period has ended. Freeze the remaining penalty alongside
-                // its locked aging, so neither grows until a later installment is late.
-                $loan->accumulated_penalty = round(max(0, $penaltyDue - $cashPenaltyPaid - $waivedAmount), 2);
+                // The schedule late period has ended. Keep loan-level aging
+                // frozen until the remaining penalty is fully paid or waived.
+                $remainingPenalty = round(max(
+                    0,
+                    $penaltyDue - $cashPenaltyPaid - $waivedAmount
+                ), 2);
+                $lockedAging = max(
+                    $agingBeforePayment,
+                    (int) ($loan->locked_aging ?? 0)
+                );
 
-                if ($loan->accumulated_penalty <= 0.001) {
-                    $loan->locked_aging = 0;
-                    $loan->aging = 0;
-                }
+                $loan->late_since_date = null;
+                $loan->penalty_late_since_date = null;
+                $loan->accumulated_penalty = $remainingPenalty;
+                $loan->locked_aging = $remainingPenalty > 0.01 ? $lockedAging : 0;
+                $loan->aging = $remainingPenalty > 0.01 ? $lockedAging : 0;
 
                 $loan->save();
             }
@@ -393,11 +414,18 @@ class RepaymentService
                 ->whereRaw($completedLoanExpression)
                 ->count();
 
-            if ($unpaidCount === 0) {
+            $remainingPenalty = $loan->currentPenaltyDue(
+                Carbon::parse($validated['transaction_date'])->startOfDay()
+            );
+
+            if ($unpaidCount === 0 && $remainingPenalty <= 0.01) {
                 $loan->update(['status' => 'completed']);
+            } elseif ($remainingPenalty > 0.01 && $loan->status !== 'active') {
+                $loan->update(['status' => 'active']);
             }
 
             $loan->update(['total_paid' => $loan->payments()->sum('total_paid')]);
+            $this->syncPaymentSettlementTimings($touchedPaymentIds);
 
             // Automatically record Penalty and Fees as General Revenue
             if ($totalPenaltyPaid > 0.001) {
@@ -527,6 +555,7 @@ class RepaymentService
 
             $transaction = RepaymentTransaction::whereKey($transaction->getKey())->lockForUpdate()->firstOrFail();
             $loan = Loan::whereKey($transaction->loan_id)->lockForUpdate()->firstOrFail();
+            $touchedPaymentIds = [];
 
             if ($transaction->repayment_type === 'Pay Off') {
                 throw new \RuntimeException('Cannot void a Pay Off transaction.');
@@ -556,6 +585,7 @@ class RepaymentService
                     foreach ($allocations as $allocation) {
                         $inst = Payment::find($allocation->payment_id);
                         if ($inst) {
+                            $touchedPaymentIds[] = $inst->id;
                             $actualAmountToSubtractFromTotalPaid = (float) $allocation->amount_applied - (float) ($allocation->penalty_applied ?? 0);
                             $inst->total_paid = round(max(0, (float) $inst->total_paid - $actualAmountToSubtractFromTotalPaid), 2);
                             $inst->fee_paid = round(max(0, (float) $inst->fee_paid - (float) $allocation->fee_applied), 2);
@@ -595,6 +625,7 @@ class RepaymentService
 
                     /** @var Payment $inst */
                     foreach ($installments as $inst) {
+                        $touchedPaymentIds[] = $inst->id;
                         if ($feeToReverse > 0.001 && $inst->fee_paid > 0) {
                             $reduceFee = min($feeToReverse, (float) $inst->fee_paid);
                             $inst->fee_paid = round((float) $inst->fee_paid - $reduceFee, 2);
@@ -666,11 +697,25 @@ class RepaymentService
             }
 
             $loan->update(['total_paid' => $loan->payments()->sum('total_paid')]);
+            $this->syncPaymentSettlementTimings($touchedPaymentIds);
 
             return [
                 'loan' => $loan->fresh(),
                 'transaction' => $transaction,
             ];
         });
+    }
+
+    /** @param array<int, int> $paymentIds */
+    private function syncPaymentSettlementTimings(array $paymentIds): void
+    {
+        if ($paymentIds === []) {
+            return;
+        }
+
+        Payment::query()
+            ->whereIn('id', array_values(array_unique($paymentIds)))
+            ->get()
+            ->each(fn (Payment $payment) => $this->settlementTimingService->sync($payment));
     }
 }

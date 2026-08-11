@@ -478,6 +478,13 @@
                     $val = str_replace('.00', '', number_format((float) $amount, $isNoDecimal ? 0 : 2));
                     return $symbolInFront ? $currSymbol . ' ' . $val : $val . ' ' . $currSymbol;
                 };
+
+                $formatOutstandingBalance = function ($amount) use ($formatMoney) {
+                    if ($amount === null || $amount === '')
+                        return '-';
+
+                    return '-' . $formatMoney(abs((float) $amount));
+                };
             @endphp
 
             @if($isSplitMethod)
@@ -557,7 +564,7 @@
                                         {{ $formatMoney($payment2 ? $payment2['payment'] : 0) }}
                                     </td>
                                     <td>
-                                        {{ $formatMoney($balance) }}
+                                        {{ $formatOutstandingBalance($balance) }}
                                     </td>
                                     <td>
 
@@ -628,7 +635,7 @@
                                     {{ $formatMoney($item['payment']) }}
                                 </td>
                                 <td>
-                                    {{ $formatMoney($item['balance']) }}
+                                    {{ $formatOutstandingBalance($item['balance']) }}
                                 </td>
                                 <td>
 

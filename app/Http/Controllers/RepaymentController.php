@@ -276,6 +276,7 @@ class RepaymentController extends Controller
             'fee_paid_so_far' => round($feePaidSoFar, 2),
             'accumulated_penalty' => round($accumulatedPenalty, 2),
             'late_since_date' => $loan ? $loan->late_since_date : null,
+            'penalty_late_since_date' => $loan ? $loan->penalty_late_since_date : null,
             'locked_aging' => $loan ? (int) $loan->locked_aging : 0,
             'penalty_due' => $loan ? $loan->currentPenaltyDue() : 0.0,
             'penalty_rate' => $loan ? $loan->resolvePenaltyRate() : 0.0,

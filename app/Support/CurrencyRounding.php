@@ -23,35 +23,12 @@ final class CurrencyRounding
 
     public static function standard(float $amount, string $currency): float
     {
-        if ($amount <= 0) {
-            return 0;
-        }
-
-        if (stripos($currency, 'KHR') !== false) {
-            $amountInt = (int) round($amount);
-            $remainder = $amountInt % 1000;
-
-            if ($remainder < 250) {
-                return (float) (floor($amountInt / 1000) * 1000);
-            }
-
-            if ($remainder < 750) {
-                return (float) (floor($amountInt / 1000) * 1000 + 500);
-            }
-
-            return (float) (ceil($amountInt / 1000) * 1000);
-        }
-
-        return (float) ceil($amount);
+        return self::up($amount, $currency);
     }
 
     public static function cumulativePrincipal(float $amount, string $currency): float
     {
-        if (stripos($currency, 'KHR') !== false) {
-            return (float) (ceil($amount / 1000) * 1000);
-        }
-
-        return (float) ceil($amount);
+        return self::up($amount, $currency);
     }
 
 }

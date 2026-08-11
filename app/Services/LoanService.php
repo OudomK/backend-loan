@@ -353,6 +353,7 @@ class LoanService
             'locked_aging' => 0,
             'accumulated_penalty' => 0,
             'late_since_date' => null,
+            'penalty_late_since_date' => null,
             'written_off_at' => null,
             'write_off_reason' => null,
             'classify_wo' => null,
@@ -433,6 +434,7 @@ class LoanService
 
         $remainingInterest = round($interestTarget, 2);
         $remainingPrincipal = round($principalTarget, 2);
+        $touchedPayments = collect();
 
         foreach ($installments as $payment) {
             if ($remainingInterest <= 0.001 && $remainingPrincipal <= 0.001) {
@@ -473,6 +475,7 @@ class LoanService
                 'principal_applied' => $principalApplied,
                 'penalty_applied' => 0,
             ]);
+            $touchedPayments->push($payment->fresh());
 
             $remainingInterest = round($remainingInterest - $interestApplied, 2);
             $remainingPrincipal = round($remainingPrincipal - $principalApplied, 2);
@@ -485,6 +488,10 @@ class LoanService
         }
 
         $loan->update(['total_paid' => $loan->payments()->sum('total_paid')]);
+        $timingService = app(PaymentSettlementTimingService::class);
+        $touchedPayments->each(
+            fn (Payment $payment) => $timingService->sync($payment)
+        );
 
         return $transaction;
     }

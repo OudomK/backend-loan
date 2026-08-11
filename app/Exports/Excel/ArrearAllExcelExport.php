@@ -105,7 +105,7 @@ class ArrearAllExcelExport
         $sheet->getStyle('A4')->getFont()->setSize(10);
 
         $headers = [
-            'Arrear Date', 'Loan No.', 'Name', 'Co-Borrower', 'Guarantor',
+            'Arrear Date', 'Loan No.', 'Installment No.', 'Name', 'Co-Borrower', 'Guarantor',
             'Gender', 'Phone', 'CB Phone', 'GU Phone',
             'C.O', 'Village', 'Commune', 'Last Payment Date', 'Aging',
             'Types of Collateral', 'Number', 'Date Disb.',
@@ -114,7 +114,7 @@ class ArrearAllExcelExport
         ];
 
         $keys = [
-            'arrear_date', 'loan_no', 'name', 'coborrower', 'guarantor',
+            'arrear_date', 'loan_no', 'installment_no', 'name', 'coborrower', 'guarantor',
             'gender', 'phone', 'coborrower_phone', 'guarantor_phone',
             'co', 'village', 'commune', 'last_payment_date', 'aging',
             'types_of_collateral', 'number', 'date_disbursement',
@@ -146,14 +146,16 @@ class ArrearAllExcelExport
                     $sheet->setCellValue($columnLetter.$row, $header);
                     $colIndex++;
                 }
-                $sheet->getStyle('A'.$row.':Y'.$row)->applyFromArray($headerStyle);
+                $sheet->getStyle('A'.$row.':Z'.$row)->applyFromArray($headerStyle);
                 $sheet->getRowDimension($row)->setRowHeight(50);
                 $row++;
 
                 // Data Rows
                 $totals = array_fill_keys($numericKeys, 0);
+                $countedLoanTotals = [];
 
                 foreach ($sectionData as $item) {
+                    $loanId = (string) ($item['loan_id'] ?? '');
                     $colIndex = 1;
                     foreach ($keys as $key) {
                         $columnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
@@ -176,10 +178,12 @@ class ArrearAllExcelExport
 
                         if (in_array($key, $numericKeys)) {
                             $floatVal = (float) $value;
-                            $totals[$key] += $floatVal;
+                            if (! in_array($key, ['disb_amount', 'outstanding']) || ! isset($countedLoanTotals[$loanId])) {
+                                $totals[$key] += $floatVal;
+                            }
                             $sheet->setCellValue($columnLetter.$row, $floatVal);
                             $sheet->getStyle($columnLetter.$row)->getNumberFormat()->setFormatCode('#,##0.00');
-                        } elseif (in_array($key, ['aging', 'number']) && is_numeric($value)) {
+                        } elseif (in_array($key, ['installment_no', 'aging', 'number']) && is_numeric($value)) {
                             $sheet->setCellValueExplicit($columnLetter.$row, $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC);
                         } else {
                             if ($key === 'status') {
@@ -199,12 +203,13 @@ class ArrearAllExcelExport
 
                         $colIndex++;
                     }
-                    $sheet->getStyle('A'.$row.':Y'.$row)->applyFromArray($dataStyle);
+                    $countedLoanTotals[$loanId] = true;
+                    $sheet->getStyle('A'.$row.':Z'.$row)->applyFromArray($dataStyle);
                     $row++;
                 }
 
                 // Totals Row
-                $sheet->mergeCells('A'.$row.':Q'.$row);
+                $sheet->mergeCells('A'.$row.':R'.$row);
                 $sheet->setCellValue('A'.$row, 'Total');
                 $sheet->getStyle('A'.$row)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
 
@@ -218,14 +223,14 @@ class ArrearAllExcelExport
                     $colIndex++;
                 }
 
-                // Only style A to X (Y is status, no total needed)
-                $sheet->getStyle('A'.$row.':X'.$row)->applyFromArray($headerStyle);
+                // Status has no total.
+                $sheet->getStyle('A'.$row.':Y'.$row)->applyFromArray($headerStyle);
                 $row += 2; // Add spacer between tables
             }
         }
 
         // Auto-size columns
-        for ($colIndex = 1; $colIndex <= 25; $colIndex++) {
+        for ($colIndex = 1; $colIndex <= 26; $colIndex++) {
             $columnLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex);
             $sheet->getColumnDimension($columnLetter)->setAutoSize(true);
         }

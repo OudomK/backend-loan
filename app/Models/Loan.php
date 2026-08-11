@@ -88,6 +88,7 @@ class Loan extends Model
         'locked_aging',
         'accumulated_penalty',
         'late_since_date',
+        'penalty_late_since_date',
         'monthly_interest',
         'reschedule_fee',
         'rescheduled_at',
@@ -259,70 +260,66 @@ class Loan extends Model
             ? 'total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)'
             : 'total_paid < (principal_amount + interest_amount - 0.01)';
 
-        // Check if there's any unpaid past due installment
-        $hasUnpaidRows = \App\Models\Payment::where('loan_id', $this->id)
+        // Row-level aging follows the oldest installment that is still overdue.
+        // Loan-level aging follows the continuous penalty period and must not
+        // move backwards when an older overdue installment is settled.
+        $earliestArrear = \App\Models\Payment::where('loan_id', $this->id)
             ->where('payment_date', '<', $today->toDateString())
             ->whereRaw($arrearExpression)
-            ->exists();
+            ->orderBy('payment_date', 'asc')
+            ->first();
 
-        // Calculate the end date for aging calculation
-        $endDate = $today;
-        if (! $hasUnpaidRows) {
-            $lastTxDate = \App\Models\RepaymentTransaction::where('loan_id', $this->id)->max('transaction_date');
-            if ($lastTxDate) {
-                $parsed = \Carbon\Carbon::parse($lastTxDate)->startOfDay();
-                if ($parsed->lt($today)) {
-                    $endDate = $parsed;
-                }
-            }
-        }
+        if (! $earliestArrear) {
+            $penaltyBalance = $this->currentPenaltyDue($today);
+            $continuousAging = $this->currentAging($today);
 
-        // Calculate current late days based on the end date
-        $currentLateDays = 0;
-        if ($this->late_since_date) {
-            $earliestDate = \Carbon\Carbon::parse($this->late_since_date)->startOfDay();
-            if ($endDate->gt($earliestDate)) {
-                $currentLateDays = (int) abs($endDate->diffInDays($earliestDate, false));
-            }
-        }
-
-        $totalAging = $this->locked_aging + $currentLateDays;
-
-        if (! $hasUnpaidRows) {
-            // Installments paid. Lock the aging.
-            if ($this->late_since_date) {
+            if ($penaltyBalance > 0.01) {
                 $this->update([
-                    'locked_aging' => $totalAging,
                     'late_since_date' => null,
-                    'aging' => $totalAging,
+                    'penalty_late_since_date' => null,
+                    'aging' => $continuousAging,
+                    'locked_aging' => $continuousAging,
+                    'accumulated_penalty' => $penaltyBalance,
                 ]);
-            } else {
-                $this->update([
-                    'aging' => $this->locked_aging,
-                ]);
-            }
-        } else {
-            // Still late (either owes installments OR owes penalty)
-            if (! $this->late_since_date) {
-                // Determine when it first became late
-                $earliestArrear = \App\Models\Payment::where('loan_id', $this->id)
-                    ->where('payment_date', '<', $today->toDateString())
-                    ->whereRaw($arrearExpression)
-                    ->orderBy('payment_date', 'asc')
-                    ->first();
-                if ($earliestArrear) {
-                    $this->update(['late_since_date' => $earliestArrear->payment_date]);
 
-                    // Recalculate currentLateDays since late_since_date just changed
-                    $earliestDate = \Carbon\Carbon::parse($earliestArrear->payment_date)->startOfDay();
-                    if ($endDate->gt($earliestDate)) {
-                        $currentLateDays = (int) abs($endDate->diffInDays($earliestDate, false));
-                    }
-                }
+                return;
             }
 
-            $this->update(['aging' => $this->locked_aging + $currentLateDays]);
+            $this->update([
+                'late_since_date' => null,
+                'penalty_late_since_date' => null,
+                'aging' => 0,
+                'locked_aging' => 0,
+                'accumulated_penalty' => 0,
+            ]);
+
+            return;
         }
+
+        $earliestDate = \Carbon\Carbon::parse($earliestArrear->payment_date)->startOfDay();
+        $penaltyStartDate = $this->penalty_late_since_date
+            ? \Carbon\Carbon::parse($this->penalty_late_since_date)->startOfDay()
+            : $earliestDate;
+        $continuousLateDays = $today->gt($penaltyStartDate)
+            ? (int) abs($today->diffInDays($penaltyStartDate))
+            : 0;
+        $loanAging = max($continuousLateDays, (int) ($this->locked_aging ?? 0));
+
+        $updates = [
+            'late_since_date' => $earliestDate->toDateString(),
+            'aging' => $loanAging,
+            'locked_aging' => (float) ($this->accumulated_penalty ?? 0) > 0.01
+                ? (int) ($this->locked_aging ?? 0)
+                : 0,
+        ];
+
+        // Penalty uses its own anchor so moving schedule aging to a newer row
+        // cannot erase or double-count an already active penalty period.
+        if (! $this->penalty_late_since_date) {
+            $updates['penalty_late_since_date'] = $earliestDate->toDateString();
+        }
+
+        $this->update($updates);
     }
 
     /**
@@ -331,18 +328,20 @@ class Loan extends Model
     public function currentAging(?\Carbon\Carbon $referenceDate = null): int
     {
         $referenceDate = ($referenceDate ?? \Carbon\Carbon::today())->copy()->startOfDay();
-        $lockedAging = max(0, (int) ($this->locked_aging ?? 0));
 
-        if (! $this->late_since_date) {
+        $lockedAging = max(0, (int) ($this->locked_aging ?? 0));
+        $agingStartDate = $this->penalty_late_since_date ?? $this->late_since_date;
+
+        if (! $agingStartDate) {
             return $lockedAging;
         }
 
-        $lateSinceDate = \Carbon\Carbon::parse($this->late_since_date)->startOfDay();
+        $lateSinceDate = \Carbon\Carbon::parse($agingStartDate)->startOfDay();
         $currentLateDays = $referenceDate->gt($lateSinceDate)
-            ? $referenceDate->diffInDays($lateSinceDate)
+            ? (int) abs($referenceDate->diffInDays($lateSinceDate))
             : 0;
 
-        return $lockedAging + $currentLateDays;
+        return max($currentLateDays, $lockedAging);
     }
 
     /**
@@ -368,20 +367,17 @@ class Loan extends Model
     public function agingAt(\Carbon\Carbon $referenceDate, ?string $arrearDate = null, bool $hasArrears = false): int
     {
         $referenceDate = $referenceDate->copy()->startOfDay();
-        if ($referenceDate->isSameDay(\Carbon\Carbon::today())) {
-            return $this->currentAging($referenceDate);
-        }
 
         if (! $arrearDate) {
-            return $hasArrears ? 1 : 0;
+            return 0;
         }
 
         $arrearDate = \Carbon\Carbon::parse($arrearDate)->startOfDay();
         $aging = $referenceDate->gt($arrearDate)
-            ? $referenceDate->diffInDays($arrearDate)
+            ? (int) abs($referenceDate->diffInDays($arrearDate))
             : 0;
 
-        return $aging > 0 || ! $hasArrears ? $aging : 1;
+        return $aging;
     }
 
     /**
@@ -389,14 +385,15 @@ class Loan extends Model
      */
     public function currentPeriodPenaltyCredits(?\Carbon\Carbon $referenceDate = null): float
     {
-        if (! $this->late_since_date) {
+        $penaltySinceDate = $this->penalty_late_since_date ?? $this->late_since_date;
+        if (! $penaltySinceDate) {
             return 0.0;
         }
 
         $referenceDate = ($referenceDate ?? \Carbon\Carbon::today())->copy()->startOfDay();
 
         return (float) $this->transactions()
-            ->whereDate('transaction_date', '>=', $this->late_since_date)
+            ->whereDate('transaction_date', '>=', $penaltySinceDate)
             ->whereDate('transaction_date', '<=', $referenceDate->toDateString())
             ->sum(\Illuminate\Support\Facades\DB::raw('penalty_paid + waived_amount'));
     }
@@ -410,14 +407,15 @@ class Loan extends Model
     {
         $referenceDate = ($referenceDate ?? \Carbon\Carbon::today())->copy()->startOfDay();
         $frozenPenalty = max(0, (float) ($this->accumulated_penalty ?? 0));
+        $penaltySinceDate = $this->penalty_late_since_date ?? $this->late_since_date;
 
-        if (! $this->late_since_date) {
+        if (! $penaltySinceDate) {
             return round($frozenPenalty, 2);
         }
 
-        $lateSinceDate = \Carbon\Carbon::parse($this->late_since_date)->startOfDay();
+        $lateSinceDate = \Carbon\Carbon::parse($penaltySinceDate)->startOfDay();
         $currentLateDays = $referenceDate->gt($lateSinceDate)
-            ? $referenceDate->diffInDays($lateSinceDate)
+            ? (int) abs($referenceDate->diffInDays($lateSinceDate))
             : 0;
         $currentPenalty = $currentLateDays * $this->resolvePenaltyRate();
 

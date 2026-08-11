@@ -120,8 +120,9 @@
                                             let v = document.getElementById('repayment_method') ? document.getElementById('repayment_method').value : '';
                                             if (!v || !dateStr) return;
                                             let d = new Date(dateStr);
-                                            if (v === 'fixed_daily') d.setDate(d.getDate() + 1);
-                                            else if (v === 'fixed_weekly') d.setDate(d.getDate() + 7);
+                                            if (v === 'fixed_daily') d.setDate(d.getDate());
+                                            else if (v === 'fixed_weekly') d.setDate(d.getDate() + 6);
+                                            else if (v === 'fixed_biweekly') d.setDate(d.getDate() + 13);
                                             else if (v.includes('15days')) {
                                                 if (d.getDate() <= 15) d.setDate(26);
                                                 else {
@@ -278,9 +279,11 @@
                                     }
                                     let d = new Date(loanDateStr);
                                     if (v === 'fixed_daily') {
-                                        d.setDate(d.getDate() + 1);
+                                        d.setDate(d.getDate());
                                     } else if (v === 'fixed_weekly') {
-                                        d.setDate(d.getDate() + 7);
+                                        d.setDate(d.getDate() + 6);
+                                    } else if (v === 'fixed_biweekly') {
+                                        d.setDate(d.getDate() + 13);
                                     } else if (v.includes('15days')) {
                                         if (d.getDate() <= 15) d.setDate(26);
                                         else {

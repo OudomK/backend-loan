@@ -409,6 +409,58 @@ class ReportPortfolioIntegrityTest extends TestCase
         $this->assertEquals(6, $payload['meta']['grand_totals']['USD']['arrear_fee']);
     }
 
+    public function test_arrear_reports_show_zero_aging_loans_first(): void
+    {
+        $borrowerId = $this->createBorrower();
+        $schedule = [
+            ['ARREAR-AGING-0', '2026-08-09', '2026-08-09'],
+            ['ARREAR-AGING-2', '2026-08-07', '2026-08-07'],
+            ['ARREAR-AGING-10', '2026-07-30', '2026-07-30'],
+        ];
+
+        foreach ($schedule as [$loanCode, $paymentDate, $startDate]) {
+            $loanId = $this->createLoan([
+                'loan_code' => $loanCode,
+                'borrower_id' => $borrowerId,
+                'start_date' => $startDate,
+                'late_since_date' => $paymentDate,
+                'penalty_rate' => 0,
+            ]);
+
+            DB::table('payments')->insert([
+                'loan_id' => $loanId,
+                'payment_number' => 1,
+                'principal_amount' => 100,
+                'interest_amount' => 10,
+                'outstanding_balance' => 100,
+                'fee_amount' => 0,
+                'fee_paid' => 0,
+                'total_due' => 110,
+                'penalty_amount' => 0,
+                'total_paid' => 0,
+                'payment_date' => $paymentDate,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        foreach (['all', 'under30'] as $reportType) {
+            $rows = app(ArrearReportController::class)->index(Request::create('/', 'GET', [
+                'report_type' => $reportType,
+                'from_date' => '2026-07-01',
+                'to_date' => '2026-08-09',
+                'paginate' => 'false',
+            ]));
+
+            $this->assertSame([0, 2, 10], array_column($rows, 'aging'), $reportType);
+            $this->assertSame(
+                ['ARREAR-AGING-0', 'ARREAR-AGING-2', 'ARREAR-AGING-10'],
+                array_column($rows, 'loan_no'),
+                $reportType
+            );
+        }
+    }
+
     public function test_arrear_reports_search_all_pages_by_code_name_location_and_amount(): void
     {
         $firstBorrowerId = $this->createBorrower();
@@ -470,6 +522,7 @@ class ReportPortfolioIntegrityTest extends TestCase
                 'updated_at' => now(),
             ]);
         }
+        DB::table('payments')->where('loan_id', $secondLoanId)->update(['total_paid' => 10]);
         $this->createTransaction($secondLoanId, 0, '2026-08-03');
 
         foreach (['all', 'under30'] as $reportType) {
@@ -492,7 +545,6 @@ class ReportPortfolioIntegrityTest extends TestCase
             foreach ([
                 'Active' => 'ARREAR-SEARCH-ALPHA',
                 'Partial' => 'ARREAR-SEARCH-BETA',
-                'OK' => 'ARREAR-STATUS-OK',
             ] as $status => $loanCode) {
                 $response = app(ArrearReportController::class)->index(Request::create('/', 'GET', [
                     'report_type' => $reportType,
@@ -507,6 +559,88 @@ class ReportPortfolioIntegrityTest extends TestCase
                 $this->assertSame($loanCode, $payload['data'][0]['loan_no'], $message);
                 $this->assertSame($status, $payload['data'][0]['status'], $message);
             }
+
+            $okResponse = app(ArrearReportController::class)->index(Request::create('/', 'GET', [
+                'report_type' => $reportType,
+                'from_date' => '2026-08-01',
+                'to_date' => '2026-08-09',
+                'status' => 'OK',
+            ]));
+            $okPayload = json_decode($okResponse->getContent(), true, flags: JSON_THROW_ON_ERROR);
+            $this->assertSame(0, $okPayload['meta']['total'], "{$reportType} must not retain penalty-only rows");
+        }
+    }
+
+    public function test_arrear_reports_track_each_installment_and_remove_it_when_schedule_due_is_settled(): void
+    {
+        $borrowerId = $this->createBorrower();
+        $loanId = $this->createLoan([
+            'loan_code' => 'ARREAR-INSTALLMENTS',
+            'borrower_id' => $borrowerId,
+            'amount' => 1000,
+            'accumulated_penalty' => 75,
+            'penalty_rate' => 0,
+        ]);
+
+        DB::table('payments')->insert([
+            [
+                'loan_id' => $loanId,
+                'payment_number' => 1,
+                'principal_amount' => 100,
+                'interest_amount' => 10,
+                'outstanding_balance' => 900,
+                'fee_amount' => 0,
+                'fee_paid' => 0,
+                'total_due' => 110,
+                'penalty_amount' => 0,
+                'total_paid' => 0,
+                'payment_date' => '2026-08-01',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'loan_id' => $loanId,
+                'payment_number' => 2,
+                'principal_amount' => 100,
+                'interest_amount' => 10,
+                'outstanding_balance' => 800,
+                'fee_amount' => 0,
+                'fee_paid' => 0,
+                'total_due' => 110,
+                'penalty_amount' => 0,
+                'total_paid' => 0,
+                'payment_date' => '2026-08-05',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        foreach (['all', 'under30'] as $reportType) {
+            $rows = $this->arrearRows($reportType);
+            $this->assertSame([2, 1], array_column($rows, 'installment_no'), $reportType);
+            $this->assertSame([4, 8], array_column($rows, 'aging'), $reportType);
+            $this->assertEquals(75, collect($rows)->sum('penalty_due'), $reportType);
+        }
+
+        DB::table('payments')
+            ->where('loan_id', $loanId)
+            ->where('payment_number', 1)
+            ->update(['total_paid' => 110]);
+
+        foreach (['all', 'under30'] as $reportType) {
+            $rows = $this->arrearRows($reportType);
+            $this->assertCount(1, $rows, $reportType);
+            $this->assertSame(2, $rows[0]['installment_no'], $reportType);
+            $this->assertEquals(75, $rows[0]['penalty_due'], $reportType);
+        }
+
+        DB::table('payments')
+            ->where('loan_id', $loanId)
+            ->where('payment_number', 2)
+            ->update(['total_paid' => 110]);
+
+        foreach (['all', 'under30'] as $reportType) {
+            $this->assertSame([], $this->arrearRows($reportType), $reportType);
         }
     }
 
@@ -883,6 +1017,17 @@ class ReportPortfolioIntegrityTest extends TestCase
         ], $overrides));
     }
 
+    /** @return array<int, array<string, mixed>> */
+    private function arrearRows(string $reportType): array
+    {
+        return app(ArrearReportController::class)->index(Request::create('/', 'GET', [
+            'report_type' => $reportType,
+            'from_date' => '2026-07-01',
+            'to_date' => '2026-08-09',
+            'paginate' => 'false',
+        ]));
+    }
+
     private function createOfficer(): int
     {
         return (int) DB::table('loan_officers')->insertGetId([
@@ -1047,6 +1192,7 @@ class ReportPortfolioIntegrityTest extends TestCase
             $table->integer('aging')->default(0);
             $table->integer('locked_aging')->default(0);
             $table->date('late_since_date')->nullable();
+            $table->date('penalty_late_since_date')->nullable();
             $table->decimal('accumulated_penalty', 15, 2)->default(0);
             $table->decimal('penalty_rate', 15, 2)->nullable();
             $table->date('written_off_at')->nullable();

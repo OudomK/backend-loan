@@ -316,6 +316,7 @@ class LoanModificationCycleTest extends TestCase
             $table->integer('locked_aging')->default(0);
             $table->decimal('accumulated_penalty', 15, 2)->default(0);
             $table->date('late_since_date')->nullable();
+            $table->date('penalty_late_since_date')->nullable();
             $table->date('written_off_at')->nullable();
             $table->string('write_off_reason')->nullable();
             $table->string('classify_wo')->nullable();
@@ -349,6 +350,10 @@ class LoanModificationCycleTest extends TestCase
             $table->unsignedBigInteger('repayment_transaction_id')->nullable();
             $table->date('payment_date');
             $table->string('payment_method')->default('Cash');
+            $table->date('settled_at')->nullable();
+            $table->date('settled_due_date')->nullable();
+            $table->integer('settled_days_variance')->nullable();
+            $table->string('settlement_source', 30)->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

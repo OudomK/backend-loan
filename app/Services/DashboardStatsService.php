@@ -320,7 +320,7 @@ class DashboardStatsService
     private function cacheParAgingBuckets(int $ttl): void
     {
         $agingLoans = Loan::where('status', 'active')
-            ->select('id', 'locked_aging', 'late_since_date')
+            ->select('id', 'locked_aging', 'late_since_date', 'penalty_late_since_date')
             ->get();
 
         $buckets = [

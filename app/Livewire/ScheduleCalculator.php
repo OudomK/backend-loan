@@ -128,9 +128,11 @@ class ScheduleCalculator extends Component
         $loanDate = Carbon::parse($this->loan_date ?: Carbon::now()->toDateString());
         
         if ($value === 'fixed_daily') {
-            $this->first_repayment_date = $loanDate->addDay()->toDateString();
+            $this->first_repayment_date = $loanDate->toDateString();
         } elseif ($value === 'fixed_weekly') {
-            $this->first_repayment_date = $loanDate->addWeek()->toDateString();
+            $this->first_repayment_date = $loanDate->addDays(6)->toDateString();
+        } elseif ($value === 'fixed_biweekly') {
+            $this->first_repayment_date = $loanDate->addDays(13)->toDateString();
         } elseif ($this->isSplitRepaymentMethod($value)) {
             $this->first_repayment_date = $this->splitFirstRepaymentDate($loanDate->toDateString());
         } elseif ($value === 'Balloon') {

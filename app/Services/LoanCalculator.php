@@ -25,6 +25,10 @@ class LoanCalculator
         $roundInterest = fn ($amount, $currency) => CurrencyRounding::up((float) $amount, (string) $currency);
         $exactAmount = fn ($amount) => round((float) $amount, 2);
         $roundCumulativePrincipal = fn ($amount, $currency) => CurrencyRounding::cumulativePrincipal((float) $amount, (string) $currency);
+        $isKhrCurrency = stripos($currency, 'KHR') !== false;
+        $roundMonthlyPrincipal = fn ($amount) => $isKhrCurrency
+            ? $applyRounding($amount, $currency)
+            : $exactAmount($amount);
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
             if ($adminFee <= 0)
                 return 0;
@@ -57,7 +61,11 @@ class LoanCalculator
                     }
                 } else {
                     $currentPaymentDate = clone $startDateObj;
-                    $currentPaymentDate->add(new DateInterval('P' . ($intervalDays * $i) . 'D'));
+                    // The disbursement date is day one of the first interval.
+                    $inclusiveOffsetDays = ($intervalDays * $i) - 1;
+                    if ($inclusiveOffsetDays > 0) {
+                        $currentPaymentDate->add(new DateInterval('P' . $inclusiveOffsetDays . 'D'));
+                    }
                 }
 
                 $feePay = $calculatePeriodFee($i, $totalPayments);
@@ -261,9 +269,24 @@ class LoanCalculator
 
                 /** @var DateTime $currentPaymentDate */
                 $currentPaymentDate = clone $paymentMeta['date'];
-                $isFirst = (bool) $paymentMeta['is_first_half'];
+                // The first repayment is always 70%, even when it falls on the
+                // second configured pay day (for example, the 26th). After that
+                // one exception, the first pay-day lane is 70% and the second is 30%.
+                $isFirst = $i === 1 || (bool) $paymentMeta['is_first_half'];
+                $daysFromStart = $i === 1
+                    // Business rule: the disbursement date counts as day one.
+                    ? $loanStartDate->diff($currentPaymentDate)->days + 1
+                    : null;
 
                 $interestPayRaw = $isFirst ? $firstPaymentInterest : $secondPaymentInterest;
+                if ($i === 1) {
+                    if ($daysFromStart <= 10) {
+                        $interestPayRaw = $monthlyInterest * ($daysFromStart / 30);
+                    } elseif ($daysFromStart > 15) {
+                        $extraDays = $daysFromStart - 15;
+                        $interestPayRaw += $monthlyInterest * ($extraDays / 30);
+                    }
+                }
                 $interestPay = $roundInterest($interestPayRaw, $currency);
 
                 if ($i == $totalPayments) {
@@ -286,11 +309,7 @@ class LoanCalculator
                     $principalPayRaw = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
 
                     if ($i === 1) {
-                        $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days + 1;
-                        if ($daysFromStart >= 15) {
-                            $principalPayRaw = $monthlyPrincipal * ($daysFromStart / 30);
-                        }
-                        $principalPay = $roundCumulativePrincipal($principalPayRaw, $currency);
+                        $principalPay = $roundCumulativePrincipal($firstPaymentPrincipal, $currency);
                     } else {
                         $exactCumulativePrincipal += $principalPayRaw;
                         $targetCumulativePrincipal = min(
@@ -365,8 +384,20 @@ class LoanCalculator
                 /** @var DateTime $currentPaymentDate */
                 $currentPaymentDate = clone $paymentMeta['date'];
                 $isFirst = (bool) $paymentMeta['is_first_half'];
+                $daysFromStart = $i === 1
+                    // Business rule: the disbursement date counts as day one.
+                    ? $loanStartDate->diff($currentPaymentDate)->days + 1
+                    : null;
 
                 $interestPayRaw = $isFirst ? $firstPaymentInterest : $secondPaymentInterest;
+                if ($i === 1) {
+                    if ($daysFromStart <= 10) {
+                        $interestPayRaw = $monthlyInterest * ($daysFromStart / 30);
+                    } elseif ($daysFromStart > 15) {
+                        $extraDays = $daysFromStart - 15;
+                        $interestPayRaw += $monthlyInterest * ($extraDays / 30);
+                    }
+                }
                 $interestPay = $roundInterest($interestPayRaw, $currency);
 
                 if ($i == $totalPayments) {
@@ -390,11 +421,7 @@ class LoanCalculator
                     $principalPayRaw = $isFirst ? $firstPaymentPrincipal : $secondPaymentPrincipal;
 
                     if ($i === 1) {
-                        $daysFromStart = $loanStartDate->diff($currentPaymentDate)->days + 1;
-                        if ($daysFromStart >= 15) {
-                            $principalPayRaw = $monthlyPrincipal * ($daysFromStart / 30);
-                        }
-                        $principalPay = $roundCumulativePrincipal($principalPayRaw, $currency);
+                        $principalPay = $roundCumulativePrincipal($firstPaymentPrincipal, $currency);
                     } else {
                         $exactCumulativePrincipal += $principalPayRaw;
                         $targetCumulativePrincipal = min(
@@ -466,7 +493,7 @@ class LoanCalculator
                 $monthlyPayment = $principal / $duration;
             }
 
-            $monthlyPayment = $exactAmount($monthlyPayment);
+            $monthlyPayment = $roundMonthlyPrincipal($monthlyPayment);
 
             $remainingBalance = $principal;
 
@@ -486,6 +513,9 @@ class LoanCalculator
 
                 if ($i == 1 && isset($daysFromStart)) {
                     $standardInterest = $remainingBalance * $monthlyInterestRate;
+                    if ($isKhrCurrency) {
+                        $standardInterest = $roundInterest($standardInterest, $currency);
+                    }
                     $monthlyPrincipal = $monthlyPayment - $standardInterest;
                     $totalPayment = $monthlyPrincipal + $monthlyInterest;
                 } else {
@@ -522,7 +552,7 @@ class LoanCalculator
 
         } elseif ($option === 'linear_monthly') {
             $monthlyInterestRate = $rate / 100;
-            $monthlyPrincipal = $exactAmount($principal / $duration);
+            $monthlyPrincipal = $roundMonthlyPrincipal($principal / $duration);
 
             $remainingBalance = $principal;
 
@@ -571,7 +601,7 @@ class LoanCalculator
             $monthlyPrincipal = $principal / $duration;
 
             $monthlyInterest = $roundInterest($monthlyInterest, $currency);
-            $monthlyPrincipal = $exactAmount($monthlyPrincipal);
+            $monthlyPrincipal = $roundMonthlyPrincipal($monthlyPrincipal);
 
             $remainingBalance = $principal;
 
@@ -662,7 +692,7 @@ class LoanCalculator
             $monthlyPrincipal = $principal / $duration;
 
             $monthlyInterest = $roundInterest($monthlyInterest, $currency);
-            $monthlyPrincipal = $exactAmount($monthlyPrincipal);
+            $monthlyPrincipal = $roundMonthlyPrincipal($monthlyPrincipal);
 
             $remainingBalance = $principal;
 

@@ -44,7 +44,7 @@ class LoanScheduleServiceParityTest extends TestCase
             $this->assertSame($appSchedule, $webSchedule, $method);
             $this->assertCount(14, $webSchedule, $method);
             $this->assertSame('26/08/2026', $webSchedule[0]['date'], $method);
-            $expectedTotal = $method === 'fixed_15days_70_30' ? 2432000 : 2401000;
+            $expectedTotal = $method === 'fixed_15days_70_30' ? 2536000 : 2404000;
             $this->assertEqualsWithDelta($expectedTotal, array_sum(array_column($webSchedule, 'payment')), 0.01, $method);
         }
     }
