@@ -70,7 +70,7 @@ class CustomerExportController extends Controller
                 $sheet->setCellValue('B' . $rowNum, $customer->customer_code);
                 $sheet->setCellValue('C' . $rowNum, $customer->first_name);
                 $sheet->setCellValue('D' . $rowNum, $customer->last_name);
-                $sheet->setCellValue('E' . $rowNum, $customer->gender);
+                $sheet->setCellValue('E' . $rowNum, $customer->formatted_gender);
                 $sheet->setCellValue('F' . $rowNum, $customer->age);
                 $sheet->setCellValue('G' . $rowNum, $customer->dob);
                 $sheet->setCellValue('H' . $rowNum, $customer->phone);

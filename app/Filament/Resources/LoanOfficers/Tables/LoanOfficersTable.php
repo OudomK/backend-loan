@@ -57,6 +57,7 @@ class LoanOfficersTable
                     ->visibleFrom('2xl')
                     ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('gender')
+                    ->getStateUsing(fn ($record): string => $record->formatted_gender)
                     ->sortable()
                     ->visibleFrom('2xl')
                     ->toggleable(isToggledHiddenByDefault: true),

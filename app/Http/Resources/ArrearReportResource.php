@@ -51,7 +51,7 @@ class ArrearReportResource extends JsonResource
             'name' => $borrower ? trim($borrower->first_name.' '.$borrower->last_name) : '-',
             'coborrower' => $loan?->coBorrower ? $loan->coBorrower->first_name.' '.$loan->coBorrower->last_name : '-',
             'guarantor' => $loan?->guarantor ? $loan->guarantor->first_name.' '.$loan->guarantor->last_name : '-',
-            'gender' => $borrower?->gender ?? '-',
+            'gender' => $borrower?->formatted_gender ?: '-',
             'phone' => $borrower?->phone ?? '-',
             'coborrower_phone' => $loan?->coBorrower?->phone ?? '-',
             'guarantor_phone' => $loan?->guarantor?->phone ?? '-',
@@ -65,7 +65,9 @@ class ArrearReportResource extends JsonResource
             'date_disbursement' => $loan?->start_date,
             'disb_amount' => (float) ($loan?->amount ?? 0),
             'outstanding' => (float) ($this->calculated_outstanding ?? 0),
-            'arrear_amount' => $arrearPrincipal,
+            // Arrear Amount is the scheduled principal and interest still due.
+            // Interest remains available separately for report breakdowns.
+            'arrear_amount' => round($arrearPrincipal + $arrearInterest, 2),
             'arrear_interest' => $arrearInterest,
             'arrear_fee' => $arrearFee,
             // The controller attaches loan-level penalty to the oldest visible

@@ -10,6 +10,8 @@ class Employee extends Model
 {
     use SoftDeletes, Auditable;
 
+    protected $appends = ['formatted_gender'];
+
     protected $fillable = [
         'name',
         'name_kh',
@@ -49,6 +51,11 @@ class Employee extends Model
         } catch (\Exception $e) {
             return null;
         }
+    }
+
+    public function getFormattedGenderAttribute(): string
+    {
+        return empty($this->gender) ? '' : strtoupper(substr($this->gender, 0, 1));
     }
 
     public function position()

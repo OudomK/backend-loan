@@ -7,6 +7,7 @@ use App\Models\CoBorrower;
 use App\Models\Guarantor;
 use App\Models\Loan;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CustomerHistoryController extends Controller
 {
@@ -95,9 +96,15 @@ class CustomerHistoryController extends Controller
         $daysOverdue = $loan->currentAging($now);
         if ($daysOverdue < 0) $daysOverdue = 0;
 
+        $penaltyDue = $loan->currentPenaltyDue($now);
         $dateOverdueStr = $earliestOverdue ? $earliestOverdue->format('Y-m-d') : '';
 
-        $penaltyDue = $loan->currentPenaltyDue($now);
+        // Once every installment is settled, Overdue Amount correctly becomes
+        // zero. If a penalty is still outstanding, keep showing the start of
+        // the completed late period that produced the locked loan-level aging.
+        if ($dateOverdueStr === '' && $penaltyDue > 0.01 && $daysOverdue > 0) {
+            $dateOverdueStr = (string) ($loan->latestSettledLatePeriod()['start_date'] ?? '');
+        }
 
         $arr['summary'] = [
             'total_paid' => $totalPaidForLoan,
@@ -262,11 +269,18 @@ class CustomerHistoryController extends Controller
             'total_amount_due' => $isPayoffTrigger ? 0.0 : (abs($requiredTotal - (float)$p->total_paid) < 0.001 ? 0.0 : max(0.0, $requiredTotal - (float)$p->total_paid)),
             'show_small_row' => ((float)$p->total_paid > 0 || (float)$p->penalty_amount > 0) && (!$isFullyPaid || $p->allocations->count() > 1),
             'allocations' => $p->allocations->map(function($a) use ($allocationTxMap, $dDate, $isPayoffTrigger) {
-                $allocRepaymentType = isset($allocationTxMap[$a->repayment_transaction_id]) ? $allocationTxMap[$a->repayment_transaction_id]->repayment_type : null;
+                $allocationTransaction = $allocationTxMap->get($a->repayment_transaction_id);
+                $allocRepaymentType = $allocationTransaction?->repayment_type;
                 
                 $allocOnTimeLabel = "0";
                 if ($dDate) {
-                    $allocDateStr = $a->transaction_date ?: $a->created_at;
+                    // The repayment transaction is the accounting source of truth.
+                    // payment_allocations.transaction_date is absent on legacy rows,
+                    // while created_at is only the technical insert timestamp and can
+                    // be weeks later than the date the customer actually paid.
+                    $allocDateStr = $allocationTransaction?->transaction_date
+                        ?: $a->transaction_date
+                        ?: $a->created_at;
                     $aDate = $allocDateStr ? \Carbon\Carbon::parse($allocDateStr)->startOfDay() : null;
                     if ($aDate) {
                         $diff = (int) $dDate->diffInDays($aDate, false);
@@ -285,7 +299,8 @@ class CustomerHistoryController extends Controller
                     'created_at' => $a->created_at->toIso8601String(),
                     'updated_at' => $a->updated_at->toIso8601String(),
                     'repayment_type' => $allocRepaymentType,
-                    'transaction_date' => isset($allocationTxMap[$a->repayment_transaction_id]) ? $allocationTxMap[$a->repayment_transaction_id]->transaction_date : null,
+                    'transaction_date' => $allocationTransaction?->transaction_date
+                        ?: $a->transaction_date,
                     'alloc_on_time_label' => $allocOnTimeLabel,
                     'alloc_total_installment' => (float)$a->principal_applied + (float)$a->interest_applied + (float)$a->fee_applied,
                 ];
@@ -293,43 +308,113 @@ class CustomerHistoryController extends Controller
         ];
     }
     /**
-     * Search for customers across all roles.
+     * Search borrowers for Client History.
+     *
+     * Short numeric queries are treated as customer row/code numbers. Searching
+     * phone and ID fragments that short creates many unrelated matches (for
+     * example, "030" is a common ID prefix).
      */
     public function search(Request $request)
     {
-        $query = $request->query('query');
-        if (!$query) {
+        $query = preg_replace('/\s+/u', ' ', trim((string) $request->query('query', '')));
+        if ($query === '') {
             return response()->json([]);
         }
 
-        $borrowers = Borrower::where(function ($q) use ($query) {
-            $like = "%{$query}%";
-            $queryNoSpace = str_replace(' ', '', $query);
-            $likeNoSpace = "%{$queryNoSpace}%";
+        $query = mb_substr($query, 0, 100);
+        $escapedQuery = $this->escapeLike($query);
+        $contains = "%{$escapedQuery}%";
+        $prefix = "{$escapedQuery}%";
+        $compactQuery = preg_replace('/[^\pL\pN]+/u', '', $query);
+        $shortNumeric = preg_match('/^\d{1,3}$/', $query) === 1;
 
-            $q->where('first_name', 'like', $like)
-                ->orWhere('last_name', 'like', $like)
-                ->orWhere('latin_name', 'like', $like)
-                    ->orWhere('nickname', 'like', $like)
-                ->orWhere('id_number', 'like', $like)
-                ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(id_number, ' ', '')"), 'like', $likeNoSpace)
-                ->orWhere('phone', 'like', $like)
-                ->orWhere(\Illuminate\Support\Facades\DB::raw("REPLACE(phone, ' ', '')"), 'like', $likeNoSpace)
-                ->orWhere('customer_code', 'like', $like)
-                ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(last_name, ' ', first_name)"), 'like', $like)
-                ->orWhere(\Illuminate\Support\Facades\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', $like);
-        })
+        $builder = Borrower::query()->select([
+            'id',
+            'row_no',
+            'customer_code',
+            'first_name',
+            'last_name',
+            'latin_name',
+            'nickname',
+            'phone',
+            'id_number',
+            'village',
+            'commune',
+            'district',
+            'province',
+            'customer_type',
+            'deleted_at',
+        ]);
+
+        if ($shortNumeric) {
+            $number = (int) $query;
+            $customerCode = 'QF-' . str_pad((string) $number, 3, '0', STR_PAD_LEFT);
+            $numericContains = '%' . $this->escapeLike($query) . '%';
+
+            $builder
+                ->where(function ($q) use ($numericContains) {
+                    $q->where('customer_code', 'like', $numericContains)
+                        ->orWhereRaw('CAST(row_no AS CHAR) LIKE ?', [$numericContains]);
+                })
+                ->orderByRaw(
+                    'CASE WHEN customer_code = ? THEN 0 WHEN row_no = ? THEN 1 ELSE 2 END',
+                    [$customerCode, $number]
+                );
+        } else {
+            $nameForward = $this->fullNameSql('first_name', 'last_name');
+            $nameReverse = $this->fullNameSql('last_name', 'first_name');
+            $shouldSearchPrivateNumbers = mb_strlen($compactQuery) >= 4;
+
+            $builder->where(function ($q) use (
+                $contains,
+                $compactQuery,
+                $nameForward,
+                $nameReverse,
+                $shouldSearchPrivateNumbers
+            ) {
+                $q->where('customer_code', 'like', $contains)
+                    ->orWhere('first_name', 'like', $contains)
+                    ->orWhere('last_name', 'like', $contains)
+                    ->orWhere('latin_name', 'like', $contains)
+                    ->orWhere('nickname', 'like', $contains)
+                    ->orWhereRaw("{$nameForward} LIKE ?", [$contains])
+                    ->orWhereRaw("{$nameReverse} LIKE ?", [$contains]);
+
+                if ($shouldSearchPrivateNumbers) {
+                    $compactContains = '%' . $this->escapeLike($compactQuery) . '%';
+                    $q->orWhereRaw("REPLACE(REPLACE(phone, ' ', ''), '-', '') LIKE ?", [$compactContains])
+                        ->orWhereRaw("REPLACE(REPLACE(id_number, ' ', ''), '-', '') LIKE ?", [$compactContains]);
+                }
+            });
+
+            $builder->orderByRaw(
+                "CASE
+                    WHEN customer_code = ? THEN 0
+                    WHEN first_name = ? OR last_name = ? OR latin_name = ? OR nickname = ? THEN 1
+                    WHEN customer_code LIKE ? THEN 2
+                    WHEN first_name LIKE ? OR last_name LIKE ? OR latin_name LIKE ? OR nickname LIKE ? THEN 3
+                    ELSE 4
+                END",
+                [$query, $query, $query, $query, $query, $prefix, $prefix, $prefix, $prefix, $prefix]
+            );
+        }
+
+        $borrowers = $builder
+            ->orderBy('customer_code')
+            ->limit(20)
             ->get()
-            ->map(fn($item) => $this->formatSearchItem($item, 'Borrower'));
+            ->map(fn($item) => $this->formatSearchItem($item, 'Borrower', $query));
 
         return response()->json($borrowers);
     }
 
-    private function formatSearchItem(mixed $item, string $role)
+    private function formatSearchItem(mixed $item, string $role, string $query = '')
     {
+        [$matchedOn, $matchedValue] = $this->findSearchMatch($item, $query);
+
         return [
             'id' => $item->id,
-            'name' => $item->first_name . ' ' . $item->last_name,
+            'name' => trim($item->first_name . ' ' . $item->last_name),
             'code' => $item->customer_code,
             'phone' => $item->phone,
             'village' => $item->village,
@@ -337,8 +422,59 @@ class CustomerHistoryController extends Controller
             'district' => $item->district,
             'province' => $item->province,
             'role' => $role,
-            'type' => strtolower(str_replace('-', '', $role)) // borrower, coborrower, guarantor
+            'type' => strtolower(str_replace('-', '', $role)), // borrower, coborrower, guarantor
+            'matched_on' => $matchedOn,
+            'matched_value' => $matchedValue,
         ];
+    }
+
+    private function escapeLike(string $value): string
+    {
+        return addcslashes($value, '\\%_');
+    }
+
+    private function fullNameSql(string $firstColumn, string $secondColumn): string
+    {
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return "COALESCE({$firstColumn}, '') || ' ' || COALESCE({$secondColumn}, '')";
+        }
+
+        return "CONCAT(COALESCE({$firstColumn}, ''), ' ', COALESCE({$secondColumn}, ''))";
+    }
+
+    private function findSearchMatch(mixed $item, string $query): array
+    {
+        $needle = mb_strtolower($query);
+        $fields = [
+            'Customer code' => (string) $item->customer_code,
+            'Name' => trim(implode(' ', array_filter([
+                $item->first_name,
+                $item->last_name,
+                $item->latin_name,
+                $item->nickname,
+            ]))),
+        ];
+
+        foreach ($fields as $label => $value) {
+            if ($value !== '' && str_contains(mb_strtolower($value), $needle)) {
+                return [$label, $value];
+            }
+        }
+
+        $compactQuery = preg_replace('/[^\pL\pN]+/u', '', $query);
+        if (mb_strlen($compactQuery) >= 4) {
+            $phone = preg_replace('/[^\pL\pN]+/u', '', (string) $item->phone);
+            if ($phone !== '' && str_contains(mb_strtolower($phone), mb_strtolower($compactQuery))) {
+                return ['Phone', (string) $item->phone];
+            }
+
+            $idNumber = preg_replace('/[^\pL\pN]+/u', '', (string) $item->id_number);
+            if ($idNumber !== '' && str_contains(mb_strtolower($idNumber), mb_strtolower($compactQuery))) {
+                return ['ID number', '•••• ' . mb_substr($idNumber, -4)];
+            }
+        }
+
+        return ['Customer', ''];
     }
 
     /**

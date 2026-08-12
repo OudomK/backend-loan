@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
 class RepaymentService
 {
     public function __construct(
-        private readonly PaymentSettlementTimingService $settlementTimingService
+        private readonly PaymentSettlementTimingService $settlementTimingService,
+        private readonly RepaymentPreviewService $previewService,
     ) {}
 
     /**
@@ -25,6 +26,16 @@ class RepaymentService
             // Acquire pessimistic lock to prevent double-processing the same loan.
             $loan = Loan::whereKey($validated['loan_id'])->lockForUpdate()->firstOrFail();
 
+            $transactionDate = Carbon::parse($validated['transaction_date'])->startOfDay();
+            $latestTransactionDate = RepaymentTransaction::query()
+                ->where('loan_id', $loan->id)
+                ->max('transaction_date');
+            if ($latestTransactionDate && $transactionDate->lt(Carbon::parse($latestTransactionDate)->startOfDay())) {
+                throw new \RuntimeException(
+                    'Historical repayments must be entered in chronological order (oldest date first).'
+                );
+            }
+
             if ($validated['repayment_type'] === 'Recovery') {
                 return $this->processRecovery($loan, $validated);
             }
@@ -35,9 +46,11 @@ class RepaymentService
                 );
             }
 
+            if ($loan->start_date && $transactionDate->lt(Carbon::parse($loan->start_date)->startOfDay())) {
+                throw new \RuntimeException('Transaction date cannot be before the loan start date.');
+            }
+
             $feeType = trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time';
-            $loan->updateAging();
-            $loan->refresh();
             $usesInstallmentFee = $feeType === 'monthly';
 
             $principalInterestAmount = (float) ($validated['amount_paid'] ?? 0);
@@ -46,10 +59,13 @@ class RepaymentService
             $penaltyAmountToPay = (float) ($validated['penalty_amount'] ?? 0);
             // The backend owns the amount due. A client may display its own preview,
             // but must never be allowed to change the loan's penalty balance.
-            $penaltyDue = $loan->currentPenaltyDue(
-                Carbon::parse($validated['transaction_date'])->startOfDay()
+            $preview = $this->previewService->build(
+                $loan,
+                $transactionDate,
+                (string) $validated['repayment_type']
             );
-            $agingBeforePayment = $loan->currentAging(Carbon::today());
+            $penaltyDue = (float) $preview['penalty_due'];
+            $agingBeforePayment = (int) $preview['aging'];
 
             if (($penaltyAmountToPay + $waivedAmount) > $penaltyDue + 0.001) {
                 throw new \RuntimeException('Penalty pay and waiver cannot be greater than the penalty due.');
@@ -128,7 +144,7 @@ class RepaymentService
 
             $currentInstIndex = $installments->count() - 1;
             $chargeUpToIndex = $currentInstIndex;
-            $today = Carbon::parse($validated['transaction_date'])->startOfDay();
+            $today = $transactionDate;
 
             foreach ($installments as $idx => $instObj) {
                 if (Carbon::parse($instObj->payment_date)->startOfDay()->gte($today)) {
@@ -324,8 +340,10 @@ class RepaymentService
 
             // Allocate Penalty
             if ($cashPenaltyPaid > 0) {
-                // Find the oldest unpaid installment
-                $inst = Payment::where('loan_id', $loan->id)
+                // Keep the penalty on the installment being settled. Querying
+                // after P/I allocation would incorrectly attach a historical
+                // penalty to the next still-unpaid row.
+                $inst = $firstInst ?: Payment::where('loan_id', $loan->id)
                     ->whereRaw('total_paid < (principal_amount + interest_amount + COALESCE(fee_amount, 0) - 0.01)')
                     ->orderBy('payment_date', 'asc')
                     ->first();
@@ -361,7 +379,9 @@ class RepaymentService
                 ]);
             }
 
-            if (in_array($validated['repayment_type'], ['Prepayment', 'Pay Off', 'Partial', 'Withdraw'], true)) {
+            // Normal and Partial repayments settle the contractual rows exactly
+            // as stored. They must not rewrite future principal or interest.
+            if (in_array($validated['repayment_type'], ['Prepayment', 'Pay Off', 'Withdraw'], true)) {
                 $loan->recalculateSchedule();
             }
 
@@ -381,6 +401,7 @@ class RepaymentService
                 }
             }
 
+            $this->syncPaymentSettlementTimings($touchedPaymentIds);
             $loan->updateAging();
             $loan->refresh();
 
@@ -425,7 +446,6 @@ class RepaymentService
             }
 
             $loan->update(['total_paid' => $loan->payments()->sum('total_paid')]);
-            $this->syncPaymentSettlementTimings($touchedPaymentIds);
 
             // Automatically record Penalty and Fees as General Revenue
             if ($totalPenaltyPaid > 0.001) {
@@ -681,7 +701,9 @@ class RepaymentService
                 $transaction->delete();
             }
 
-            $loan->recalculateSchedule();
+            if (in_array($transaction->repayment_type, ['Prepayment', 'Withdraw', 'Refinance', 'Reschedule'], true)) {
+                $loan->recalculateSchedule();
+            }
             $loan->updateAging();
 
             $usesInstallmentFee = (trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time') === 'monthly';

@@ -1,8 +1,7 @@
 name: 🚀 Deploy to Cloudways
 
 on:
-  push:
-    branches: [ soun ]  # deploy នៅពេល push ទៅ branch "soun"
+  workflow_dispatch:
 
 jobs:
   deploy:

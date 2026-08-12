@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\CurrencyRounding;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\LogOptions;
@@ -38,6 +39,20 @@ class Loan extends Model
 {
     use LogsActivity, SoftDeletes;
 
+    public const SCHEDULE_INPUT_FIELDS = [
+        'amount',
+        'interest_rate',
+        'duration_months',
+        'start_date',
+        'currency',
+        'repayment_method',
+        'payment_frequency',
+        'pay_day_1',
+        'pay_day_2',
+        'admin_fee',
+        'admin_fee_type',
+    ];
+
     protected $appends = ['print_schedule'];
 
     public function getActivitylogOptions(): LogOptions
@@ -69,6 +84,8 @@ class Loan extends Model
         'sector',
         'loan_code',
         'payment_frequency',
+        'pay_day_1',
+        'pay_day_2',
         'loan_officer_id',
         'admin_fee',
         'admin_fee_type',
@@ -101,7 +118,36 @@ class Loan extends Model
         'verified_at',
         'approved_at',
         'rejection_reason',
+        'schedule_needs_recalculation',
+        'schedule_recalculated_at',
+        'schedule_recalculated_by',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'schedule_needs_recalculation' => 'boolean',
+            'schedule_recalculated_at' => 'datetime',
+            'pay_day_1' => 'integer',
+            'pay_day_2' => 'integer',
+        ];
+    }
+
+    protected static function booted(): void
+    {
+        static::updating(function (Loan $loan): void {
+            $isScheduleRegeneration = $loan->isDirty('schedule_recalculated_at')
+                && $loan->schedule_needs_recalculation === false;
+
+            if (! $isScheduleRegeneration
+                && $loan->status === LoanApproval::STATUS_REJECTED
+                && $loan->isDirty(self::SCHEDULE_INPUT_FIELDS)) {
+                $loan->schedule_needs_recalculation = true;
+                $loan->schedule_recalculated_at = null;
+                $loan->schedule_recalculated_by = null;
+            }
+        });
+    }
 
     // ── Approval Workflow ────────────────────────────────────────────
 
@@ -157,7 +203,13 @@ class Loan extends Model
 
     public function canBeResubmitted(): bool
     {
-        return $this->status === LoanApproval::STATUS_REJECTED;
+        return $this->status === LoanApproval::STATUS_REJECTED
+            && ! (bool) $this->schedule_needs_recalculation;
+    }
+
+    public function scheduleRecalculator(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class, 'schedule_recalculated_by');
     }
 
     // ── End Approval Workflow ────────────────────────────────────────
@@ -333,7 +385,15 @@ class Loan extends Model
         $agingStartDate = $this->penalty_late_since_date ?? $this->late_since_date;
 
         if (! $agingStartDate) {
-            return $lockedAging;
+            if ((float) ($this->accumulated_penalty ?? 0) <= 0.01) {
+                return $lockedAging;
+            }
+
+            // Older loans can carry a frozen penalty without the late-period
+            // anchor/locked-aging fields introduced later. Only reconstruct
+            // aging from saved timing evidence; a penalty balance by itself
+            // cannot prove how many days the customer was late.
+            return $this->recoverLegacyLockedAging();
         }
 
         $lateSinceDate = \Carbon\Carbon::parse($agingStartDate)->startOfDay();
@@ -342,6 +402,99 @@ class Loan extends Model
             : 0;
 
         return max($currentLateDays, $lockedAging);
+    }
+
+    /**
+     * Recover a non-zero loan-level aging lock for legacy frozen penalties.
+     *
+     * Old `aging` values may preserve a continuous multi-row late period,
+     * while settled_days_variance preserves the late timing of a paid row.
+     */
+    private function recoverLegacyLockedAging(): int
+    {
+        $savedAging = max(
+            0,
+            (int) ($this->aging ?? 0),
+            (int) ($this->locked_aging ?? 0)
+        );
+
+        $historicalLateDays = (int) ($this->latestSettledLatePeriod()['days'] ?? 0);
+
+        // Actual Due/Settled dates are stronger evidence than a legacy saved
+        // integer. Fall back to the saved value only when no timing evidence
+        // survived the migration.
+        return $historicalLateDays > 0 ? $historicalLateDays : $savedAging;
+    }
+
+    /**
+     * Return the most recent continuous late period that has fully ended.
+     *
+     * Overlapping overdue installment intervals are merged so loan-level
+     * aging remains continuous across multiple rows instead of resetting when
+     * the oldest row is paid. Penalty values are deliberately not involved.
+     *
+     * @return array{start_date: string, end_date: string, days: int}|null
+     */
+    public function latestSettledLatePeriod(): ?array
+    {
+        $intervals = $this->payments()
+            ->withTrashed()
+            ->whereNotNull('payment_date')
+            ->where(function ($query): void {
+                $query->whereNotNull('settled_at')
+                    ->orWhere('settled_days_variance', '<', 0);
+            })
+            ->orderBy('payment_date')
+            ->get(['payment_date', 'settled_at', 'settled_days_variance'])
+            ->map(function (Payment $payment): ?array {
+                $start = \Carbon\Carbon::parse($payment->payment_date)->startOfDay();
+                $end = $payment->settled_at
+                    ? \Carbon\Carbon::parse($payment->settled_at)->startOfDay()
+                    : $start->copy()->addDays(abs((int) $payment->settled_days_variance));
+
+                if (! $end->gt($start)) {
+                    return null;
+                }
+
+                return [$start, $end];
+            })
+            ->filter()
+            ->values();
+
+        if ($intervals->isEmpty()) {
+            return null;
+        }
+
+        $periodStart = null;
+        $periodEnd = null;
+        $latestPeriod = null;
+
+        foreach ($intervals as [$start, $end]) {
+            if ($periodStart === null) {
+                $periodStart = $start->copy();
+                $periodEnd = $end->copy();
+                continue;
+            }
+
+            if ($start->lte($periodEnd)) {
+                if ($end->gt($periodEnd)) {
+                    $periodEnd = $end->copy();
+                }
+                continue;
+            }
+
+            $latestPeriod = [$periodStart, $periodEnd];
+            $periodStart = $start->copy();
+            $periodEnd = $end->copy();
+        }
+
+        $latestPeriod = [$periodStart, $periodEnd];
+
+        return [
+            'start_date' => $latestPeriod[0]->toDateString(),
+            'end_date' => $latestPeriod[1]->toDateString(),
+            'days' => (int) $latestPeriod[0]->diffInDays($latestPeriod[1]),
+        ];
     }
 
     /**
@@ -541,26 +694,40 @@ class Loan extends Model
             /** @var \App\Models\Payment $payment */
             $isLast = ($index === $futurePayments->count() - 1);
 
-            $newInterest = round($payment->interest_amount * $ratio, 2);
+            $newInterest = CurrencyRounding::up(
+                (float) $payment->interest_amount * $ratio,
+                (string) ($this->currency ?? 'USD')
+            );
+            $newFee = CurrencyRounding::up(
+                (float) ($payment->fee_amount ?? 0),
+                (string) ($this->currency ?? 'USD')
+            );
 
             if ($isLast) {
                 // Absorb any rounding differences in the final payment
-                $newPrincipal = $currentBalance;
+                $newPrincipal = round($currentBalance, 2);
             } else {
-                $newPrincipal = round($payment->principal_amount * $ratio, 2);
+                $newPrincipal = min(
+                    CurrencyRounding::up(
+                        (float) $payment->principal_amount * $ratio,
+                        (string) ($this->currency ?? 'USD')
+                    ),
+                    $currentBalance
+                );
             }
 
             if ($index === 0) {
                 // Approximate new monthly payment based on the first upcoming adjusted installment
-                $newMonthlyPayment = round($newPrincipal + $newInterest + $payment->fee_amount, 2);
+                $newMonthlyPayment = round($newPrincipal + $newInterest + $newFee, 2);
             }
 
             $payment->principal_amount = $newPrincipal;
             $payment->interest_amount = $newInterest;
-            $payment->total_due = round($newPrincipal + $newInterest + ($payment->fee_amount ?? 0), 2);
+            $payment->fee_amount = $newFee;
+            $payment->total_due = round($newPrincipal + $newInterest + $newFee, 2);
             $payment->save();
 
-            $currentBalance -= $newPrincipal;
+            $currentBalance = round(max(0, $currentBalance - $newPrincipal), 2);
         }
 
         $this->update(['monthly_payment' => $newMonthlyPayment]);

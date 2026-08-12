@@ -142,6 +142,104 @@ class LoanAgingTransitionTest extends TestCase
         $this->assertEquals(12.5, $loan->currentPenaltyDue());
     }
 
+    public function test_legacy_penalty_without_an_anchor_recovers_and_persists_locked_aging(): void
+    {
+        $loan = $this->createLoan([
+            'aging' => 0,
+            'locked_aging' => 0,
+            'accumulated_penalty' => 10,
+            'late_since_date' => null,
+            'penalty_late_since_date' => null,
+            'penalty_rate' => 2.5,
+        ]);
+        $payment = $this->createPayment($loan, 1, '2026-07-20', 110);
+        $payment->forceFill([
+            'settled_at' => '2026-08-03',
+            'settled_due_date' => '2026-07-20',
+            'settled_days_variance' => -14,
+        ])->saveQuietly();
+
+        // Penalty value is not a timing source. The historical fourteen-day
+        // settlement is the evidence used to recover aging.
+        $this->assertSame(14, $loan->currentAging());
+
+        $loan->updateAging();
+        $loan->refresh();
+
+        $this->assertSame(14, (int) $loan->aging);
+        $this->assertSame(14, (int) $loan->locked_aging);
+        $this->assertSame(14, $loan->currentAging());
+        $this->assertEquals(10, $loan->accumulated_penalty);
+        $this->assertNull($loan->late_since_date);
+        $this->assertNull($loan->penalty_late_since_date);
+    }
+
+    public function test_legacy_penalty_without_timing_evidence_does_not_invent_aging(): void
+    {
+        $loan = $this->createLoan([
+            'aging' => 0,
+            'locked_aging' => 0,
+            'accumulated_penalty' => 292.50,
+            'late_since_date' => null,
+            'penalty_late_since_date' => null,
+            'penalty_rate' => 2.5,
+        ]);
+        $this->createPayment($loan, 1, '2026-07-20', 110);
+
+        $this->assertSame(0, $loan->currentAging());
+
+        $loan->updateAging();
+        $loan->refresh();
+
+        $this->assertSame(0, (int) $loan->aging);
+        $this->assertSame(0, (int) $loan->locked_aging);
+        $this->assertEquals(292.50, $loan->accumulated_penalty);
+    }
+
+    public function test_legacy_recovery_merges_overlapping_rows_and_uses_the_latest_late_period(): void
+    {
+        $loan = $this->createLoan([
+            'aging' => 999,
+            'locked_aging' => 999,
+            'accumulated_penalty' => 25,
+            'late_since_date' => null,
+            'penalty_late_since_date' => null,
+        ]);
+
+        $first = $this->createPayment($loan, 1, '2026-05-03', 110);
+        $first->forceFill([
+            'settled_at' => '2026-06-10',
+            'settled_days_variance' => -38,
+        ])->saveQuietly();
+
+        $second = $this->createPayment($loan, 2, '2026-06-02', 110);
+        $second->forceFill([
+            'settled_at' => '2026-06-15',
+            'settled_days_variance' => -13,
+        ])->saveQuietly();
+
+        // A later, separate five-day late period is the period associated with
+        // the current frozen balance. The stale saved value must not win.
+        $third = $this->createPayment($loan, 3, '2026-07-01', 110);
+        $third->forceFill([
+            'settled_at' => '2026-07-06',
+            'settled_days_variance' => -5,
+        ])->saveQuietly();
+
+        $this->assertSame([
+            'start_date' => '2026-07-01',
+            'end_date' => '2026-07-06',
+            'days' => 5,
+        ], $loan->latestSettledLatePeriod());
+        $this->assertSame(5, $loan->currentAging());
+
+        $loan->updateAging();
+        $loan->refresh();
+
+        $this->assertSame(5, (int) $loan->aging);
+        $this->assertSame(5, (int) $loan->locked_aging);
+    }
+
     public function test_report_aging_uses_the_reference_date_and_keeps_due_today_at_zero(): void
     {
         $loan = $this->createLoan();

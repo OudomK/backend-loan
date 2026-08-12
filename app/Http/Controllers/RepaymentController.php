@@ -6,6 +6,8 @@ use App\Models\Loan;
 use App\Models\Payment;
 use App\Models\RepaymentTransaction;
 use App\Services\RepaymentService;
+use App\Services\RepaymentPreviewService;
+use App\Support\SearchResultRanker;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -220,7 +222,25 @@ class RepaymentController extends Controller
             ->whereHas('payments', function ($query) {
                 $query->whereRaw($this->unpaidInstallmentExpression());
             })
-            ->get();
+            ->limit(50)
+            ->get()
+            ->sort(function (Loan $left, Loan $right) use ($query): int {
+                $score = fn (Loan $loan): int => SearchResultRanker::score($query, [
+                    $loan->loan_code,
+                    $loan->borrower?->first_name,
+                    $loan->borrower?->last_name,
+                    $loan->borrower?->latin_name,
+                    $loan->borrower?->nickname,
+                    trim(($loan->borrower?->first_name ?? '').' '.($loan->borrower?->last_name ?? '')),
+                    trim(($loan->borrower?->last_name ?? '').' '.($loan->borrower?->first_name ?? '')),
+                    $loan->borrower?->phone,
+                ]);
+
+                return $score($left) <=> $score($right)
+                    ?: strnatcasecmp((string) $left->loan_code, (string) $right->loan_code);
+            })
+            ->take(20)
+            ->values();
 
         return response()->json($loans->map(function ($loan) {
             $symbol = str_contains(strtoupper((string) $loan->currency), 'KHR') ? '៛' : '$';
@@ -248,40 +268,20 @@ class RepaymentController extends Controller
     /**
      * Get unpaid installments for a specific loan and fee status (for one-time fee display).
      */
-    public function getInstallments(int|string $loan_id)
+    public function getInstallments(Request $request, int|string $loan_id, RepaymentPreviewService $previewService)
     {
-        $loan = Loan::find($loan_id);
-        $feeType = $loan ? (trim((string) ($loan->admin_fee_type ?? '')) ?: 'one_time') : 'one_time';
-        $usesInstallmentFee = $feeType === 'monthly';
-        $installmentDueExpression = $loan
-            ? $this->unpaidPaymentExpressionForLoan($loan)
-            : 'total_paid < (principal_amount + interest_amount)';
-        $installments = Payment::where('loan_id', $loan_id)
-            ->whereRaw($installmentDueExpression)
-            ->orderBy('payment_date', 'asc')
-            ->get();
-
-        $totalFee = $usesInstallmentFee && $loan
-            ? ($loan->amount * ((float) ($loan->admin_fee ?? 0) / 100))
-            : 0;
-        $feePaidSoFar = $usesInstallmentFee
-            ? (float) RepaymentTransaction::where('loan_id', $loan_id)->sum('fee_paid')
-            : 0;
-        $accumulatedPenalty = $loan ? (float) $loan->accumulated_penalty : 0.0;
-
-        return response()->json([
-            'installments' => $installments,
-            'fee_type' => $feeType,
-            'total_fee' => round($totalFee, 2),
-            'fee_paid_so_far' => round($feePaidSoFar, 2),
-            'accumulated_penalty' => round($accumulatedPenalty, 2),
-            'late_since_date' => $loan ? $loan->late_since_date : null,
-            'penalty_late_since_date' => $loan ? $loan->penalty_late_since_date : null,
-            'locked_aging' => $loan ? (int) $loan->locked_aging : 0,
-            'penalty_due' => $loan ? $loan->currentPenaltyDue() : 0.0,
-            'penalty_rate' => $loan ? $loan->resolvePenaltyRate() : 0.0,
-            'current_period_penalty_credits' => $loan ? $loan->currentPeriodPenaltyCredits() : 0.0,
+        $validated = $request->validate([
+            'transaction_date' => 'nullable|date',
+            'repayment_type' => 'nullable|string|in:Normal,Prepayment,Partial,Pay Off,Refinance,Reschedule,Recovery,Withdraw',
         ]);
+        $loan = Loan::findOrFail($loan_id);
+        $transactionDate = Carbon::parse($validated['transaction_date'] ?? Carbon::today())->startOfDay();
+
+        return response()->json($previewService->build(
+            $loan,
+            $transactionDate,
+            $validated['repayment_type'] ?? 'Normal'
+        ));
     }
 
     /**

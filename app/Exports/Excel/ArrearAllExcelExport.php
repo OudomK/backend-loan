@@ -105,7 +105,7 @@ class ArrearAllExcelExport
         $sheet->getStyle('A4')->getFont()->setSize(10);
 
         $headers = [
-            'Arrear Date', 'Loan No.', 'Installment No.', 'Name', 'Co-Borrower', 'Guarantor',
+            'Arrear Date', 'Loan No.', 'Name', 'Co-Borrower', 'Guarantor',
             'Gender', 'Phone', 'CB Phone', 'GU Phone',
             'C.O', 'Village', 'Commune', 'Last Payment Date', 'Aging',
             'Types of Collateral', 'Number', 'Date Disb.',
@@ -114,7 +114,7 @@ class ArrearAllExcelExport
         ];
 
         $keys = [
-            'arrear_date', 'loan_no', 'installment_no', 'name', 'coborrower', 'guarantor',
+            'arrear_date', 'loan_no', 'name', 'coborrower', 'guarantor',
             'gender', 'phone', 'coborrower_phone', 'guarantor_phone',
             'co', 'village', 'commune', 'last_payment_date', 'aging',
             'types_of_collateral', 'number', 'date_disbursement',
@@ -183,7 +183,7 @@ class ArrearAllExcelExport
                             }
                             $sheet->setCellValue($columnLetter.$row, $floatVal);
                             $sheet->getStyle($columnLetter.$row)->getNumberFormat()->setFormatCode('#,##0.00');
-                        } elseif (in_array($key, ['installment_no', 'aging', 'number']) && is_numeric($value)) {
+                        } elseif (in_array($key, ['aging', 'number']) && is_numeric($value)) {
                             $sheet->setCellValueExplicit($columnLetter.$row, $value, \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_NUMERIC);
                         } else {
                             if ($key === 'status') {

@@ -571,7 +571,7 @@ class ReportPortfolioIntegrityTest extends TestCase
         }
     }
 
-    public function test_arrear_reports_track_each_installment_and_remove_it_when_schedule_due_is_settled(): void
+    public function test_arrear_reports_combine_installments_by_loan_and_remove_settled_amounts(): void
     {
         $borrowerId = $this->createBorrower();
         $loanId = $this->createLoan([
@@ -617,9 +617,13 @@ class ReportPortfolioIntegrityTest extends TestCase
 
         foreach (['all', 'under30'] as $reportType) {
             $rows = $this->arrearRows($reportType);
-            $this->assertSame([2, 1], array_column($rows, 'installment_no'), $reportType);
-            $this->assertSame([4, 8], array_column($rows, 'aging'), $reportType);
-            $this->assertEquals(75, collect($rows)->sum('penalty_due'), $reportType);
+            $this->assertCount(1, $rows, $reportType);
+            $this->assertArrayNotHasKey('installment_no', $rows[0], $reportType);
+            $this->assertSame('2026-08-01', $rows[0]['arrear_date'], $reportType);
+            $this->assertSame(8, $rows[0]['aging'], $reportType);
+            $this->assertEquals(220, $rows[0]['arrear_amount'], $reportType);
+            $this->assertEquals(20, $rows[0]['arrear_interest'], $reportType);
+            $this->assertEquals(75, $rows[0]['penalty_due'], $reportType);
         }
 
         DB::table('payments')
@@ -630,7 +634,9 @@ class ReportPortfolioIntegrityTest extends TestCase
         foreach (['all', 'under30'] as $reportType) {
             $rows = $this->arrearRows($reportType);
             $this->assertCount(1, $rows, $reportType);
-            $this->assertSame(2, $rows[0]['installment_no'], $reportType);
+            $this->assertArrayNotHasKey('installment_no', $rows[0], $reportType);
+            $this->assertEquals(110, $rows[0]['arrear_amount'], $reportType);
+            $this->assertEquals(10, $rows[0]['arrear_interest'], $reportType);
             $this->assertEquals(75, $rows[0]['penalty_due'], $reportType);
         }
 
@@ -641,6 +647,63 @@ class ReportPortfolioIntegrityTest extends TestCase
 
         foreach (['all', 'under30'] as $reportType) {
             $this->assertSame([], $this->arrearRows($reportType), $reportType);
+        }
+    }
+
+    public function test_arrear_amount_combines_remaining_principal_and_interest_after_partial_payments(): void
+    {
+        $borrowerId = $this->createBorrower();
+        $loanId = $this->createLoan([
+            'loan_code' => 'ARREAR-PARTIAL-TOTAL',
+            'borrower_id' => $borrowerId,
+            'amount' => 1000,
+            'admin_fee_type' => 'monthly',
+            'penalty_rate' => 0,
+        ]);
+
+        DB::table('payments')->insert([
+            [
+                'loan_id' => $loanId,
+                'payment_number' => 1,
+                'principal_amount' => 100,
+                'interest_amount' => 20,
+                'outstanding_balance' => 900,
+                'fee_amount' => 10,
+                'fee_paid' => 10,
+                // 10 fee + 20 interest + 50 principal have been paid.
+                'total_due' => 130,
+                'penalty_amount' => 0,
+                'total_paid' => 80,
+                'payment_date' => '2026-08-01',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'loan_id' => $loanId,
+                'payment_number' => 2,
+                'principal_amount' => 200,
+                'interest_amount' => 30,
+                'outstanding_balance' => 700,
+                'fee_amount' => 10,
+                'fee_paid' => 4,
+                // 4 fee + 10 interest have been paid; principal is untouched.
+                'total_due' => 240,
+                'penalty_amount' => 0,
+                'total_paid' => 14,
+                'payment_date' => '2026-08-05',
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+
+        foreach (['all', 'under30'] as $reportType) {
+            $rows = $this->arrearRows($reportType);
+
+            $this->assertCount(1, $rows, $reportType);
+            $this->assertSame('Partial', $rows[0]['status'], $reportType);
+            $this->assertEquals(270, $rows[0]['arrear_amount'], $reportType);
+            $this->assertEquals(20, $rows[0]['arrear_interest'], $reportType);
+            $this->assertEquals(6, $rows[0]['arrear_fee'], $reportType);
         }
     }
 

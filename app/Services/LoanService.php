@@ -506,7 +506,7 @@ class LoanService
         }
 
         $principalTotal = 0.0;
-        $lastPaymentDate = null;
+        $normalizedRows = [];
         foreach ($schedule as $index => $item) {
             $paymentDate = $item['date'] ?? ($item['payment_date'] ?? null);
             if ($paymentDate && preg_match('/^\d{2}\/\d{2}\/\d{4}$/', (string) $paymentDate)) {
@@ -529,22 +529,18 @@ class LoanService
             }
 
             $principalTotal += $principal;
-            $lastPaymentDate = $paymentDate;
-            $loan->payments()->create([
-                'payment_number' => $item['period'] ?? ($item['payment_number'] ?? ($index + 1)),
-                'principal_amount' => $principal,
-                'interest_amount' => $interest,
-                'fee_amount' => $fee,
-                'outstanding_balance' => isset($item['balance'])
-                    ? (float) $item['balance']
-                    : (isset($item['remaining_balance'])
-                        ? (float) $item['remaining_balance']
-                        : (isset($item['outstanding_balance']) ? (float) $item['outstanding_balance'] : null)),
-                'penalty_amount' => 0,
-                'total_paid' => 0,
-                'payment_date' => $paymentDate,
-                'payment_method' => 'Cash',
-            ]);
+            $normalizedRows[] = [
+                'period' => $item['period'] ?? ($item['payment_number'] ?? ($index + 1)),
+                'date' => $paymentDate,
+                'principal' => $principal,
+                'interest' => $interest,
+                'fee' => $fee,
+                'payment' => round($principal + $interest + $fee, 2),
+                'balance' => $item['balance']
+                    ?? $item['remaining_balance']
+                    ?? $item['outstanding_balance']
+                    ?? null,
+            ];
         }
 
         if (abs($principalTotal - $expectedPrincipal) > 0.02) {
@@ -553,18 +549,13 @@ class LoanService
             ]);
         }
 
-        $firstPayment = $loan->payments()->orderBy('payment_number')->first();
-        $loan->update([
-            'monthly_payment' => $firstPayment
-                ? round(
-                    (float) $firstPayment->principal_amount
-                    + (float) $firstPayment->interest_amount
-                    + (float) $firstPayment->fee_amount,
-                    2
-                )
-                : 0,
-            'maturity_date' => $lastPaymentDate,
-        ]);
+        try {
+            app(LoanScheduleService::class)->persist($loan, $normalizedRows);
+        } catch (\RuntimeException $exception) {
+            throw ValidationException::withMessages([
+                'custom_schedule' => $exception->getMessage(),
+            ]);
+        }
     }
 
     public function previewModification(Loan $loan, array $data)

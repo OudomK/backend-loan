@@ -24,7 +24,7 @@ class EditLoanScheduleTest extends TestCase
         $this->createTestSchema();
     }
 
-    public function test_balance_only_update_does_not_modify_other_schedule_fields(): void
+    public function test_balance_cannot_be_edited_directly(): void
     {
         $loan = $this->createLoan('EDIT-OS-ONLY');
         $payment = $this->createPayment($loan, [
@@ -35,16 +35,21 @@ class EditLoanScheduleTest extends TestCase
             'payment_date' => '2026-09-11',
         ]);
 
-        $response = $this->updateSchedule($loan, [
-            'payments' => [[
-                'id' => $payment->id,
-                'outstanding_balance' => 875,
-            ]],
-        ]);
+        try {
+            $this->updateSchedule($loan, [
+                'reason' => 'Correct old schedule',
+                'payments' => [[
+                    'id' => $payment->id,
+                    'outstanding_balance' => 875,
+                ]],
+            ]);
+            $this->fail('Balance must be calculated by the backend.');
+        } catch (ValidationException) {
+            $this->assertTrue(true);
+        }
 
-        $this->assertSame(200, $response->getStatusCode());
         $payment->refresh();
-        $this->assertEquals(875, $payment->outstanding_balance);
+        $this->assertEquals(900, $payment->outstanding_balance);
         $this->assertEquals(100, $payment->principal_amount);
         $this->assertEquals(20, $payment->interest_amount);
         $this->assertEquals(5, $payment->fee_amount);
@@ -58,6 +63,7 @@ class EditLoanScheduleTest extends TestCase
 
         try {
             $this->updateSchedule($loan, [
+                'reason' => 'Correct old schedule',
                 'payments' => [[
                     'id' => $payment->id,
                     'principal_amount' => -1,
@@ -79,9 +85,10 @@ class EditLoanScheduleTest extends TestCase
 
         try {
             $this->updateSchedule($loan, [
+                'reason' => 'Correct old schedule',
                 'payments' => [[
                     'id' => $otherPayment->id,
-                    'outstanding_balance' => 1,
+                    'principal_amount' => 1,
                 ]],
             ]);
             $this->fail('A schedule row from another loan must be rejected.');
@@ -100,6 +107,7 @@ class EditLoanScheduleTest extends TestCase
 
         try {
             $this->updateSchedule($loan, [
+                'reason' => 'Correct old schedule',
                 'payments' => [[
                     'id' => $payment->id,
                     'principal_amount' => 50,
@@ -132,19 +140,118 @@ class EditLoanScheduleTest extends TestCase
         $this->assertEquals(1000, $loan->fresh()->getBasePrincipalForOS());
     }
 
-    public function test_principal_edit_synchronizes_the_contract_principal_used_by_os(): void
+    public function test_manual_edit_changes_only_the_requested_column(): void
     {
         $loan = $this->createLoan('EDIT-PRINCIPAL-SOURCE');
         $first = $this->createPayment($loan, [
             'payment_number' => 1,
             'principal_amount' => 400,
+            'outstanding_balance' => 600,
+        ]);
+        $second = $this->createPayment($loan, [
+            'payment_number' => 2,
+            'principal_amount' => 600,
+            'outstanding_balance' => 0,
+            'payment_date' => '2026-10-11',
+        ]);
+
+        $response = $this->updateSchedule($loan, [
+            'reason' => 'Correct one principal cell',
+            'payments' => [[
+                'id' => $first->id,
+                'principal_amount' => 450,
+            ]],
+        ]);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $loan->refresh();
+        $this->assertEquals(1000, $loan->amount);
+        $this->assertEquals(1000, $loan->getBasePrincipalForOS());
+        $this->assertEquals(1000, $loan->disbursed_amount);
+        $this->assertEquals(500, $loan->monthly_payment);
+        $this->assertEquals(450, $first->fresh()->principal_amount);
+        $this->assertEquals(20, $first->fresh()->interest_amount);
+        $this->assertEquals(600, $first->fresh()->outstanding_balance);
+        $this->assertSame('2026-09-11', $first->fresh()->payment_date);
+        $this->assertEquals(600, $second->fresh()->principal_amount);
+        $this->assertEquals(0, $second->fresh()->outstanding_balance);
+    }
+
+    public function test_usd_preview_rounds_changed_cents_up_and_does_not_write(): void
+    {
+        $loan = $this->createLoan('EDIT-PREVIEW');
+        $first = $this->createPayment($loan, [
+            'payment_number' => 1,
+            'principal_amount' => 400,
+            'interest_amount' => 20,
+            'outstanding_balance' => 600,
+        ]);
+        $second = $this->createPayment($loan, [
+            'payment_number' => 2,
+            'principal_amount' => 600,
+            'interest_amount' => 20,
+            'outstanding_balance' => 0,
+            'payment_date' => '2026-10-11',
+        ]);
+
+        $response = $this->previewSchedule($loan, [
+            'payments' => [
+                ['id' => $first->id, 'principal_amount' => 399.01, 'interest_amount' => 20.01],
+                ['id' => $second->id, 'principal_amount' => 600],
+            ],
+        ]);
+
+        $payload = $response->getData(true);
+        $this->assertSame(400.0, (float) $payload['schedule'][0]['principal_amount']);
+        $this->assertSame(21.0, (float) $payload['schedule'][0]['interest_amount']);
+        $this->assertEquals(20, $first->fresh()->interest_amount);
+        $this->assertEquals(400, $first->fresh()->principal_amount);
+    }
+
+    public function test_installment_with_partial_payment_is_read_only(): void
+    {
+        $loan = $this->createLoan('EDIT-PARTIAL-LOCKED');
+        $first = $this->createPayment($loan, [
+            'payment_number' => 1,
+            'principal_amount' => 400,
+            'total_paid' => 10,
+            'outstanding_balance' => 600,
         ]);
         $this->createPayment($loan, [
             'payment_number' => 2,
             'principal_amount' => 600,
+            'payment_date' => '2026-10-11',
+            'outstanding_balance' => 0,
+        ]);
+
+        try {
+            $this->updateSchedule($loan, [
+                'reason' => 'Try changing paid row',
+                'payments' => [[
+                    'id' => $first->id,
+                    'interest_amount' => 25,
+                ]],
+            ]);
+            $this->fail('A partially paid installment must be read-only.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('read-only', $exception->getMessage());
+        }
+
+        $this->assertEquals(20, $first->fresh()->interest_amount);
+    }
+
+    public function test_manual_principal_edit_does_not_change_the_loan_contract_amount(): void
+    {
+        $loan = $this->createLoan('EDIT-PRINCIPAL-TOTAL');
+        $first = $this->createPayment($loan, ['principal_amount' => 400]);
+        $this->createPayment($loan, [
+            'payment_number' => 2,
+            'principal_amount' => 600,
+            'payment_date' => '2026-10-11',
         ]);
 
         $response = $this->updateSchedule($loan, [
+            'reason' => 'Correct one principal cell only',
             'payments' => [[
                 'id' => $first->id,
                 'principal_amount' => 500,
@@ -152,11 +259,60 @@ class EditLoanScheduleTest extends TestCase
         ]);
 
         $this->assertSame(200, $response->getStatusCode());
-        $loan->refresh();
-        $this->assertEquals(1100, $loan->amount);
-        $this->assertEquals(1100, $loan->getBasePrincipalForOS());
-        $this->assertEquals(1000, $loan->disbursed_amount);
-        $this->assertEquals(132, $loan->monthly_interest);
+        $this->assertEquals(1000, $loan->fresh()->amount);
+        $this->assertEquals(500, $first->fresh()->principal_amount);
+    }
+
+    public function test_manual_edit_rejects_duplicate_payment_ids(): void
+    {
+        $loan = $this->createLoan('EDIT-DUPLICATE-ID');
+        $first = $this->createPayment($loan, ['principal_amount' => 1000]);
+
+        try {
+            $this->updateSchedule($loan, [
+                'reason' => 'Duplicate request row',
+                'payments' => [
+                    ['id' => $first->id, 'interest_amount' => 21],
+                    ['id' => $first->id, 'interest_amount' => 22],
+                ],
+            ]);
+            $this->fail('Duplicate payment IDs must be rejected.');
+        } catch (ValidationException) {
+            $this->assertTrue(true);
+        }
+
+        $this->assertEquals(20, $first->fresh()->interest_amount);
+    }
+
+    public function test_first_payment_date_cannot_be_before_loan_start_date(): void
+    {
+        $loan = $this->createLoan('EDIT-BEFORE-START');
+        $first = $this->createPayment($loan, [
+            'payment_number' => 1,
+            'principal_amount' => 400,
+            'outstanding_balance' => 600,
+        ]);
+        $this->createPayment($loan, [
+            'payment_number' => 2,
+            'principal_amount' => 600,
+            'payment_date' => '2026-10-11',
+            'outstanding_balance' => 0,
+        ]);
+
+        try {
+            $this->updateSchedule($loan, [
+                'reason' => 'Invalid first date',
+                'payments' => [[
+                    'id' => $first->id,
+                    'payment_date' => '2026-08-01',
+                ]],
+            ]);
+            $this->fail('First payment date before loan start must be rejected.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('start date', $exception->getMessage());
+        }
+
+        $this->assertSame('2026-09-11', $first->fresh()->payment_date);
     }
 
     public function test_schedule_route_requires_customer_history_edit_permission(): void
@@ -170,6 +326,16 @@ class EditLoanScheduleTest extends TestCase
         $this->assertContains(
             'permission:ui:customer_history:edit',
             $route->gatherMiddleware()
+        );
+
+        $previewRoute = collect(app('router')->getRoutes())->first(function ($route): bool {
+            return $route->uri() === 'api/loans/{id}/schedule/preview'
+                && in_array('POST', $route->methods(), true);
+        });
+        $this->assertNotNull($previewRoute);
+        $this->assertContains(
+            'permission:ui:customer_history:edit',
+            $previewRoute->gatherMiddleware()
         );
     }
 
@@ -213,6 +379,14 @@ class EditLoanScheduleTest extends TestCase
         );
     }
 
+    private function previewSchedule(Loan $loan, array $payload)
+    {
+        return app(LoanController::class)->previewScheduleUpdate(
+            Request::create('/', 'POST', $payload),
+            $loan->id
+        );
+    }
+
     private function createTestSchema(): void
     {
         Schema::create('loans', function (Blueprint $table): void {
@@ -225,6 +399,7 @@ class EditLoanScheduleTest extends TestCase
             $table->integer('duration_months')->default(1);
             $table->decimal('monthly_payment', 15, 2)->default(0);
             $table->date('start_date')->nullable();
+            $table->date('maturity_date')->nullable();
             $table->string('status')->default('active');
             $table->string('currency')->default('USD');
             $table->string('repayment_method')->nullable();
@@ -243,6 +418,8 @@ class EditLoanScheduleTest extends TestCase
             $table->decimal('outstanding_balance', 15, 2)->nullable();
             $table->decimal('penalty_amount', 15, 2)->default(0);
             $table->decimal('total_paid', 15, 2)->default(0);
+            $table->decimal('prepayment', 15, 2)->default(0);
+            $table->unsignedBigInteger('repayment_transaction_id')->nullable();
             $table->date('payment_date');
             $table->string('payment_method')->default('Cash');
             $table->timestamps();
@@ -258,6 +435,18 @@ class EditLoanScheduleTest extends TestCase
             $table->decimal('withdrawn_prepayment', 15, 2)->default(0);
             $table->timestamps();
             $table->softDeletes();
+        });
+
+        Schema::create('payment_allocations', function (Blueprint $table): void {
+            $table->id();
+            $table->unsignedBigInteger('payment_id');
+            $table->unsignedBigInteger('repayment_transaction_id');
+            $table->decimal('amount_applied', 15, 2)->default(0);
+            $table->decimal('fee_applied', 15, 2)->default(0);
+            $table->decimal('interest_applied', 15, 2)->default(0);
+            $table->decimal('principal_applied', 15, 2)->default(0);
+            $table->decimal('penalty_applied', 15, 2)->default(0);
+            $table->timestamps();
         });
     }
 }

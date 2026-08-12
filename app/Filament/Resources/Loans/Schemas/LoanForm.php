@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\Loans\Schemas;
 
+use App\Models\Loan;
+use App\Models\LoanApproval;
 use App\Support\CurrencyHelper;
 use Filament\Forms\Components\DatePicker;
 use Filament\Schemas\Components\Grid;
@@ -88,7 +90,9 @@ class LoanForm
                                                         'rejected' => 'Rejected',
                                                     ])
                                                     ->default('pending_check')
-                                                    ->required(),
+                                                    ->disabled()
+                                                    ->dehydrated(false)
+                                                    ->helperText('Status is controlled by the approval workflow.'),
                                                 Select::make('loan_officer_id')
                                                     ->relationship('officer', 'id')
                                                     ->getOptionLabelFromRecordUsing(fn($record) => "{$record->name}")
@@ -176,21 +180,25 @@ class LoanForm
                                                 TextInput::make('amount')
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
+                                                    ->disabled(fn (?Loan $record): bool => $record !== null && $record->status !== LoanApproval::STATUS_REJECTED)
                                                     ->required(),
                                                 Select::make('currency')
                                                     ->options(CurrencyHelper::options())
                                                     ->default(CurrencyHelper::USD)
                                                     ->native(false)
                                                     ->live()
+                                                    ->disabled(fn (?Loan $record): bool => $record !== null && $record->status !== LoanApproval::STATUS_REJECTED)
                                                     ->required(),
                                                 TextInput::make('interest_rate')
                                                     ->label('Interest Rate (%)')
                                                     ->numeric()
                                                     ->suffix('%')
+                                                    ->disabled(fn (?Loan $record): bool => $record !== null && $record->status !== LoanApproval::STATUS_REJECTED)
                                                     ->required(),
                                                 TextInput::make('admin_fee')
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
+                                                    ->disabled(fn (?Loan $record): bool => $record !== null && $record->status !== LoanApproval::STATUS_REJECTED)
                                                     ->default(0),
                                                 TextInput::make('purpose')
                                                     ->label('Purpose')
@@ -205,6 +213,7 @@ class LoanForm
                                                 TextInput::make('duration_months')
                                                     ->label('Duration (Months)')
                                                     ->numeric()
+                                                    ->disabled(fn (?Loan $record): bool => $record !== null && $record->status !== LoanApproval::STATUS_REJECTED)
                                                     ->required(),
                                                 Select::make('payment_frequency')
                                                     ->options([
@@ -217,7 +226,9 @@ class LoanForm
                                                     ])
                                                     ->default('monthly')
                                                     ->native(false)
-                                                    ->required(),
+                                                    ->disabled()
+                                                    ->dehydrated(false)
+                                                    ->helperText('Calculated from the repayment method.'),
                                                 Select::make('repayment_method')
                                                     ->options([
                                                         'fixed_daily' => 'Fixed Daily (1x per day)',
@@ -233,6 +244,7 @@ class LoanForm
                                                     ])
                                                     ->searchable()
                                                     ->native(false)
+                                                    ->disabled(fn (?Loan $record): bool => $record !== null && $record->status !== LoanApproval::STATUS_REJECTED)
                                                     ->required(),
                                             ]),
                                         Grid::make([
@@ -242,13 +254,31 @@ class LoanForm
                                         ])
                                             ->schema([
                                                 DatePicker::make('start_date')
+                                                    ->disabled(fn (?Loan $record): bool => $record !== null && $record->status !== LoanApproval::STATUS_REJECTED)
                                                     ->required()
                                                     ->native(false),
+                                                TextInput::make('pay_day_1')
+                                                    ->label('Monthly Repayment Day')
+                                                    ->numeric()
+                                                    ->minValue(1)
+                                                    ->maxValue(31)
+                                                    ->visible(fn (callable $get): bool => in_array($get('repayment_method'), [
+                                                        'fixed_monthly',
+                                                        'linear_monthly',
+                                                        'annuity_monthly',
+                                                        'Balloon',
+                                                        'negotiable',
+                                                    ], true))
+                                                    ->disabled(fn (?Loan $record): bool => $record !== null && $record->status !== LoanApproval::STATUS_REJECTED),
                                                 DatePicker::make('maturity_date')
-                                                    ->native(false),
+                                                    ->native(false)
+                                                    ->disabled()
+                                                    ->dehydrated(false),
                                                 TextInput::make('monthly_payment')
                                                     ->numeric()
-                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency'))),
+                                                    ->prefix(fn (callable $get): string => CurrencyHelper::symbol($get('currency')))
+                                                    ->disabled()
+                                                    ->dehydrated(false),
                                                 Select::make('payment_qr_id')
                                                     ->relationship('paymentQr', 'name')
                                                     ->label('Payment QR Code')

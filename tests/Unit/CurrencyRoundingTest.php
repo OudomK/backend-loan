@@ -30,6 +30,7 @@ class CurrencyRoundingTest extends TestCase
     public function test_usd_amounts_round_up_to_a_whole_dollar(): void
     {
         $this->assertSame(1201.0, CurrencyRounding::up(1200.01, 'USD'));
+        $this->assertSame(1201.0, CurrencyRounding::up(1200.99, 'USD'));
         $this->assertSame(1200.0, CurrencyRounding::up(1200, 'USD'));
     }
 

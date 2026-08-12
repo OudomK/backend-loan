@@ -9,6 +9,10 @@ use Illuminate\Support\Facades\DB;
 
 class LoanApprovalService
 {
+    public function __construct(
+        private readonly RejectedLoanScheduleService $rejectedLoanScheduleService
+    ) {}
+
     /**
      * Submit a loan for approval (initial submission).
      */
@@ -141,6 +145,16 @@ class LoanApprovalService
      */
     public function reject(Loan $loan, User $user, string $reason): Loan
     {
+        $reason = trim($reason);
+
+        if ($reason === '') {
+            throw new \InvalidArgumentException('Rejection reason is required.');
+        }
+
+        if (mb_strlen($reason) > 2000) {
+            throw new \InvalidArgumentException('Rejection reason may not exceed 2000 characters.');
+        }
+
         return DB::transaction(function () use ($loan, $user, $reason): Loan {
             $loan = $this->lockLoan($loan);
             if (!$loan->canBeRejected()) {
@@ -174,8 +188,16 @@ class LoanApprovalService
         return DB::transaction(function () use ($loan, $user, $comments): Loan {
             $loan = $this->lockLoan($loan);
             if (!$loan->canBeResubmitted()) {
+                if ((bool) $loan->schedule_needs_recalculation) {
+                    throw new \InvalidArgumentException(
+                        'The repayment schedule must be regenerated before this loan can be resubmitted.'
+                    );
+                }
+
                 throw new \InvalidArgumentException("Loan #{$loan->id} cannot be resubmitted. Current status: {$loan->status}");
             }
+
+            $this->rejectedLoanScheduleService->assertReadyForResubmission($loan);
 
             $loan->update([
                 'status' => LoanApproval::STATUS_PENDING_CHECK,
