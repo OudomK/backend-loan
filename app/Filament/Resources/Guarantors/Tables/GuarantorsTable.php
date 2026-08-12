@@ -64,6 +64,7 @@ class GuarantorsTable
                     ->searchable()
                     ->visibleFrom('2xl'),
                 TextColumn::make('gender')
+                    ->getStateUsing(fn ($record): string => $record->formatted_gender)
                     ->badge()
                     ->visibleFrom('2xl'),
                 TextColumn::make('marital_status')

@@ -105,8 +105,7 @@ class ArrearReportController extends Controller
 
         $mappedData = ArrearReportResource::collection($payments)->resolve($request);
 
-        // A penalty belongs to the loan, not to every installment. Show it once
-        // on that loan's oldest unpaid installment to avoid duplicate values.
+        // A penalty belongs to the loan, not to an individual installment.
         $penaltyByLoan = [];
         foreach ($payments as $payment) {
             $loan = $payment->loan;
@@ -117,9 +116,12 @@ class ArrearReportController extends Controller
             $penaltyByLoan[$loan->id] = [
                 'due' => $loan->currentPenaltyDue($referenceDate),
                 'paid' => $loan->currentPeriodPenaltyCredits($referenceDate),
-                'attached' => false,
             ];
         }
+
+        // The report is loan-level: combine every visible unpaid installment
+        // into one row while preserving the oldest arrear date and aging.
+        $mappedData = $this->consolidateByLoan($mappedData, $penaltyByLoan);
 
         if ($search !== '') {
             $searchText = mb_strtolower($search, 'UTF-8');
@@ -146,20 +148,7 @@ class ArrearReportController extends Controller
             ));
         }
 
-        foreach ($mappedData as &$item) {
-            $loanId = $item['loan_id'] ?? null;
-            if ($loanId === null || ! isset($penaltyByLoan[$loanId]) || $penaltyByLoan[$loanId]['attached']) {
-                continue;
-            }
-
-            $item['penalty_due'] = $penaltyByLoan[$loanId]['due'];
-            $item['penalty_paid'] = $penaltyByLoan[$loanId]['paid'];
-            $penaltyByLoan[$loanId]['attached'] = true;
-        }
-        unset($item);
-
-        // Newly due installments first. Rows from the same date retain a stable
-        // loan/payment ordering.
+        // Loans with the lowest aging appear first.
         usort($mappedData, function (array $left, array $right): int {
             $agingComparison = ((int) ($left['aging'] ?? 0)) <=> ((int) ($right['aging'] ?? 0));
             if ($agingComparison !== 0) {
@@ -170,7 +159,7 @@ class ArrearReportController extends Controller
 
             return $loanComparison !== 0
                 ? $loanComparison
-                : ((int) ($left['installment_no'] ?? 0)) <=> ((int) ($right['installment_no'] ?? 0));
+                : ((int) ($left['loan_id'] ?? 0)) <=> ((int) ($right['loan_id'] ?? 0));
         });
 
         $paginate = filter_var($request->query('paginate', true), FILTER_VALIDATE_BOOLEAN);
@@ -225,6 +214,50 @@ class ArrearReportController extends Controller
                 'grand_totals' => $grandTotals,
             ],
         ]);
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $rows
+     * @param  array<int, array{due: float, paid: float}>  $penaltyByLoan
+     * @return array<int, array<string, mixed>>
+     */
+    private function consolidateByLoan(array $rows, array $penaltyByLoan): array
+    {
+        $loans = [];
+
+        foreach ($rows as $row) {
+            $loanId = (int) ($row['loan_id'] ?? 0);
+
+            if (! isset($loans[$loanId])) {
+                $loans[$loanId] = $row;
+                continue;
+            }
+
+            foreach (['arrear_amount', 'arrear_interest', 'arrear_fee'] as $amountKey) {
+                $loans[$loanId][$amountKey] = round(
+                    (float) ($loans[$loanId][$amountKey] ?? 0) + (float) ($row[$amountKey] ?? 0),
+                    2
+                );
+            }
+
+            $loans[$loanId]['aging'] = max(
+                (int) ($loans[$loanId]['aging'] ?? 0),
+                (int) ($row['aging'] ?? 0)
+            );
+
+            if (strcasecmp((string) ($row['status'] ?? ''), 'Partial') === 0) {
+                $loans[$loanId]['status'] = 'Partial';
+            }
+        }
+
+        foreach ($loans as $loanId => &$row) {
+            unset($row['installment_no']);
+            $row['penalty_due'] = (float) ($penaltyByLoan[$loanId]['due'] ?? 0);
+            $row['penalty_paid'] = (float) ($penaltyByLoan[$loanId]['paid'] ?? 0);
+        }
+        unset($row);
+
+        return array_values($loans);
     }
 
     public function exportExcel(Request $request)

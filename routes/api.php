@@ -203,8 +203,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('loans/pending-approvals', [\App\Http\Controllers\LoanApprovalApiController::class, 'getPendingApprovals']);
     Route::post('loans/{id}/approval-action', [\App\Http\Controllers\LoanApprovalApiController::class, 'performAction']);
 
-    Route::apiResource('loans', LoanController::class);
+    Route::apiResource('loans', LoanController::class)
+        ->middlewareFor(['index', 'show'], 'permission:ui:loan_application:view')
+        ->middlewareFor('store', 'permission:ui:loan_application:create')
+        ->middlewareFor('update', 'permission:ui:loan_application:edit')
+        ->middlewareFor('destroy', 'permission:ui:loan_application:delete');
     Route::put('loans/{id}/schedule', [LoanController::class, 'updateSchedule'])
+        ->middleware('permission:ui:customer_history:edit');
+    Route::post('loans/{id}/schedule/preview', [LoanController::class, 'previewScheduleUpdate'])
         ->middleware('permission:ui:customer_history:edit');
 
     Route::get('/repayments/due-list', [RepaymentController::class, 'getDueList'])->middleware('permission:ui:repayment:view');

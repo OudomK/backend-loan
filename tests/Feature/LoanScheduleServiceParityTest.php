@@ -200,4 +200,58 @@ class LoanScheduleServiceParityTest extends TestCase
         $this->assertSame('monthly', LoanScheduleService::canonicalPaymentFrequency('fixed_monthly', 'biweekly'));
         $this->assertSame('term', LoanScheduleService::canonicalPaymentFrequency('negotiable', 'monthly'));
     }
+
+    public function test_every_usd_repayment_method_rounds_any_cent_amount_up_to_a_whole_dollar(): void
+    {
+        $service = app(LoanScheduleService::class);
+        $methods = [
+            'fixed_daily',
+            'fixed_weekly',
+            'fixed_biweekly',
+            'fixed_15days_70_30',
+            'fixed_15days_50_50',
+            'fixed_monthly',
+            'annuity_monthly',
+            'linear_monthly',
+            'Balloon',
+            'negotiable',
+        ];
+
+        foreach ($methods as $method) {
+            $schedule = $service->generate([
+                'amount' => 1000,
+                'interest_rate' => 1.37,
+                'duration_months' => 3,
+                'repayment_method' => $method,
+                'start_date' => '2026-08-08',
+                'currency' => 'USD',
+                'admin_fee' => 0.37,
+                'admin_fee_type' => 'monthly',
+                'pay_day_1' => 11,
+                'pay_day_2' => 26,
+            ]);
+
+            foreach ($schedule as $index => $row) {
+                foreach (['principal', 'interest', 'fee', 'payment', 'balance'] as $field) {
+                    $this->assertEquals(
+                        round((float) $row[$field]),
+                        (float) $row[$field],
+                        "{$method} row {$index} {$field} must not contain cents"
+                    );
+                }
+                $this->assertSame(
+                    (float) $row['payment'],
+                    (float) ($row['principal'] + $row['interest'] + $row['fee']),
+                    "{$method} row {$index} total"
+                );
+            }
+
+            $this->assertSame(
+                1000.0,
+                array_sum(array_column($schedule, 'principal')),
+                "{$method} principal total"
+            );
+            $this->assertSame(0.0, (float) $schedule[array_key_last($schedule)]['balance'], $method);
+        }
+    }
 }

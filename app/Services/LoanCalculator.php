@@ -26,9 +26,7 @@ class LoanCalculator
         $exactAmount = fn ($amount) => round((float) $amount, 2);
         $roundCumulativePrincipal = fn ($amount, $currency) => CurrencyRounding::cumulativePrincipal((float) $amount, (string) $currency);
         $isKhrCurrency = stripos($currency, 'KHR') !== false;
-        $roundMonthlyPrincipal = fn ($amount) => $isKhrCurrency
-            ? $applyRounding($amount, $currency)
-            : $exactAmount($amount);
+        $roundMonthlyPrincipal = fn ($amount) => $applyRounding($amount, $currency);
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
             if ($adminFee <= 0)
                 return 0;

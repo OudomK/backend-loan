@@ -5,8 +5,8 @@ namespace App\Filament\Resources\Loans\Pages;
 use App\Filament\Resources\Loans\LoanResource;
 use App\Models\Borrower;
 use App\Models\Loan;
+use App\Models\LoanApproval;
 use App\Services\LoanScheduleService;
-use Carbon\Carbon;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\CreateRecord;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +17,9 @@ class CreateLoan extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
+        // Workflow status is server-controlled. New loans always start at Check.
+        $data['status'] = LoanApproval::STATUS_PENDING_CHECK;
+
         if (!empty($data['borrower_id'])) {
             $cycle = Loan::where('borrower_id', $data['borrower_id'])
                 ->where('status', '!=', 'rejected')
@@ -140,59 +143,7 @@ class CreateLoan extends CreateRecord
             return;
         }
 
-        $loan->update([
-            'monthly_payment' => (float) ($schedule[0]['payment'] ?? 0),
-        ]);
-
-        foreach ($schedule as $item) {
-            $paymentDate = $this->normalizeScheduleDate((string) ($item['date'] ?? ''));
-            if ($paymentDate === null) {
-                continue;
-            }
-
-            $principalAmt = (float) ($item['principal'] ?? 0);
-            $interestAmt = (float) ($item['interest'] ?? 0);
-            $feeAmt = (float) ($item['fee'] ?? 0);
-
-            $loan->payments()->create([
-                'payment_number' => (int) ($item['period'] ?? 0),
-                'principal_amount' => $principalAmt,
-                'interest_amount' => $interestAmt,
-                'fee_amount' => $feeAmt,
-                'outstanding_balance' => isset($item['balance']) ? (float) $item['balance'] : (isset($item['remaining_balance']) ? (float) $item['remaining_balance'] : (isset($item['outstanding_balance']) ? (float) $item['outstanding_balance'] : null)),
-                'penalty_amount' => 0,
-                'total_paid' => 0,
-                'payment_date' => $paymentDate,
-                'payment_method' => 'Cash',
-            ]);
-        }
-
-        $lastPaymentDate = $loan->payments()->max('payment_date');
-        if (!empty($lastPaymentDate) && empty($loan->maturity_date)) {
-            $loan->update(['maturity_date' => $lastPaymentDate]);
-        }
-    }
-
-    private function normalizeScheduleDate(string $date): ?string
-    {
-        if ($date === '') {
-            return null;
-        }
-
-        if (preg_match('#^\d{1,2}/\d{1,2}/\d{4}$#', $date)) {
-            $parsed = Carbon::createFromFormat('d/m/Y', $date);
-            return $parsed ? $parsed->format('Y-m-d') : null;
-        }
-
-        if (preg_match('#^\d{4}-\d{2}-\d{2}$#', $date)) {
-            return $date;
-        }
-
-        try {
-            return Carbon::parse($date)->format('Y-m-d');
-        } catch (\Throwable) {
-            return null;
-        }
+        app(LoanScheduleService::class)->persist($loan, $schedule);
     }
 
     private function buildLoanCode(int $borrowerId, int $cycle): string

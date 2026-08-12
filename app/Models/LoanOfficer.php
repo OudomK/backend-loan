@@ -10,6 +10,7 @@ class LoanOfficer extends Model
 {
     use SoftDeletes, Auditable;
 
+    protected $appends = ['formatted_gender'];
 
     protected $fillable = ['employee_id', 'name', 'phone', 'phone_2', 'phone_3', 'status', 'start_date', 'gender'];
 
@@ -25,6 +26,11 @@ class LoanOfficer extends Model
     public function getStatusAttribute(?string $value): ?string
     {
         return $value === null ? null : strtolower((string) $value);
+    }
+
+    public function getFormattedGenderAttribute(): string
+    {
+        return empty($this->gender) ? '' : strtoupper(substr($this->gender, 0, 1));
     }
 
     public function employee()

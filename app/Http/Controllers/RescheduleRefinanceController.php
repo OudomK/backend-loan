@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Loan;
 use App\Services\LoanService;
+use App\Support\SearchResultRanker;
 use Illuminate\Http\Request;
 
 class RescheduleRefinanceController extends Controller
@@ -54,6 +55,23 @@ class RescheduleRefinanceController extends Controller
             })
             ->limit(50)
             ->get();
+
+        $loans = $loans->sort(function (Loan $left, Loan $right) use ($query): int {
+            $score = fn (Loan $loan): int => SearchResultRanker::score($query, [
+                $loan->loan_code,
+                $loan->borrower?->first_name,
+                $loan->borrower?->last_name,
+                $loan->borrower?->latin_name,
+                $loan->borrower?->nickname,
+                trim(($loan->borrower?->first_name ?? '').' '.($loan->borrower?->last_name ?? '')),
+                trim(($loan->borrower?->last_name ?? '').' '.($loan->borrower?->first_name ?? '')),
+                $loan->borrower?->phone,
+                $loan->borrower?->id_number,
+            ]);
+
+            return $score($left) <=> $score($right)
+                ?: strnatcasecmp((string) $left->loan_code, (string) $right->loan_code);
+        })->take(20)->values();
 
         return response()->json($loans->map(function (Loan $loan) {
             $currentBalance = $this->loanService->calculateCurrentBalance($loan);

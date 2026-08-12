@@ -5,8 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Borrower;
 use App\Models\Loan;
 use App\Services\LoanScheduleService;
-use App\Support\CurrencyRounding;
-use Carbon\Carbon;
+use App\Services\ManualLoanScheduleService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -15,23 +14,14 @@ use Illuminate\Validation\ValidationException;
 
 class LoanController extends Controller
 {
-    public function __construct(private readonly LoanScheduleService $scheduleService) {}
+    public function __construct(
+        private readonly LoanScheduleService $scheduleService,
+        private readonly ManualLoanScheduleService $manualScheduleService
+    ) {}
 
     public function getPaymentQrs()
     {
         return response()->json(\App\Models\PaymentQr::where('is_active', true)->get());
-    }
-
-    /** Normalize schedule date (d/m/Y or Y-m-d) to Y-m-d for DB. */
-    private function normalizeScheduleDate(string $date): string
-    {
-        if (preg_match('#^\d{1,2}/\d{1,2}/\d{4}$#', $date)) {
-            $parsed = Carbon::createFromFormat('d/m/Y', $date);
-
-            return $parsed ? $parsed->format('Y-m-d') : $date;
-        }
-
-        return $date;
     }
 
     public function index()
@@ -74,7 +64,8 @@ class LoanController extends Controller
             'interest_rate' => 'nullable|numeric',
             'duration_months' => 'nullable|integer',
             'start_date' => 'nullable|date',
-            'status' => 'required|in:pending,pending_check,pending_verify,pending_approval,active,completed,paid_off,rejected',
+            // Kept compatible with existing clients, but never trusted below.
+            'status' => 'sometimes|in:pending,pending_check',
             'currency' => 'nullable|string',
             'repayment_method' => 'nullable|string',
             'purpose' => ($requirePurpose ? 'required' : 'nullable').'|string|max:255',
@@ -83,6 +74,8 @@ class LoanController extends Controller
             'loan_officer_id' => 'nullable|exists:loan_officers,id',
             'admin_fee' => 'nullable|numeric',
             'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
+            'pay_day_1' => 'nullable|integer|min:1|max:31',
+            'pay_day_2' => 'nullable|integer|min:1|max:31',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
             'guarantor_id' => 'nullable|exists:guarantors,id',
@@ -98,8 +91,6 @@ class LoanController extends Controller
             'collaterals.*.description' => 'nullable|string',
             'custom_schedule' => 'nullable|array', // For negotiable loans
             'payment_qr_id' => 'nullable|exists:payment_qrs,id',
-            'pay_day_1' => 'nullable|integer|min:1|max:31',
-            'pay_day_2' => 'nullable|integer|min:1|max:31',
         ], [
             'borrower_id.required' => 'សូមជ្រើសរើសអតិថិជន។',
             'borrower_id.exists' => 'អតិថិជនមិនត្រឹមត្រូវ។',
@@ -157,10 +148,8 @@ class LoanController extends Controller
         $defaultRate = $currency === 'KHR' ? 10000 : 2.5;
         $validated['penalty_rate'] = \App\Models\Setting::where('key', $settingKey)->value('value') ?? $defaultRate;
 
-        // Force legacy 'pending' status to the new 'pending_check' stage
-        if (($validated['status'] ?? '') === 'pending') {
-            $validated['status'] = \App\Models\LoanApproval::STATUS_PENDING_CHECK;
-        }
+        // Workflow status is server-controlled. New loans always start at Check.
+        $validated['status'] = \App\Models\LoanApproval::STATUS_PENDING_CHECK;
 
         // Track who submitted this from the API (might be null if API has no auth context yet, fallback to officer id)
         $validated['submitted_by'] = \Illuminate\Support\Facades\Auth::id() ?? $validated['loan_officer_id'] ?? null;
@@ -200,44 +189,15 @@ class LoanController extends Controller
             if ($requiresSchedule) {
                 // Handle Negotiable (Custom Schedule)
                 if ($validated['repayment_method'] === 'negotiable' && ! empty($validated['custom_schedule'])) {
-                    $schedule = $validated['custom_schedule'];
-
-                    // Use the first payment as monthly reference (though it varies)
-                    $loan->update(['monthly_payment' => $schedule[0]['payment'] ?? 0]);
-
-                    foreach ($schedule as $item) {
-                        $loan->payments()->create([
-                            'payment_number' => $item['period'],
-                            'principal_amount' => $item['principal'],
-                            'interest_amount' => $item['interest'],
-                            'fee_amount' => (float) ($item['fee'] ?? 0),
-                            'outstanding_balance' => isset($item['balance']) ? (float) $item['balance'] : (isset($item['remaining_balance']) ? (float) $item['remaining_balance'] : (isset($item['outstanding_balance']) ? (float) $item['outstanding_balance'] : null)),
-                            'penalty_amount' => 0,
-                            'total_paid' => 0,
-                            'payment_date' => $this->normalizeScheduleDate($item['date']),
-                            'payment_method' => 'Cash',
-                        ]);
-                    }
+                    $schedule = $this->scheduleService->normalize(
+                        $validated['custom_schedule'],
+                        (string) ($validated['currency'] ?? 'USD'),
+                        (float) $validated['amount']
+                    );
+                    $this->scheduleService->persist($loan, $schedule);
                 } else {
                     $schedule = $this->scheduleService->generate($validated);
-
-                    if (! empty($schedule)) {
-                        $loan->update(['monthly_payment' => $schedule[0]['payment'] ?? 0]);
-
-                        foreach ($schedule as $item) {
-                            $loan->payments()->create([
-                                'payment_number' => $item['period'],
-                                'principal_amount' => $item['principal'],
-                                'interest_amount' => $item['interest'],
-                                'fee_amount' => (float) ($item['fee'] ?? 0),
-                                'outstanding_balance' => isset($item['balance']) ? (float) $item['balance'] : (isset($item['remaining_balance']) ? (float) $item['remaining_balance'] : (isset($item['outstanding_balance']) ? (float) $item['outstanding_balance'] : null)),
-                                'penalty_amount' => 0,
-                                'total_paid' => 0,
-                                'payment_date' => $this->normalizeScheduleDate($item['date']),
-                                'payment_method' => 'Cash',
-                            ]);
-                        }
-                    }
+                    $this->scheduleService->persist($loan, $schedule);
                 }
 
                 $savedPaymentsCount = $loan->payments()->count();
@@ -485,18 +445,36 @@ class LoanController extends Controller
             'amount' => 'sometimes|required|numeric',
             'interest_rate' => 'sometimes|required|numeric',
             'duration_months' => 'sometimes|required|integer',
-            'monthly_payment' => 'sometimes|required|numeric',
+            'monthly_payment' => 'prohibited',
             'start_date' => 'sometimes|required|date',
-            'status' => 'sometimes|required|in:pending,active,completed,paid_off',
+            'currency' => 'sometimes|required|string',
+            'repayment_method' => 'sometimes|required|string',
+            'payment_frequency' => 'prohibited',
+            // Status changes must use the dedicated approval/operation workflows.
+            'status' => 'prohibited',
             'purpose' => 'sometimes|'.($requirePurpose ? 'required' : 'nullable').'|string|max:255',
             'admin_fee' => 'nullable|numeric',
             'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
+            'pay_day_1' => 'nullable|integer|min:1|max:31',
+            'pay_day_2' => 'nullable|integer|min:1|max:31',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
             'guarantor_id' => 'nullable|exists:guarantors,id',
             'guarantor_relationship' => 'nullable|string',
             'product_id' => 'nullable|exists:loan_products,id',
         ]);
+
+        $changedScheduleInputs = array_intersect(
+            array_keys($validated),
+            Loan::SCHEDULE_INPUT_FIELDS
+        );
+
+        if ($changedScheduleInputs !== []
+            && $loan->status !== \App\Models\LoanApproval::STATUS_REJECTED) {
+            throw ValidationException::withMessages([
+                'loan' => 'Financial terms can only be corrected after the loan is rejected.',
+            ]);
+        }
 
         $loan->update($validated);
 
@@ -544,11 +522,6 @@ class LoanController extends Controller
         return response()->json(['message' => 'Loan successfully written off.', 'loan' => $loan]);
     }
 
-    private function applyRounding(float $amount, string $currency): float
-    {
-        return round($amount, 2);
-    }
-
     private function assertCycleIsEditable(Loan $loan): void
     {
         if (in_array($loan->status, ['rescheduled', 'refinanced'], true)) {
@@ -561,119 +534,64 @@ class LoanController extends Controller
     public function updateSchedule(Request $request, int $id)
     {
         $loan = Loan::findOrFail($id);
-        if ($loan->status !== 'active') {
-            throw ValidationException::withMessages([
-                'loan' => 'Only an active loan cycle can have its schedule edited.',
-            ]);
-        }
+        $validated = $this->validateManualScheduleRequest($request, $loan, true);
+        $result = $this->manualScheduleService->apply(
+            $loan,
+            $validated['payments'],
+            $validated['reason'],
+            $request->user()
+        );
 
+        return response()->json([
+            'message' => 'Schedule successfully updated.',
+            ...$result,
+        ]);
+    }
+
+    public function previewScheduleUpdate(Request $request, int $id)
+    {
+        $loan = Loan::findOrFail($id);
+        $validated = $this->validateManualScheduleRequest($request, $loan, false);
+        $result = $this->manualScheduleService->preview($loan, $validated['payments']);
+
+        return response()->json($result);
+    }
+
+    /** @return array<string, mixed> */
+    private function validateManualScheduleRequest(Request $request, Loan $loan, bool $requireReason): array
+    {
         $validated = $request->validate([
+            'reason' => [$requireReason ? 'required' : 'nullable', 'string', 'max:1000'],
             'payments' => 'required|array|min:1',
             'payments.*' => 'required|array',
             'payments.*.id' => [
                 'required',
                 'integer',
+                'distinct',
                 Rule::exists('payments', 'id')->where(
                     fn ($query) => $query->where('loan_id', $loan->id)
                 ),
             ],
             'payments.*.payment_date' => 'sometimes|required|date',
-            'payments.*.principal_amount' => 'sometimes|required|numeric|min:0',
-            'payments.*.interest_amount' => 'sometimes|required|numeric|min:0',
-            'payments.*.fee_amount' => 'sometimes|required|numeric|min:0',
-            'payments.*.outstanding_balance' => 'sometimes|required|numeric|min:0',
-            'payments.*.balance' => 'sometimes|required|numeric|min:0',
-            'payments.*.remaining_balance' => 'sometimes|required|numeric|min:0',
+            'payments.*.principal_amount' => 'sometimes|required|numeric|min:0|max:9999999999999.99',
+            'payments.*.interest_amount' => 'sometimes|required|numeric|min:0|max:9999999999999.99',
+            'payments.*.fee_amount' => 'prohibited',
+            'payments.*.outstanding_balance' => 'prohibited',
+            'payments.*.balance' => 'prohibited',
+            'payments.*.remaining_balance' => 'prohibited',
         ]);
 
-        $editableFields = [
-            'payment_date',
-            'principal_amount',
-            'interest_amount',
-            'fee_amount',
-            'outstanding_balance',
-            'balance',
-            'remaining_balance',
-        ];
         foreach ($validated['payments'] as $index => $paymentData) {
-            if (array_intersect($editableFields, array_keys($paymentData)) === []) {
+            if (array_intersect(
+                ['payment_date', 'principal_amount', 'interest_amount'],
+                array_keys($paymentData)
+            ) === []) {
                 throw ValidationException::withMessages([
-                    "payments.{$index}" => 'At least one schedule field must be provided.',
+                    "payments.{$index}" => 'Change the date, principal, or interest for this installment.',
                 ]);
             }
         }
 
-        $principalWasEdited = collect($validated['payments'])
-            ->contains(fn (array $paymentData): bool => array_key_exists('principal_amount', $paymentData));
-
-        DB::transaction(function () use ($loan, $validated, $principalWasEdited) {
-            foreach ($validated['payments'] as $paymentData) {
-                $payment = $loan->payments()->findOrFail($paymentData['id']);
-                $currency = $loan->currency ?? 'USD';
-                $updates = [];
-
-                if (array_key_exists('payment_date', $paymentData)) {
-                    $updates['payment_date'] = $paymentData['payment_date'];
-                }
-                if (array_key_exists('principal_amount', $paymentData)) {
-                    $updates['principal_amount'] = $this->applyRounding(
-                        (float) $paymentData['principal_amount'],
-                        $currency
-                    );
-                }
-                if (array_key_exists('interest_amount', $paymentData)) {
-                    $updates['interest_amount'] = CurrencyRounding::up(
-                        (float) $paymentData['interest_amount'],
-                        $currency
-                    );
-                }
-                if (array_key_exists('fee_amount', $paymentData)) {
-                    $updates['fee_amount'] = $this->applyRounding(
-                        (float) $paymentData['fee_amount'],
-                        $currency
-                    );
-                }
-
-                foreach (['outstanding_balance', 'balance', 'remaining_balance'] as $balanceKey) {
-                    if (array_key_exists($balanceKey, $paymentData)) {
-                        $updates['outstanding_balance'] = $this->applyRounding(
-                            (float) $paymentData[$balanceKey],
-                            $currency
-                        );
-                        break;
-                    }
-                }
-
-                if ($updates !== []) {
-                    $payment->update($updates);
-                }
-            }
-
-            if ($principalWasEdited) {
-                $contractPrincipal = round((float) $loan->payments()->sum('principal_amount'), 2);
-                $principalMovement = (float) $loan->transactions()
-                    ->selectRaw(
-                        'COALESCE(SUM(COALESCE(principal_paid, 0) + COALESCE(prepayment_paid, 0) '
-                        .' + COALESCE(paid_off_amount, 0) - COALESCE(withdrawn_prepayment, 0)), 0) AS aggregate'
-                    )
-                    ->value('aggregate');
-
-                if ($contractPrincipal + 0.001 < $principalMovement) {
-                    throw ValidationException::withMessages([
-                        'payments' => 'Schedule principal cannot be lower than principal already paid.',
-                    ]);
-                }
-
-                $loan->update([
-                    'amount' => $contractPrincipal,
-                    'monthly_interest' => round(
-                        $contractPrincipal * (float) $loan->interest_rate / 100,
-                        2
-                    ),
-                ]);
-            }
-        });
-
-        return response()->json(['message' => 'Schedule successfully updated.']);
+        return $validated;
     }
 }

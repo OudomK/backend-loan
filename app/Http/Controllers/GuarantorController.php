@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Guarantor;
 use App\Models\Loan;
+use App\Support\SearchResultRanker;
 use Illuminate\Http\Request;
 
 class GuarantorController extends Controller
@@ -58,14 +59,22 @@ class GuarantorController extends Controller
                 ])
                 ->orderByRaw(
                     "CASE
-                        WHEN customer_code LIKE ? THEN 0
-                        WHEN phone LIKE ? THEN 1
-                        WHEN id_number LIKE ? THEN 2
-                        WHEN first_name LIKE ? THEN 3
-                        WHEN last_name LIKE ? THEN 4
-                        ELSE 5
+                        WHEN customer_code = ? THEN 0
+                        WHEN phone = ? THEN 1
+                        WHEN id_number = ? THEN 2
+                        WHEN first_name = ? OR last_name = ? OR latin_name = ? OR nickname = ? THEN 3
+                        WHEN customer_code LIKE ? THEN 4
+                        WHEN phone LIKE ? THEN 5
+                        WHEN id_number LIKE ? THEN 6
+                        WHEN first_name LIKE ? OR last_name LIKE ? OR latin_name LIKE ? OR nickname LIKE ? THEN 7
+                        ELSE 8
                     END",
-                    ["{$search}%", "{$search}%", "{$search}%", "{$search}%", "{$search}%"]
+                    [
+                        $search, $search, $search,
+                        $search, $search, $search, $search,
+                        "{$search}%", "{$search}%", "{$search}%",
+                        "{$search}%", "{$search}%", "{$search}%", "{$search}%",
+                    ]
                 )
                 ->limit(15)
                 ->get()
@@ -85,6 +94,21 @@ class GuarantorController extends Controller
                     ];
                 })
                 ->values();
+
+            $results = $results->sort(function (array $left, array $right) use ($search): int {
+                $score = fn (array $item): int => SearchResultRanker::score($search, [
+                    $item['code'] ?? '',
+                    $item['name'] ?? '',
+                    $item['latin_name'] ?? '',
+                    $item['nickname'] ?? '',
+                    $item['phone'] ?? '',
+                    $item['id_number'] ?? '',
+                    $item['latest_loan_code'] ?? '',
+                ]);
+
+                return $score($left) <=> $score($right)
+                    ?: strnatcasecmp((string) ($left['code'] ?? ''), (string) ($right['code'] ?? ''));
+            })->values();
 
             return response()->json($results);
         }

@@ -4,6 +4,8 @@ namespace App\Filament\Resources\RepaymentTransactions\Schemas;
 
 use App\Models\Loan;
 use App\Models\Payment;
+use App\Models\PaymentMethod;
+use App\Models\RepaymentTransaction;
 use App\Support\CurrencyHelper;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -25,7 +27,7 @@ class RepaymentTransactionForm
                         Group::make()
                             ->schema([
                                 Section::make('Transaction Context')
-            ->description('Link the repayment to a loan and credit officer.')
+                                    ->description('Link the repayment to a loan and credit officer.')
                                     ->icon('heroicon-o-link')
                                     ->schema([
                                         Grid::make([
@@ -36,15 +38,15 @@ class RepaymentTransactionForm
                                                 Select::make('loan_id')
                                                     ->label('Loan')
                                                     ->relationship('loan', 'loan_code')
-                                                    ->getOptionLabelFromRecordUsing(fn($record) => "Loan: {$record->loan_code} - {$record->borrower?->first_name} {$record->borrower?->last_name}")
+                                                    ->getOptionLabelFromRecordUsing(fn ($record) => "Loan: {$record->loan_code} - {$record->borrower?->first_name} {$record->borrower?->last_name}")
                                                     ->searchable()
                                                     ->preload()
                                                     ->live()
-                                                    ->afterStateUpdated(fn($state, callable $set) => static::fillDueAmounts($state, $set))
+                                                    ->afterStateUpdated(fn ($state, callable $set) => static::fillDueAmounts($state, $set))
                                                     ->required(),
-                        Select::make('collector_id')
-                            ->label('Credit Officer')
-                            ->relationship('collector', 'name')
+                                                Select::make('collector_id')
+                                                    ->label('Credit Officer')
+                                                    ->relationship('collector', 'name')
                                                     ->searchable()
                                                     ->preload()
                                                     ->required(),
@@ -61,7 +63,21 @@ class RepaymentTransactionForm
                                         ])
                                             ->schema([
                                                 Select::make('payment_method')
-                                                    ->options(\App\Models\PaymentMethod::where('is_active', true)->pluck('name', 'name')->toArray())
+                                                    ->options(function (?RepaymentTransaction $record): array {
+                                                        $options = PaymentMethod::query()
+                                                            ->where('is_active', true)
+                                                            ->pluck('name', 'name')
+                                                            ->all();
+
+                                                        // Historical repayments may use a method that has since
+                                                        // been deactivated. Keep that value valid on its edit form
+                                                        // without making it available for new payments.
+                                                        if (filled($record?->payment_method)) {
+                                                            $options[$record->payment_method] = $record->payment_method;
+                                                        }
+
+                                                        return $options;
+                                                    })
                                                     ->default('Cash')
                                                     ->native(false)
                                                     ->required(),
@@ -100,6 +116,7 @@ class RepaymentTransactionForm
                                                     ->label('Total Amount Paid')
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
+                                                    ->minValue(0)
                                                     ->required()
                                                     ->placeholder('0.00')
                                                     ->helperText('Principal + interest only. Penalty is entered separately, and fee is auto-paid.')
@@ -107,36 +124,42 @@ class RepaymentTransactionForm
                                                 TextInput::make('principal_paid')
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
+                                                    ->minValue(0)
                                                     ->required()
                                                     ->placeholder('0.00')
+                                                    ->helperText('Recalculated against the loan schedule when saved.')
                                                     ->live()
-                                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
+                                                    ->afterStateUpdated(fn ($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                                 TextInput::make('interest_paid')
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
+                                                    ->minValue(0)
                                                     ->required()
                                                     ->placeholder('0.00')
+                                                    ->helperText('Recalculated against the loan schedule when saved.')
                                                     ->live()
-                                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
+                                                    ->afterStateUpdated(fn ($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                                 TextInput::make('penalty_paid')
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
+                                                    ->minValue(0)
                                                     ->default(0)
                                                     ->required()
                                                     ->placeholder('0.00')
                                                     ->live()
-                                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
+                                                    ->afterStateUpdated(fn ($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                                 TextInput::make('fee_paid')
                                                     ->label('Auto fee preview')
                                                     ->numeric()
                                                     ->prefix(fn (callable $get): string => CurrencyHelper::symbol(static::loanCurrency($get('loan_id'))))
+                                                    ->minValue(0)
                                                     ->default(0)
                                                     ->placeholder('0.00')
                                                     ->live()
-                                                    ->afterStateUpdated(fn($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
+                                                    ->afterStateUpdated(fn ($state, callable $set, callable $get) => static::syncTotalAmount($set, $get))
                                                     ->columnSpan(['default' => 12, 'md' => 6]),
                                             ]),
                                     ]),

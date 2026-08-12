@@ -4,9 +4,12 @@ namespace App\Filament\Resources\RepaymentTransactions\Pages;
 
 use App\Filament\Resources\RepaymentTransactions\RepaymentTransactionResource;
 use App\Services\RepaymentService;
+use App\Services\RepaymentTransactionEditService;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\EditRecord;
+use Filament\Support\Exceptions\Halt;
+use Illuminate\Database\Eloquent\Model;
 
 class EditRepaymentTransaction extends EditRecord
 {
@@ -45,8 +48,35 @@ class EditRepaymentTransaction extends EditRecord
     protected function getFormActions(): array
     {
         return [
+            $this->getSaveFormAction()
+                ->label('Save changes'),
             $this->getCancelFormAction(),
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    protected function handleRecordUpdate(Model $record, array $data): Model
+    {
+        try {
+            $updatedRecord = app(RepaymentTransactionEditService::class)->update($record, $data);
+            $this->record = $updatedRecord;
+
+            return $updatedRecord;
+        } catch (\RuntimeException $exception) {
+            Notification::make()
+                ->danger()
+                ->title($exception->getMessage())
+                ->send();
+
+            throw (new Halt)->rollBackDatabaseTransaction();
+        }
+    }
+
+    protected function getSavedNotificationTitle(): ?string
+    {
+        return 'Repayment transaction updated successfully';
     }
 
     protected function getRedirectUrl(): string

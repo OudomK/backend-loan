@@ -114,7 +114,7 @@ class LoanCalculatorScheduleModesTest extends TestCase
         }
     }
 
-    public function test_fixed_monthly_usd_principal_keeps_cent_precision(): void
+    public function test_fixed_monthly_usd_principal_rounds_cents_up_and_closes_exactly(): void
     {
         $calculator = app(LoanCalculator::class);
 
@@ -127,8 +127,10 @@ class LoanCalculatorScheduleModesTest extends TestCase
             'USD'
         );
 
-        $this->assertEqualsWithDelta(333.33, $schedule[0]['principal'], 0.01);
-        $this->assertEqualsWithDelta(333.34, $schedule[array_key_last($schedule)]['principal'], 0.01);
+        $this->assertSame(334.0, $schedule[0]['principal']);
+        $this->assertSame(334.0, $schedule[1]['principal']);
+        $this->assertSame(332.0, $schedule[array_key_last($schedule)]['principal']);
+        $this->assertSame(1000.0, array_sum(array_column($schedule, 'principal')));
     }
     public function test_fixed_weekly_schedule_generates_weekly_installments(): void
     {
