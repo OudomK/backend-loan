@@ -21,9 +21,31 @@ class LoanCalculatorScheduleModesTest extends TestCase
         );
 
         $this->assertCount(30, $schedule);
-        $this->assertSame('01/05/2026', $schedule[0]['date']);
-        $this->assertSame('02/05/2026', $schedule[1]['date']);
+        $this->assertSame('02/05/2026', $schedule[0]['date']);
+        $this->assertSame('03/05/2026', $schedule[1]['date']);
         $this->assertEquals(0, $schedule[array_key_last($schedule)]['balance']);
+    }
+
+    public function test_fixed_daily_respects_an_explicit_first_repayment_date(): void
+    {
+        $calculator = app(LoanCalculator::class);
+
+        $schedule = $calculator->calculateLoanWithDates(
+            300,
+            3,
+            3,
+            'fixed_daily',
+            '2026-05-01',
+            'USD',
+            0,
+            'one_time',
+            null,
+            null,
+            '2026-05-05'
+        );
+
+        $this->assertSame('05/05/2026', $schedule[0]['date']);
+        $this->assertSame('06/05/2026', $schedule[1]['date']);
     }
 
     public function test_fixed_daily_rate_is_charged_per_payment(): void
