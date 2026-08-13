@@ -50,8 +50,6 @@ class LoanApprovalService
             if (!$loan->canBeChecked()) {
                 throw new \InvalidArgumentException("Loan #{$loan->id} cannot be checked. Current status: {$loan->status}");
             }
-            $this->ensureDifferentActor($loan, $user, ['submitted_by'], 'check');
-
             $loan->update([
                 'status' => LoanApproval::STATUS_PENDING_VERIFY,
                 'checked_by' => $user->id,
@@ -80,8 +78,6 @@ class LoanApprovalService
             if (!$loan->canBeVerified()) {
                 throw new \InvalidArgumentException("Loan #{$loan->id} cannot be verified. Current status: {$loan->status}");
             }
-            $this->ensureDifferentActor($loan, $user, ['submitted_by', 'checked_by'], 'verify');
-
             $loan->update([
                 'status' => LoanApproval::STATUS_PENDING_APPROVAL,
                 'verified_by' => $user->id,
@@ -115,13 +111,6 @@ class LoanApprovalService
                     "Loan #{$loan->id} cannot be approved without a saved repayment schedule."
                 );
             }
-            $this->ensureDifferentActor(
-                $loan,
-                $user,
-                ['submitted_by', 'checked_by', 'verified_by'],
-                'approve'
-            );
-
             $loan->update([
                 'status' => LoanApproval::STATUS_APPROVED, // 'active'
                 'approved_by' => $user->id,
@@ -228,23 +217,4 @@ class LoanApprovalService
         return Loan::query()->whereKey($loan->getKey())->lockForUpdate()->firstOrFail();
     }
 
-    /**
-     * Enforce maker/checker separation for the sequential approval stages.
-     *
-     * @param  array<int, string>  $actorColumns
-     */
-    private function ensureDifferentActor(
-        Loan $loan,
-        User $user,
-        array $actorColumns,
-        string $action
-    ): void {
-        foreach ($actorColumns as $column) {
-            if ($loan->{$column} !== null && (int) $loan->{$column} === (int) $user->id) {
-                throw new \InvalidArgumentException(
-                    "The same user cannot {$action} this loan after participating in an earlier approval stage."
-                );
-            }
-        }
-    }
 }

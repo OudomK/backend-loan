@@ -26,6 +26,7 @@ class LoanCalculator
         $exactAmount = fn ($amount) => round((float) $amount, 2);
         $roundCumulativePrincipal = fn ($amount, $currency) => CurrencyRounding::cumulativePrincipal((float) $amount, (string) $currency);
         $isKhrCurrency = stripos($currency, 'KHR') !== false;
+        $isUsdCurrency = stripos($currency, 'USD') !== false;
         $roundMonthlyPrincipal = fn ($amount) => $applyRounding($amount, $currency);
         $calculatePeriodFee = function ($periodNumber, $totalPayments) use ($principal, $adminFee, $adminFeeType, $applyRounding, $currency) {
             if ($adminFee <= 0)
@@ -168,10 +169,22 @@ class LoanCalculator
             return $dates;
         };
 
-        // Smart Check for split schedules: normalize each pay-day lane
-        // independently. A short principal row is topped up through interest,
-        // matching the behavior of the other fixed repayment methods.
-        $normalizeSplitPayments = function (array $payments): array {
+        // KHR Smart Check is intentionally isolated from USD. It starts at row
+        // 2, preserves row 1 pro-rate, and only normalizes KHR split lanes.
+        $normalizeKhrSplitPayments = function (array $payments) use ($exactAmount): array {
+            while ($payments !== []) {
+                $lastIndex = array_key_last($payments);
+                $lastPayment = $payments[$lastIndex];
+                $hasPrincipal = (float) ($lastPayment['principal'] ?? 0) > 0;
+                $hasFee = (float) ($lastPayment['fee'] ?? 0) > 0;
+
+                if ($hasPrincipal || $hasFee) {
+                    break;
+                }
+
+                array_pop($payments);
+            }
+
             $targets = [];
 
             foreach ($payments as $payment) {
@@ -184,21 +197,341 @@ class LoanCalculator
             }
 
             foreach ($payments as &$payment) {
+                if (!empty($payment['is_first_payment'])) {
+                    unset($payment['split_slot']);
+                    unset($payment['is_first_payment']);
+
+                    continue;
+                }
+
                 $slot = (string) ($payment['split_slot'] ?? 'default');
                 $target = $targets[$slot] ?? (float) $payment['payment'];
-                $shortfall = !empty($payment['is_first_payment'])
-                    ? 0
-                    : max(0, $target - (float) $payment['payment']);
+                $adjustedInterest = $target
+                    - (float) $payment['principal']
+                    - (float) $payment['fee'];
 
-                if ($shortfall > 0) {
-                    $payment['interest'] += $shortfall;
-                    $payment['payment'] = $target;
+                if ($target > 0 && $adjustedInterest >= 0) {
+                    $payment['interest'] = $exactAmount($adjustedInterest);
+                    $payment['payment'] = $exactAmount($target);
                 }
 
                 unset($payment['split_slot']);
                 unset($payment['is_first_payment']);
             }
             unset($payment);
+
+            return $payments;
+        };
+
+        // USD Smart Check has its own branch so future USD rounding changes
+        // cannot change KHR split schedules. Row 1 remains pro-rated.
+        $normalizeUsdSplitPayments = function (array $payments) use ($exactAmount): array {
+            while ($payments !== []) {
+                $lastIndex = array_key_last($payments);
+                $lastPayment = $payments[$lastIndex];
+                $hasPrincipal = (float) ($lastPayment['principal'] ?? 0) > 0;
+                $hasFee = (float) ($lastPayment['fee'] ?? 0) > 0;
+
+                if ($hasPrincipal || $hasFee) {
+                    break;
+                }
+
+                array_pop($payments);
+            }
+
+            $targets = [];
+
+            foreach ($payments as $payment) {
+                if (!empty($payment['is_first_payment'])) {
+                    continue;
+                }
+
+                $slot = (string) ($payment['split_slot'] ?? 'default');
+                $targets[$slot] = max($targets[$slot] ?? 0, (float) $payment['payment']);
+            }
+
+            foreach ($payments as &$payment) {
+                if (!empty($payment['is_first_payment'])) {
+                    unset($payment['split_slot']);
+                    unset($payment['is_first_payment']);
+
+                    continue;
+                }
+
+                $slot = (string) ($payment['split_slot'] ?? 'default');
+                $target = $targets[$slot] ?? (float) $payment['payment'];
+                $adjustedInterest = $target
+                    - (float) $payment['principal']
+                    - (float) $payment['fee'];
+
+                if ($target > 0 && $adjustedInterest >= 0) {
+                    $payment['interest'] = $exactAmount($adjustedInterest);
+                    $payment['payment'] = $exactAmount($target);
+                }
+
+                unset($payment['split_slot']);
+                unset($payment['is_first_payment']);
+            }
+            unset($payment);
+
+            return $payments;
+        };
+
+        // KHR split schedules have their own principal Smart Check. Complete
+        // regular months use one 500-riel principal target; the final partial
+        // month absorbs the remainder so row 1 pro-rate is not changed.
+        $normalizeKhrSplitPrincipal = function (array $payments) use (
+            $principal,
+            $duration,
+            $currency,
+            $applyRounding,
+            $exactAmount
+        ): array {
+            if (stripos($currency, 'KHR') === false || $duration <= 0 || count($payments) < 2) {
+                return $payments;
+            }
+
+            $originalPayments = $payments;
+            $groups = [];
+            foreach ($payments as $index => $payment) {
+                $month = substr((string) ($payment['date'] ?? ''), 0, 7);
+                $groups[$month][] = $index;
+            }
+
+            if (count($groups) < 2) {
+                return $payments;
+            }
+
+            $groupKeys = array_keys($groups);
+            $firstGroupKey = $groupKeys[0];
+            $lastGroupKey = $groupKeys[array_key_last($groupKeys)];
+            $targetMonthlyPrincipal = $applyRounding($principal / $duration, $currency);
+            $netAdjustment = 0.0;
+
+            foreach ($groups as $month => $indices) {
+                if ($month === $firstGroupKey || $month === $lastGroupKey || count($indices) !== 2) {
+                    continue;
+                }
+
+                $currentMonthlyPrincipal = array_sum(array_map(
+                    static fn (int $index): float => (float) $payments[$index]['principal'],
+                    $indices
+                ));
+                $difference = $exactAmount($targetMonthlyPrincipal - $currentMonthlyPrincipal);
+
+                if (abs($difference) < 0.001) {
+                    continue;
+                }
+
+                usort($indices, static function (int $left, int $right) use ($payments, $difference): int {
+                    $comparison = (float) $payments[$left]['payment'] <=> (float) $payments[$right]['payment'];
+                    return $difference > 0 ? $comparison : -$comparison;
+                });
+
+                $index = $indices[0];
+                $newPrincipal = $exactAmount((float) $payments[$index]['principal'] + $difference);
+                if ($newPrincipal < 0) {
+                    continue;
+                }
+
+                $payments[$index]['principal'] = $newPrincipal;
+                $payments[$index]['payment'] = $exactAmount(
+                    $newPrincipal
+                    + (float) $payments[$index]['interest']
+                    + (float) $payments[$index]['fee']
+                );
+                $netAdjustment = $exactAmount($netAdjustment + $difference);
+            }
+
+            $lastIndices = array_reverse($groups[$lastGroupKey]);
+            if ($netAdjustment > 0) {
+                $remainingReduction = $netAdjustment;
+                foreach ($lastIndices as $index) {
+                    $reduction = min((float) $payments[$index]['principal'], $remainingReduction);
+                    $payments[$index]['principal'] = $exactAmount((float) $payments[$index]['principal'] - $reduction);
+                    $remainingReduction = $exactAmount($remainingReduction - $reduction);
+                    if ($remainingReduction <= 0) {
+                        break;
+                    }
+                }
+
+                if ($remainingReduction > 0.001) {
+                    return $originalPayments;
+                }
+            } elseif ($netAdjustment < 0) {
+                $index = $lastIndices[0];
+                $payments[$index]['principal'] = $exactAmount(
+                    (float) $payments[$index]['principal'] + abs($netAdjustment)
+                );
+            }
+
+            foreach ($lastIndices as $index) {
+                $payments[$index]['payment'] = $exactAmount(
+                    (float) $payments[$index]['principal']
+                    + (float) $payments[$index]['interest']
+                    + (float) $payments[$index]['fee']
+                );
+            }
+
+            return $payments;
+        };
+
+        // USD split schedules keep the displayed principal stable for every
+        // complete regular month. The final month absorbs the accumulated
+        // whole-dollar remainder so total principal still closes exactly.
+        $normalizeUsdSplitPrincipal = function (array $payments) use (
+            $principal,
+            $duration,
+            $currency,
+            $applyRounding,
+            $exactAmount
+        ): array {
+            if (stripos($currency, 'USD') === false || $duration <= 0 || count($payments) < 2) {
+                return $payments;
+            }
+
+            $originalPayments = $payments;
+
+            $groups = [];
+            foreach ($payments as $index => $payment) {
+                $month = substr((string) ($payment['date'] ?? ''), 0, 7);
+                $groups[$month][] = $index;
+            }
+
+            if (count($groups) < 2) {
+                return $payments;
+            }
+
+            $groupKeys = array_keys($groups);
+            $firstGroupKey = $groupKeys[0];
+            $lastGroupKey = $groupKeys[array_key_last($groupKeys)];
+            $targetMonthlyPrincipal = $applyRounding($principal / $duration, $currency);
+            $netAdjustment = 0.0;
+
+            foreach ($groups as $month => $indices) {
+                if ($month === $lastGroupKey || count($indices) !== 2) {
+                    continue;
+                }
+
+                $currentMonthlyPrincipal = array_sum(array_map(
+                    static fn (int $index): float => (float) $payments[$index]['principal'],
+                    $indices
+                ));
+                $difference = $exactAmount($targetMonthlyPrincipal - $currentMonthlyPrincipal);
+
+                if (abs($difference) < 0.001) {
+                    continue;
+                }
+
+                usort($indices, static function (int $left, int $right) use ($payments, $difference): int {
+                    $comparison = (float) $payments[$left]['payment'] <=> (float) $payments[$right]['payment'];
+                    return $difference > 0 ? $comparison : -$comparison;
+                });
+
+                $index = $indices[0];
+                $newPrincipal = $exactAmount((float) $payments[$index]['principal'] + $difference);
+                if ($newPrincipal < 0) {
+                    continue;
+                }
+
+                $payments[$index]['principal'] = $newPrincipal;
+                $payments[$index]['payment'] = $exactAmount(
+                    $newPrincipal
+                    + (float) $payments[$index]['interest']
+                    + (float) $payments[$index]['fee']
+                );
+                $netAdjustment = $exactAmount($netAdjustment + $difference);
+            }
+
+            $lastIndices = array_reverse($groups[$lastGroupKey]);
+            $remainderIndices = array_values(array_unique([
+                ...$lastIndices,
+                ...$groups[$firstGroupKey],
+            ]));
+            if ($netAdjustment > 0) {
+                $remainingReduction = $netAdjustment;
+                foreach ($remainderIndices as $index) {
+                    $reduction = min((float) $payments[$index]['principal'], $remainingReduction);
+                    $payments[$index]['principal'] = $exactAmount((float) $payments[$index]['principal'] - $reduction);
+                    $remainingReduction = $exactAmount($remainingReduction - $reduction);
+                    if ($remainingReduction <= 0) {
+                        break;
+                    }
+                }
+
+                if ($remainingReduction > 0.001) {
+                    return $originalPayments;
+                }
+            } elseif ($netAdjustment < 0) {
+                $index = $lastIndices[0];
+                $payments[$index]['principal'] = $exactAmount(
+                    (float) $payments[$index]['principal'] + abs($netAdjustment)
+                );
+            }
+
+            foreach ($remainderIndices as $index) {
+                $payments[$index]['payment'] = $exactAmount(
+                    (float) $payments[$index]['principal']
+                    + (float) $payments[$index]['interest']
+                    + (float) $payments[$index]['fee']
+                );
+            }
+
+            return $payments;
+        };
+
+        // KHR monthly Smart Check is a dedicated branch. Its target has already
+        // been rounded with KHR rules (500-riel units).
+        $normalizeKhrMonthlyFinalPayment = function (
+            array $payments,
+            float $targetPayment,
+            bool $allowReduction = false
+        ) use ($exactAmount): array {
+            if ($payments === [] || $targetPayment <= 0) {
+                return $payments;
+            }
+
+            $lastIndex = array_key_last($payments);
+            $currentPayment = (float) ($payments[$lastIndex]['payment'] ?? 0);
+            $finalPrincipal = (float) ($payments[$lastIndex]['principal'] ?? 0);
+            $finalFee = (float) ($payments[$lastIndex]['fee'] ?? 0);
+            $adjustedInterest = $targetPayment - $finalPrincipal - $finalFee;
+
+            $shouldAdjust = $targetPayment > $currentPayment
+                || ($allowReduction && abs($targetPayment - $currentPayment) >= 0.001);
+
+            if ($shouldAdjust && $adjustedInterest >= 0) {
+                $payments[$lastIndex]['interest'] = $exactAmount($adjustedInterest);
+                $payments[$lastIndex]['payment'] = $exactAmount($targetPayment);
+            }
+
+            return $payments;
+        };
+
+        // USD monthly Smart Check is separate from KHR. Its target has already
+        // been rounded upward to a whole dollar.
+        $normalizeUsdMonthlyFinalPayment = function (
+            array $payments,
+            float $targetPayment,
+            bool $allowReduction = false
+        ) use ($exactAmount): array {
+            if ($payments === [] || $targetPayment <= 0) {
+                return $payments;
+            }
+
+            $lastIndex = array_key_last($payments);
+            $currentPayment = (float) ($payments[$lastIndex]['payment'] ?? 0);
+            $finalPrincipal = (float) ($payments[$lastIndex]['principal'] ?? 0);
+            $finalFee = (float) ($payments[$lastIndex]['fee'] ?? 0);
+            $adjustedInterest = $targetPayment - $finalPrincipal - $finalFee;
+
+            $shouldAdjust = $targetPayment > $currentPayment
+                || ($allowReduction && abs($targetPayment - $currentPayment) >= 0.001);
+
+            if ($shouldAdjust && $adjustedInterest >= 0) {
+                $payments[$lastIndex]['interest'] = $exactAmount($adjustedInterest);
+                $payments[$lastIndex]['payment'] = $exactAmount($targetPayment);
+            }
 
             return $payments;
         };
@@ -241,6 +574,9 @@ class LoanCalculator
             $firstPayPercent = (int) ($percentages[2] ?? 70);
             $secondPayPercent = (int) ($percentages[3] ?? 30);
 
+            // When disbursed on days 1-15, the first schedule month starts on
+            // the second pay day only. Use one fewer installment so a
+            // 40-month term renders as 40 monthly rows, not 41 partial rows.
             $totalPayments = $duration * 2;
             $monthlyPrincipal = $principal / $duration;
             $monthlyInterest = $principal * ($rate / 100);
@@ -341,6 +677,11 @@ class LoanCalculator
             }
 
             usort($allPayments, fn($a, $b) => $a['order'] <=> $b['order']);
+            if ($isKhrCurrency) {
+                $allPayments = $normalizeKhrSplitPrincipal($allPayments);
+            } elseif ($isUsdCurrency) {
+                $allPayments = $normalizeUsdSplitPrincipal($allPayments);
+            }
             $runningBalance = $principal;
             foreach ($allPayments as $idx => &$pay) {
                 if ($idx === count($allPayments) - 1) {
@@ -352,7 +693,13 @@ class LoanCalculator
                 $pay['date'] = date('d/m/Y', strtotime($pay['date']));
             }
             unset($pay);
-            $results = $normalizeSplitPayments($allPayments);
+            if ($isKhrCurrency) {
+                $results = $normalizeKhrSplitPayments($allPayments);
+            } elseif ($isUsdCurrency) {
+                $results = $normalizeUsdSplitPayments($allPayments);
+            } else {
+                $results = $allPayments;
+            }
         } elseif ($option === 'fixed_15days_50_50') {
             $firstPayPercent = 50;
             $secondPayPercent = 50;
@@ -452,6 +799,11 @@ class LoanCalculator
             }
 
             usort($allPayments, fn($a, $b) => $a['order'] <=> $b['order']);
+            if ($isKhrCurrency) {
+                $allPayments = $normalizeKhrSplitPrincipal($allPayments);
+            } elseif ($isUsdCurrency) {
+                $allPayments = $normalizeUsdSplitPrincipal($allPayments);
+            }
             $runningBalance = $principal;
             foreach ($allPayments as $idx => &$pay) {
                 if ($idx === count($allPayments) - 1) {
@@ -463,15 +815,22 @@ class LoanCalculator
                 $pay['date'] = date('d/m/Y', strtotime($pay['date']));
             }
             unset($pay);
-            $results = $normalizeSplitPayments($allPayments);
+            if ($isKhrCurrency) {
+                $results = $normalizeKhrSplitPayments($allPayments);
+            } elseif ($isUsdCurrency) {
+                $results = $normalizeUsdSplitPayments($allPayments);
+            } else {
+                $results = $allPayments;
+            }
         } elseif ($option === 'fixed_daily') {
-            // Daily rate is charged once for every repayment and the final row is normalized.
+            // Daily Smart Check keeps the final total payment equal to the
+            // regular daily payment while the final principal closes balance.
             $results = $buildFixedIntervalSchedule(1, $duration, true, true);
         } elseif ($option === 'fixed_biweekly') {
-            // Biweekly rate is charged once for every repayment and the final row is normalized.
-            $results = $buildFixedIntervalSchedule(14, $duration, true, true);
+            $results = $buildFixedIntervalSchedule(14, $duration, true);
         } elseif ($option === 'fixed_weekly') {
-            // Weekly rate is charged once for every repayment and the final row is normalized.
+            // Weekly Smart Check mirrors Daily without sharing monthly/split
+            // normalization: only the final weekly interest is adjusted.
             $results = $buildFixedIntervalSchedule(7, $duration, true, true);
         } elseif ($option === 'annuity_monthly') {
             if ($principal <= 0 || $duration <= 0) {
@@ -546,6 +905,13 @@ class LoanCalculator
                 if ($i < $duration) {
                     $advanceMonthlyPaymentDate($currentPaymentDate);
                 }
+            }
+
+            $monthlySmartCheckTarget = $monthlyPayment + $calculatePeriodFee($duration, $duration);
+            if ($isKhrCurrency) {
+                $results = $normalizeKhrMonthlyFinalPayment($results, $monthlySmartCheckTarget, true);
+            } elseif ($isUsdCurrency) {
+                $results = $normalizeUsdMonthlyFinalPayment($results, $monthlySmartCheckTarget, true);
             }
 
         } elseif ($option === 'linear_monthly') {
@@ -643,6 +1009,15 @@ class LoanCalculator
                     $advanceMonthlyPaymentDate($currentPaymentDate);
                 }
             }
+
+            $monthlySmartCheckTarget = $monthlyPrincipal
+                + $monthlyInterest
+                + $calculatePeriodFee($duration, $duration);
+            if ($isKhrCurrency) {
+                $results = $normalizeKhrMonthlyFinalPayment($results, $monthlySmartCheckTarget);
+            } elseif ($isUsdCurrency) {
+                $results = $normalizeUsdMonthlyFinalPayment($results, $monthlySmartCheckTarget);
+            }
         } elseif ($option === 'Balloon') {
             $monthlyInterest = $principal * ($rate / 100);
             $monthlyInterest = $roundInterest($monthlyInterest, $currency);
@@ -726,6 +1101,15 @@ class LoanCalculator
                 if ($i < $duration) {
                     $advanceMonthlyPaymentDate($currentPaymentDate);
                 }
+            }
+
+            $monthlySmartCheckTarget = $monthlyPrincipal
+                + $monthlyInterest
+                + $calculatePeriodFee($duration, $duration);
+            if ($isKhrCurrency) {
+                $results = $normalizeKhrMonthlyFinalPayment($results, $monthlySmartCheckTarget);
+            } elseif ($isUsdCurrency) {
+                $results = $normalizeUsdMonthlyFinalPayment($results, $monthlySmartCheckTarget);
             }
         }
 
