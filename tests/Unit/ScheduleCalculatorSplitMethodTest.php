@@ -43,13 +43,13 @@ class ScheduleCalculatorSplitMethodTest extends TestCase
         $this->assertSame('2026-09-08', $component->first_repayment_date);
     }
 
-    public function test_fixed_interval_methods_count_the_disbursement_date_as_day_one(): void
+    public function test_daily_starts_next_day_while_other_intervals_keep_their_existing_dates(): void
     {
         $component = new ScheduleCalculator();
         $component->loan_date = '2026-08-10';
 
         $component->updatedRepaymentMethod('fixed_daily');
-        $this->assertSame('2026-08-10', $component->first_repayment_date);
+        $this->assertSame('2026-08-11', $component->first_repayment_date);
 
         $component->updatedRepaymentMethod('fixed_weekly');
         $this->assertSame('2026-08-16', $component->first_repayment_date);

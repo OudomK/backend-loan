@@ -39,7 +39,13 @@ class LoanCalculator
             return $applyRounding($totalFeeAmount / $totalPayments, $currency);
         };
 
-        $buildFixedIntervalSchedule = function (int $intervalDays, ?int $totalPaymentsOverride = null, bool $ratePerPayment = false, bool $normalizeFinalPayment = false) use ($principal, $rate, $duration, $startDateObj, $applyRounding, $roundInterest, $calculatePeriodFee, $currency, $firstRepaymentDate) {
+        $buildFixedIntervalSchedule = function (
+            int $intervalDays,
+            ?int $totalPaymentsOverride = null,
+            bool $ratePerPayment = false,
+            bool $normalizeFinalPayment = false,
+            bool $startNextDay = false
+        ) use ($principal, $rate, $duration, $startDateObj, $applyRounding, $roundInterest, $calculatePeriodFee, $currency, $firstRepaymentDate) {
             if ($principal <= 0 || $duration <= 0 || $intervalDays <= 0) {
                 return [];
             }
@@ -60,8 +66,9 @@ class LoanCalculator
                     }
                 } else {
                     $currentPaymentDate = clone $startDateObj;
-                    // The disbursement date is day one of the first interval.
-                    $inclusiveOffsetDays = ($intervalDays * $i) - 1;
+                    // Daily starts repayment on the day after disbursement.
+                    // Other interval methods preserve their inclusive dates.
+                    $inclusiveOffsetDays = ($intervalDays * $i) - 1 + ($startNextDay ? 1 : 0);
                     if ($inclusiveOffsetDays > 0) {
                         $currentPaymentDate->add(new DateInterval('P' . $inclusiveOffsetDays . 'D'));
                     }
@@ -825,7 +832,7 @@ class LoanCalculator
         } elseif ($option === 'fixed_daily') {
             // Daily Smart Check keeps the final total payment equal to the
             // regular daily payment while the final principal closes balance.
-            $results = $buildFixedIntervalSchedule(1, $duration, true, true);
+            $results = $buildFixedIntervalSchedule(1, $duration, true, true, true);
         } elseif ($option === 'fixed_biweekly') {
             $results = $buildFixedIntervalSchedule(14, $duration, true);
         } elseif ($option === 'fixed_weekly') {
