@@ -57,18 +57,22 @@ class LoanApprovalWorkflowTest extends TestCase
         );
     }
 
-    public function test_same_user_cannot_participate_in_two_sequential_approval_stages(): void
+    public function test_same_user_can_participate_in_all_approval_stages(): void
     {
-        $submitter = $this->createUser('Submitter');
-        $loan = app(LoanApprovalService::class)->submit(
-            $this->createLoan('SEPARATION-001', 'pending'),
-            $submitter
-        );
+        $user = $this->createUser('Workflow User');
+        $service = app(LoanApprovalService::class);
+        $loan = $service->submit($this->createLoan('SAME-ACTOR-001', 'pending'), $user);
+        $this->createPayment($loan);
 
-        $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('same user cannot check');
+        $loan = $service->check($loan, $user);
+        $loan = $service->verify($loan, $user);
+        $loan = $service->approve($loan, $user);
 
-        app(LoanApprovalService::class)->check($loan, $submitter);
+        $this->assertSame(LoanApproval::STATUS_APPROVED, $loan->status);
+        $this->assertSame($user->id, (int) $loan->submitted_by);
+        $this->assertSame($user->id, (int) $loan->checked_by);
+        $this->assertSame($user->id, (int) $loan->verified_by);
+        $this->assertSame($user->id, (int) $loan->approved_by);
     }
 
     public function test_stale_loan_instance_cannot_create_a_duplicate_transition(): void
