@@ -67,7 +67,7 @@ class LoanController extends Controller
             // Kept compatible with existing clients, but never trusted below.
             'status' => 'sometimes|in:pending,pending_check',
             'currency' => 'nullable|string',
-            'repayment_method' => 'nullable|string',
+            'repayment_method' => ['nullable', 'string', Rule::in(LoanScheduleService::SUPPORTED_METHODS)],
             'purpose' => ($requirePurpose ? 'required' : 'nullable').'|string|max:255',
             'loan_code' => 'nullable|string',
             'payment_frequency' => 'nullable|string',
@@ -75,7 +75,6 @@ class LoanController extends Controller
             'admin_fee' => 'nullable|numeric',
             'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
             'pay_day_1' => 'nullable|integer|min:1|max:31',
-            'pay_day_2' => 'nullable|integer|min:1|max:31',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
             'guarantor_id' => 'nullable|exists:guarantors,id',
@@ -226,13 +225,12 @@ class LoanController extends Controller
             'amount' => 'required|numeric',
             'interest_rate' => 'required|numeric',
             'duration_months' => 'required|integer',
-            'repayment_method' => 'required|string',
+            'repayment_method' => ['required', 'string', Rule::in(LoanScheduleService::SUPPORTED_METHODS)],
             'start_date' => 'required|date',
             'currency' => 'nullable|string',
             'admin_fee' => 'nullable|numeric',
             'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
             'pay_day_1' => 'nullable|integer|min:1|max:31',
-            'pay_day_2' => 'nullable|integer|min:1|max:31',
         ]);
 
         try {
@@ -448,7 +446,7 @@ class LoanController extends Controller
             'monthly_payment' => 'prohibited',
             'start_date' => 'sometimes|required|date',
             'currency' => 'sometimes|required|string',
-            'repayment_method' => 'sometimes|required|string',
+            'repayment_method' => ['sometimes', 'required', 'string', Rule::in(LoanScheduleService::SUPPORTED_METHODS)],
             'payment_frequency' => 'prohibited',
             // Status changes must use the dedicated approval/operation workflows.
             'status' => 'prohibited',
@@ -456,7 +454,6 @@ class LoanController extends Controller
             'admin_fee' => 'nullable|numeric',
             'admin_fee_type' => 'nullable|string|in:one_time,monthly,deducted_upfront,capitalized_upfront',
             'pay_day_1' => 'nullable|integer|min:1|max:31',
-            'pay_day_2' => 'nullable|integer|min:1|max:31',
             'co_borrower_id' => 'nullable|exists:co_borrowers,id',
             'co_borrower_relationship' => 'nullable|string',
             'guarantor_id' => 'nullable|exists:guarantors,id',

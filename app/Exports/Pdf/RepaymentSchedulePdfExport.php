@@ -25,8 +25,8 @@ class RepaymentSchedulePdfExport
         ]);
 
         // Define company and report information
-        $companyNameKh = 'ប្រាក់.រហ័ស ហ្វាយនែន ម.ក';
-        $companyNameEn = 'Quick Fund Finance Plc.';
+        $companyNameKh = $dbSettings['company_name_khmer'] ?? ($dbSettings['company_name_kh'] ?? '');
+        $companyNameEn = $dbSettings['company_name'] ?? ($dbSettings['company_name_en'] ?? '');
         $reportTitle = 'Schedule Repay';
         
         $fromDate = $request->query('start_date');
@@ -38,26 +38,15 @@ class RepaymentSchedulePdfExport
             $dateStr = 'As At ' . date('d/m/Y');
         }
 
-        $logoPath = public_path('images/logo.jpg');
-        $logoHtml = '';
-        if (file_exists($logoPath)) {
-            $logoHtml = '<img src="' . $logoPath . '" style="height: 60px;">';
-        }
-
         // Header
         $mpdf->SetHTMLHeader('
             <table width="100%" style="border: none; padding-bottom: 10px;">
                 <tr>
-                    <td width="20%" style="border: none; vertical-align: middle; text-align: left;">
-                        ' . $logoHtml . '
-                    </td>
-                    <td width="60%" style="border: none; text-align: center; vertical-align: top;">
+                    <td width="100%" style="border: none; text-align: center; vertical-align: top;">
                         <div style="font-size: 16px; font-weight: bold; margin-bottom: 5px;">' . $companyNameKh . '</div>
                         <div style="font-size: 14px; font-weight: bold; margin-bottom: 5px;">' . $companyNameEn . '</div>
                         <div style="font-size: 13px; margin-bottom: 5px;">' . $reportTitle . '</div>
                         <div style="font-size: 12px; color: #333;">' . $dateStr . ', Exchange Rate 4000</div>
-                    </td>
-                    <td width="20%" style="border: none; vertical-align: top; text-align: right;">
                     </td>
                 </tr>
             </table>
@@ -67,7 +56,7 @@ class RepaymentSchedulePdfExport
         $mpdf->SetHTMLFooter('
             <table width="100%" style="font-size: 8px; color: #666; border-top: 1px solid #ddd; padding-top: 5px;">
                 <tr>
-                    <td width="50%" align="left">Quick Fund Finance Plc.</td>
+                    <td width="50%" align="left"></td>
                     <td width="50%" align="right">Page {PAGENO} of {nbpg}</td>
                 </tr>
             </table>

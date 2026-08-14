@@ -7,7 +7,6 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use Illuminate\Http\Request;
 use App\Models\Setting;
 
@@ -26,30 +25,17 @@ class LoanOperationExcelExport
 
         $highestCol = 'L'; // A to L is 12 columns
 
-        // Add Logo
-        $drawing = new Drawing();
-        $drawing->setName('Logo');
-        $drawing->setDescription('Logo');
-        $logoPath = public_path('images/logo.jpg');
-        if (file_exists($logoPath)) {
-            $drawing->setPath($logoPath);
-            $drawing->setHeight(90);
-            $drawing->setCoordinates('A1');
-            $drawing->setOffsetY(5);
-            $drawing->setWorksheet($sheet);
-        }
-
         // Title and Header Information
-        $sheet->getRowDimension(1)->setRowHeight(45); // Space for taller logo
+        $sheet->getRowDimension(1)->setRowHeight(45);
 
         $sheet->mergeCells("A1:{$highestCol}1");
-        $khmerCompanyName = Setting::where('key', 'khmer_company_name')->value('value') ?? 'ប្រាក់.រហ័ស ហ្វាយនែន ម.ក';
+        $khmerCompanyName = Setting::where('key', 'khmer_company_name')->value('value') ?? '';
         $sheet->setCellValue('A1', $khmerCompanyName);
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $sheet->mergeCells("A2:{$highestCol}2");
-        $companyName = Setting::where('key', 'company_name')->value('value') ?? 'Quick Fund Finance Plc.';
+        $companyName = Setting::where('key', 'company_name')->value('value') ?? '';
         $sheet->setCellValue('A2', $companyName);
         $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(12);
         $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);

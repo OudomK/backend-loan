@@ -17,8 +17,6 @@ class FormatHelper
         }
 
         $abbreviations = [
-            'fixed_15days_70_30' => 'Flat 70-30',
-            'fixed_15days_50_50' => 'Flat 50-50',
             'fixed_monthly' => 'Flat Monthly',
             'fixed_weekly' => 'Weekly',
             'fixed_daily' => 'Daily',
@@ -112,10 +110,6 @@ class FormatHelper
 
     public static function effectivePaymentFrequency(?string $paymentFrequency, ?string $repaymentMethod): string
     {
-        if (in_array($repaymentMethod, ['fixed_15days_70_30', 'fixed_15days_50_50'], true)) {
-            return 'biweekly';
-        }
-
         return trim((string) $paymentFrequency);
     }
 }

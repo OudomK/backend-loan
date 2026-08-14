@@ -8,7 +8,6 @@ use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ArrearUnder30ExcelExport
@@ -24,8 +23,8 @@ class ArrearUnder30ExcelExport
         $excelFont = Setting::where('key', 'excel_export_font')->value('value') ?? 'Khmer OS Siemreap';
         $spreadsheet->getDefaultStyle()->getFont()->setName($excelFont)->setSize(8);
 
-        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? 'ប្រាក់ រហ័ស ហ្វាយនែន ម.ក';
-        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? 'Quick Fund Finance Plc.';
+        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? '';
+        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? '';
         $reportTitle = 'Loan In Arrear Period (Under 30 Days)';
 
         $normalizedCurrency = strtoupper($currency);
@@ -65,20 +64,7 @@ class ArrearUnder30ExcelExport
             ],
         ];
 
-        // 1. Title area & Logo
-        $drawing = new Drawing;
-        $drawing->setName('Logo');
-        $drawing->setDescription('Logo');
-        $logoPath = public_path('images/logo.jpg');
-        if (file_exists($logoPath)) {
-            $drawing->setPath($logoPath);
-            $drawing->setHeight(90);
-            $drawing->setCoordinates('A1');
-            $drawing->setOffsetY(5);
-            $drawing->setWorksheet($sheet);
-        }
-
-        $sheet->getRowDimension(1)->setRowHeight(45); // Space for taller logo
+        $sheet->getRowDimension(1)->setRowHeight(45);
 
         $highestCol = 'N'; // Limit title merge span to keep it visibly centered near the left
 

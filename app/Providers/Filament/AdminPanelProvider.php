@@ -34,10 +34,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
-            ->brandLogo(asset('images/logo.jpg'))
-            ->darkModeBrandLogo(asset('images/dark_logo.png'))
-            ->brandLogoHeight('4rem')
-            ->favicon(asset('images/logo.jpg'))
+            ->favicon('data:,')
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->spa()
             ->login(\App\Filament\Pages\Auth\Login::class)
@@ -52,12 +49,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->renderHook(
                 PanelsRenderHook::HEAD_END,
-                fn(): HtmlString => new HtmlString(
-                    $this->renderAdminFontStyle() . '
-                    <link rel="icon" href="' . asset('images/logo.jpg') . '" media="(prefers-color-scheme: light)">
-                    <link rel="icon" href="' . asset('images/dark_logo.png') . '" media="(prefers-color-scheme: dark)">
-                '
-                ),
+                fn(): HtmlString => new HtmlString($this->renderAdminFontStyle()),
             )
             ->renderHook(
                 PanelsRenderHook::BODY_END,
@@ -162,7 +154,6 @@ class AdminPanelProvider extends PanelProvider
                 .fi-body :where(.fi-page, .fi-header, .fi-sidebar, .fi-ta, .fi-fo, .fi-btn, .fi-input, .fi-select-input, .fi-dropdown, .fi-modal, .fi-section, .fi-tabs, .fi-breadcrumbs) {
                     font-family: var(--font-family) !important;
                 }
-                .fi-logo, .fi-sidebar-header img, .fi-sidebar-header a img { border-radius: 0.70rem !important; overflow: hidden !important; }
             </style>',
             $fontFaceCss ? "<style>{$fontFaceCss}</style>" : '',
             $this->resolveAdminFontStack(),

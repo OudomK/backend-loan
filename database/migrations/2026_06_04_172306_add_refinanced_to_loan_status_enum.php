@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -11,7 +12,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'active', 'completed', 'paid_off', 'refinanced', 'written_off', 'rejected') DEFAULT 'pending'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'active', 'completed', 'paid_off', 'refinanced', 'written_off', 'rejected') DEFAULT 'pending'");
+
+            return;
+        }
+
+        Schema::table('loans', function (Blueprint $table): void {
+            $table->enum('status', ['pending', 'active', 'completed', 'paid_off', 'refinanced', 'written_off', 'rejected'])
+                ->default('pending')
+                ->change();
+        });
     }
 
     /**
@@ -19,6 +30,16 @@ return new class extends Migration
      */
     public function down(): void
     {
-        \Illuminate\Support\Facades\DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'active', 'completed', 'paid_off') DEFAULT 'pending'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'active', 'completed', 'paid_off') DEFAULT 'pending'");
+
+            return;
+        }
+
+        Schema::table('loans', function (Blueprint $table): void {
+            $table->enum('status', ['pending', 'active', 'completed', 'paid_off'])
+                ->default('pending')
+                ->change();
+        });
     }
 };

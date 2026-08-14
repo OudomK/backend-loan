@@ -22,8 +22,8 @@ class BorrowingExcelExport
         $excelFont = Setting::where('key', 'excel_export_font')->value('value') ?? 'Khmer OS Siemreap';
         $spreadsheet->getDefaultStyle()->getFont()->setName($excelFont)->setSize(9);
 
-        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? "ប្រាក់ រហ័ស ហ្វាយនែន ម.ក";
-        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? "Quick Fund Finance Plc.";
+        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? '';
+        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? '';
         $reportTitle = "Borrowing Report";
 
         $headerStyle = [
@@ -75,27 +75,7 @@ class BorrowingExcelExport
 
         $highestCol = "P";
 
-        $drawing = new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
-        $drawing->setName('Logo');
-        $drawing->setDescription('Logo');
-        $logoPath = Setting::where('key', 'company_logo')->value('value');
-
-        $validLogoPath = null;
-        if ($logoPath && file_exists(storage_path('app/public/' . $logoPath))) {
-            $validLogoPath = storage_path('app/public/' . $logoPath);
-        } elseif (file_exists(public_path('images/logo.jpg'))) {
-            $validLogoPath = public_path('images/logo.jpg');
-        }
-
-        if ($validLogoPath) {
-            $drawing->setPath($validLogoPath);
-            $drawing->setHeight(90);
-            $drawing->setCoordinates('A1');
-            $drawing->setOffsetY(5);
-            $drawing->setWorksheet($sheet);
-        }
-
-        $sheet->getRowDimension(1)->setRowHeight(45); // Space for taller logo
+        $sheet->getRowDimension(1)->setRowHeight(45);
 
         $sheet->mergeCells("A1:{$highestCol}1");
         $sheet->setCellValue('A1', $khmerCompanyName);

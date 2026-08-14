@@ -7,7 +7,6 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use Illuminate\Http\Request;
 use App\Models\Setting;
 
@@ -26,31 +25,18 @@ class RepaymentScheduleExcelExport
         // Hide default gridlines
         $sheet->setShowGridlines(false);
 
-        // Add Logo
-        $drawing = new Drawing();
-        $drawing->setName('Logo');
-        $drawing->setDescription('Logo');
-        $logoPath = public_path('images/logo.jpg');
-        if (file_exists($logoPath)) {
-            $drawing->setPath($logoPath);
-            $drawing->setHeight(90);
-            $drawing->setCoordinates('A1');
-            $drawing->setOffsetY(5);
-            $drawing->setWorksheet($sheet);
-        }
-
         // Title and Header Information
-        $sheet->getRowDimension(1)->setRowHeight(45); // Space for taller logo
+        $sheet->getRowDimension(1)->setRowHeight(45);
 
         $highestCol = 'N'; // Similar visible span as other reports
 
         $sheet->mergeCells("A1:{$highestCol}1");
-        $sheet->setCellValue('A1', 'ប្រាក់.រហ័ស ហ្វាយនែន ម.ក');
+        $sheet->setCellValue('A1', '');
         $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14);
         $sheet->getStyle('A1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         $sheet->mergeCells("A2:{$highestCol}2");
-        $sheet->setCellValue('A2', 'Quick Fund Finance Plc.');
+        $sheet->setCellValue('A2', '');
         $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(12);
         $sheet->getStyle('A2')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 

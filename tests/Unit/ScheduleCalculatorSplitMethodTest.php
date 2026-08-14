@@ -7,28 +7,6 @@ use PHPUnit\Framework\TestCase;
 
 class ScheduleCalculatorSplitMethodTest extends TestCase
 {
-    public function test_split_method_uses_biweekly_and_the_26th_for_early_month_disbursement(): void
-    {
-        $component = new ScheduleCalculator();
-        $component->loan_date = '2026-08-08';
-
-        $component->updatedRepaymentMethod('fixed_15days_70_30');
-
-        $this->assertSame('Biweekly', $component->payment_frequency);
-        $this->assertSame('2026-08-26', $component->first_repayment_date);
-    }
-
-    public function test_split_method_uses_the_11th_of_next_month_for_late_month_disbursement(): void
-    {
-        $component = new ScheduleCalculator();
-        $component->loan_date = '2026-08-20';
-
-        $component->updatedRepaymentMethod('fixed_15days_50_50');
-
-        $this->assertSame('Biweekly', $component->payment_frequency);
-        $this->assertSame('2026-09-11', $component->first_repayment_date);
-    }
-
     public function test_monthly_and_balloon_defaults_match_the_app(): void
     {
         $component = new ScheduleCalculator();

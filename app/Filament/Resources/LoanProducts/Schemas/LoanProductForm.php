@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\LoanProducts\Schemas;
 
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Toggle;
@@ -38,7 +39,19 @@ class LoanProductForm
                 TextInput::make('duration_months')
                     ->numeric()
                     ->default(null),
-                TextInput::make('repayment_method')
+                Select::make('repayment_method')
+                    ->options([
+                        'fixed_daily' => 'Fixed Daily',
+                        'fixed_weekly' => 'Fixed Weekly',
+                        'fixed_biweekly' => 'Fixed Bi-weekly',
+                        'fixed_monthly' => 'Fixed Monthly',
+                        'linear_monthly' => 'Linear Monthly',
+                        'annuity_monthly' => 'Annuity Monthly',
+                        'Balloon' => 'Balloon',
+                        'negotiable' => 'Negotiable',
+                    ])
+                    ->searchable()
+                    ->native(false)
                     ->default(null),
             ]);
     }

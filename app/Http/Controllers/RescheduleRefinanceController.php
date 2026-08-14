@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Loan;
+use App\Services\LoanScheduleService;
 use App\Services\LoanService;
 use App\Support\SearchResultRanker;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class RescheduleRefinanceController extends Controller
 {
@@ -142,7 +144,7 @@ class RescheduleRefinanceController extends Controller
             'remaining_term' => 'required|integer|min:1',
             'reschedule_date' => 'required|date',
             'first_payment_date' => 'required|date|after:reschedule_date',
-            'repayment_method' => 'nullable|string',
+            'repayment_method' => ['nullable', 'string', Rule::in(LoanScheduleService::SUPPORTED_METHODS)],
             'reschedule_fee' => 'nullable|numeric|min:0',
             'pay_off_principal' => 'nullable|numeric|min:0',
             'accrued_interest' => 'nullable|numeric|min:0',
@@ -180,7 +182,7 @@ class RescheduleRefinanceController extends Controller
             'start_date' => 'required|date',
             'refinance_fee' => 'nullable|numeric|min:0',
             'penalty_amount' => 'nullable|numeric|min:0',
-            'repayment_method' => 'nullable|string',
+            'repayment_method' => ['nullable', 'string', Rule::in(LoanScheduleService::SUPPORTED_METHODS)],
             'custom_schedule' => 'nullable|array|min:1',
             'custom_schedule.*.period' => 'nullable|integer|min:1',
             'custom_schedule.*.payment_number' => 'nullable|integer|min:1',
@@ -215,7 +217,7 @@ class RescheduleRefinanceController extends Controller
             'additional_amount' => 'nullable|numeric|min:0',
             'paydown_amount' => 'nullable|numeric|min:0',
             'start_date' => 'required|date',
-            'repayment_method' => 'nullable|string',
+            'repayment_method' => ['nullable', 'string', Rule::in(LoanScheduleService::SUPPORTED_METHODS)],
         ]);
 
         $loan = Loan::findOrFail($validated['loan_id']);

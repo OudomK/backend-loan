@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Employee;
 use App\Support\CurrencyHelper;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class PayrollController extends Controller
 {
@@ -43,8 +44,11 @@ class PayrollController extends Controller
             $validated['currency'] = CurrencyHelper::normalize($validated['currency']);
         }
 
+        $payrollMonth = Carbon::parse($validated['month_year']);
+
         $exists = \App\Models\Payroll::where('employee_id', $validated['employee_id'])
-            ->whereRaw("DATE_FORMAT(month_year, '%Y-%m') = DATE_FORMAT(?, '%Y-%m')", [$validated['month_year']])
+            ->whereYear('month_year', $payrollMonth->year)
+            ->whereMonth('month_year', $payrollMonth->month)
             ->exists();
 
         if ($exists) {

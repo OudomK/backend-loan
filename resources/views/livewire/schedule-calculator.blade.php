@@ -258,8 +258,6 @@
                                         $wire.set('payment_frequency', 'Biweekly');
                                     } else if (v === 'fixed_weekly') {
                                         $wire.set('payment_frequency', 'Weekly');
-                                    } else if (v.includes('15days')) {
-                                        $wire.set('payment_frequency', 'Biweekly');
                                     } else if (v === 'negotiable') {
                                         $wire.set('payment_frequency', 'Term');
                                     } else {
@@ -284,12 +282,6 @@
                                         d.setDate(d.getDate() + 6);
                                     } else if (v === 'fixed_biweekly') {
                                         d.setDate(d.getDate() + 13);
-                                    } else if (v.includes('15days')) {
-                                        if (d.getDate() <= 15) d.setDate(26);
-                                        else {
-                                            d.setMonth(d.getMonth() + 1);
-                                            d.setDate(11);
-                                        }
                                     } else if (v === 'Balloon') {
                                         d.setMonth(d.getMonth() + 1);
                                     } else {
@@ -310,8 +302,6 @@
                                 <optgroup label="Flat">
                                     <option value="fixed_daily">Daily (ថ្ងៃ)</option>
                                     <option value="fixed_weekly">Weekly (សប្តាហ៍)</option>
-                                    <option value="fixed_15days_70_30">Bi-weekly 70-30 (កន្លះខែ)</option>
-                                    <option value="fixed_15days_50_50">Bi-weekly 50-50 (កន្លះខែ)</option>
                                     <option value="fixed_monthly">Monthly (បង់ខែ)</option>
                                 </optgroup>
                                 <optgroup label="&nbsp;">

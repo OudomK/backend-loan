@@ -17,7 +17,7 @@ class TranslationSeeder extends Seeder
             ['key' => 'login', 'kh' => 'ចូល', 'en' => 'LOGIN'],
             ['key' => 'pleaseEnterEmail', 'kh' => 'សូមបញ្ចូលអ៊ីមែលរបស់អ្នក', 'en' => 'Please enter your email'],
             ['key' => 'pleaseEnterPassword', 'kh' => 'សូមបញ្ចូលពាក្យសម្ងាត់របស់អ្នក', 'en' => 'Please enter your password'],
-            ['key' => 'copyright', 'kh' => '© ២០២៤ ប្រាក់ រហ័ស ហ្វាយនែន។ រក្សាសិទ្ធិគ្រប់យ៉ាង។', 'en' => '© 2024 Quick Fund Finance. All rights reserved.'],
+            ['key' => 'copyright', 'kh' => '© ២០២៤ រក្សាសិទ្ធិគ្រប់យ៉ាង។', 'en' => '© 2024. All rights reserved.'],
             ['key' => 'credit', 'kh' => 'ឥណទាន', 'en' => 'Credit'],
             ['key' => 'operation', 'kh' => 'ប្រតិបត្តិការ', 'en' => 'Operation'],
             ['key' => 'fundManagement', 'kh' => 'គ្រប់គ្រងមូលនិធិ', 'en' => 'Fund Management'],

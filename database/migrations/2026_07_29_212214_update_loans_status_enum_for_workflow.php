@@ -12,8 +12,17 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Alter the ENUM column to include the new workflow statuses
-        DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'pending_check', 'pending_verify', 'pending_approval', 'active', 'completed', 'paid_off', 'refinanced', 'rescheduled', 'written_off', 'rejected') NOT NULL DEFAULT 'pending_check'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'pending_check', 'pending_verify', 'pending_approval', 'active', 'completed', 'paid_off', 'refinanced', 'rescheduled', 'written_off', 'rejected') NOT NULL DEFAULT 'pending_check'");
+
+            return;
+        }
+
+        Schema::table('loans', function (Blueprint $table): void {
+            $table->enum('status', ['pending', 'pending_check', 'pending_verify', 'pending_approval', 'active', 'completed', 'paid_off', 'refinanced', 'rescheduled', 'written_off', 'rejected'])
+                ->default('pending_check')
+                ->change();
+        });
     }
 
     /**
@@ -21,7 +30,16 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Revert back to the old ENUM statuses (this might fail if there are loans with the new statuses)
-        DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'active', 'completed', 'paid_off', 'refinanced', 'rescheduled', 'written_off', 'rejected') NOT NULL DEFAULT 'pending'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'active', 'completed', 'paid_off', 'refinanced', 'rescheduled', 'written_off', 'rejected') NOT NULL DEFAULT 'pending'");
+
+            return;
+        }
+
+        Schema::table('loans', function (Blueprint $table): void {
+            $table->enum('status', ['pending', 'active', 'completed', 'paid_off', 'refinanced', 'rescheduled', 'written_off', 'rejected'])
+                ->default('pending')
+                ->change();
+        });
     }
 };

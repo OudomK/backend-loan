@@ -25,7 +25,7 @@ class IncomeStatementExcelExport
         $spreadsheet->getDefaultStyle()->getFont()->setName($excelFont);
         $spreadsheet->getDefaultStyle()->getFont()->setSize(9);
 
-        $companyName = Setting::where('key', 'company_name')->value('value') ?? 'QUICK FUND';
+        $companyName = Setting::where('key', 'company_name')->value('value') ?? '';
         $reportTitle = 'INCOME STATEMENT';
         $reportSubtitle = 'របាយការណ៍ចំណូល និង ចំណាយ';
 
@@ -43,28 +43,6 @@ class IncomeStatementExcelExport
         for ($i = 0; $i <= $extraCols; $i++) {
             $colLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i + 2);
             $sheet->getColumnDimension($colLetter)->setWidth(18);
-        }
-
-        // LOGO
-        $drawing = new \PhpOffice\PhpSpreadsheet\Worksheet\Drawing();
-        $drawing->setName('Logo');
-        $drawing->setDescription('Logo');
-        $logoPath = Setting::where('key', 'company_logo')->value('value');
-
-        $validLogoPath = null;
-        if ($logoPath && file_exists(storage_path('app/public/' . $logoPath))) {
-            $validLogoPath = storage_path('app/public/' . $logoPath);
-        } elseif (file_exists(public_path('images/logo.jpg'))) {
-            $validLogoPath = public_path('images/logo.jpg');
-        }
-
-        if ($validLogoPath) {
-            $drawing->setPath($validLogoPath);
-            $drawing->setHeight(80);
-            $drawing->setCoordinates('A1');
-            $drawing->setOffsetX(10);
-            $drawing->setOffsetY(10);
-            $drawing->setWorksheet($sheet);
         }
 
         $sheet->getRowDimension(1)->setRowHeight(30);

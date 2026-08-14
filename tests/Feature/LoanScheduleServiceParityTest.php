@@ -24,59 +24,12 @@ class LoanScheduleServiceParityTest extends TestCase
         ];
     }
 
-    public function test_web_and_app_split_inputs_generate_identical_schedules(): void
-    {
-        $service = app(LoanScheduleService::class);
-
-        foreach (LoanScheduleService::SPLIT_METHODS as $method) {
-            $base = $this->baseInput($method);
-
-            $webSchedule = $service->generate([
-                ...$base,
-                'first_repayment_date' => '2026-08-26',
-            ]);
-            $appSchedule = $service->generate([
-                ...$base,
-                'pay_day_1' => 11,
-                'pay_day_2' => 26,
-            ]);
-
-            $this->assertSame($appSchedule, $webSchedule, $method);
-            $this->assertCount(14, $webSchedule, $method);
-            $this->assertSame('26/08/2026', $webSchedule[0]['date'], $method);
-            $expectedTotal = $method === 'fixed_15days_70_30' ? 2536000 : 2404000;
-            $this->assertEqualsWithDelta($expectedTotal, array_sum(array_column($webSchedule, 'payment')), 0.01, $method);
-        }
-    }
-
-    public function test_web_calculator_component_uses_the_shared_schedule_service(): void
-    {
-        $component = new ScheduleCalculator();
-        $component->amount = '1,100,000';
-        $component->interest_rate = '16.5';
-        $component->duration_months = '7';
-        $component->loan_date = '2026-08-08';
-        $component->currency = 'KHR';
-        $component->repayment_method = 'fixed_15days_70_30';
-        $component->first_repayment_date = '2026-08-26';
-
-        $component->calculate();
-
-        $expected = app(LoanScheduleService::class)->generate(
-            $this->baseInput('fixed_15days_70_30')
-        );
-
-        $this->assertSame($expected, $component->schedule);
-        $this->assertSame('Biweekly', $component->payment_frequency);
-    }
-
     public function test_quick_web_form_and_app_api_match_for_every_visible_method_without_fees(): void
     {
         $methods = [
             'fixed_daily',
             'fixed_weekly',
-            'fixed_15days_70_30',
-            'fixed_15days_50_50',
+            'fixed_biweekly',
             'fixed_monthly',
             'annuity_monthly',
             'linear_monthly',
@@ -97,10 +50,7 @@ class LoanScheduleServiceParityTest extends TestCase
 
             $appInput = $this->baseInput($method);
 
-            if (LoanScheduleService::isSplitMethod($method)) {
-                $appInput['pay_day_1'] = 11;
-                $appInput['pay_day_2'] = 26;
-            } elseif (in_array($method, ['fixed_monthly', 'annuity_monthly', 'linear_monthly'], true)) {
+            if (in_array($method, ['fixed_monthly', 'annuity_monthly', 'linear_monthly'], true)) {
                 $appInput['pay_day_1'] = 11;
             } elseif ($method === 'Balloon') {
                 $appInput['pay_day_1'] = 8;
@@ -168,12 +118,11 @@ class LoanScheduleServiceParityTest extends TestCase
         $feeType = 'capitalized_upfront';
         $schedulePrincipal = $service->calculateSchedulePrincipal($requestedAmount, $feePercent, $feeType);
         $input = [
-            ...$this->baseInput('fixed_15days_70_30'),
+            ...$this->baseInput('fixed_monthly'),
             'amount' => $requestedAmount,
             'admin_fee' => $feePercent,
             'admin_fee_type' => $feeType,
             'pay_day_1' => 11,
-            'pay_day_2' => 26,
         ];
 
         $request = Request::create('/api/loans/preview-schedule', 'POST', $input);
@@ -192,8 +141,6 @@ class LoanScheduleServiceParityTest extends TestCase
 
     public function test_frequency_is_canonical_for_every_supported_method(): void
     {
-        $this->assertSame('biweekly', LoanScheduleService::canonicalPaymentFrequency('fixed_15days_70_30', 'monthly'));
-        $this->assertSame('biweekly', LoanScheduleService::canonicalPaymentFrequency('fixed_15days_50_50', 'monthly'));
         $this->assertSame('biweekly', LoanScheduleService::canonicalPaymentFrequency('fixed_biweekly', 'monthly'));
         $this->assertSame('weekly', LoanScheduleService::canonicalPaymentFrequency('fixed_weekly', 'monthly'));
         $this->assertSame('daily', LoanScheduleService::canonicalPaymentFrequency('fixed_daily', 'monthly'));
@@ -208,8 +155,6 @@ class LoanScheduleServiceParityTest extends TestCase
             'fixed_daily',
             'fixed_weekly',
             'fixed_biweekly',
-            'fixed_15days_70_30',
-            'fixed_15days_50_50',
             'fixed_monthly',
             'annuity_monthly',
             'linear_monthly',
@@ -228,7 +173,6 @@ class LoanScheduleServiceParityTest extends TestCase
                 'admin_fee' => 0.37,
                 'admin_fee_type' => 'monthly',
                 'pay_day_1' => 11,
-                'pay_day_2' => 26,
             ]);
 
             foreach ($schedule as $index => $row) {

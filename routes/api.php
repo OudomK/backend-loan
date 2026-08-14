@@ -101,7 +101,6 @@ Route::get('/app/settings', function () {
 
     return response()->json([
         'company_name' => $dbSettings['company_name'] ?? Config::get('app.company_name', 'Company Name'),
-        'company_logo' => isset($dbSettings['company_logo']) ? asset('storage/'.$dbSettings['company_logo']) : null,
         'default_language' => $dbSettings['default_language'] ?? 'EN',
         'frontend_font_family' => $dbSettings['frontend_font_family'] ?? 'battambang',
         'pdf_export_font' => $dbSettings['pdf_export_font'] ?? ($dbSettings['frontend_font_family'] ?? 'noto_sans_khmer'),

@@ -237,8 +237,6 @@ class LoanForm
                                                         'fixed_monthly' => 'Fixed Monthly (Flat)',
                                                         'linear_monthly' => 'Linear Monthly (Declining)',
                                                         'annuity_monthly' => 'Annuity Monthly',
-                                                        'fixed_15days_70_30' => 'Fixed 15 Days (70/30)',
-                                                        'fixed_15days_50_50' => 'Fixed 15 Days (50/50)',
                                                         'Balloon' => 'Balloon',
                                                         'negotiable' => 'Negotiable',
                                                     ])

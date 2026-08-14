@@ -14,17 +14,9 @@ class CapitalSharePdfExport
         $dateLabel = Carbon::today()->format('d/m/Y');
         $fileLabel = Carbon::today()->format('Ymd');
         
-        $companyName = Setting::where('key', 'company_name')->value('value') ?? 'Quick Fund Finance Plc.';
-        $companyNameKh = Setting::where('key', 'company_name_khmer')->value('value') ?? 'ប្រាក់ រហ័ស ហ្វាយនែន ម.ក';
+        $companyName = Setting::where('key', 'company_name')->value('value') ?? '';
+        $companyNameKh = Setting::where('key', 'company_name_khmer')->value('value') ?? '';
         
-        $logoPath = Setting::where('key', 'company_logo')->value('value');
-        $logoImg = '';
-        if ($logoPath && file_exists(storage_path('app/public/' . $logoPath))) {
-            $logoImg = '<img src="' . storage_path('app/public/' . $logoPath) . '" width="50" style="max-height: 50px;" />';
-        } elseif (file_exists(public_path('images/logo.jpg'))) {
-            $logoImg = '<img src="' . public_path('images/logo.jpg') . '" width="50" style="max-height: 50px;" />';
-        }
-
         $search = $request->query('search');
 
         $html = view('exports.capital_share_pdf', [
@@ -52,16 +44,12 @@ class CapitalSharePdfExport
         $mpdf->SetHTMLHeader('
             <table width="100%" style="border: none; padding-bottom: 10px;">
                 <tr>
-                    <td width="20%" style="border: none; vertical-align: middle; text-align: left;">
-                        ' . str_replace('width="50"', 'width="70"', str_replace('max-height: 50px', 'max-height: 70px', $logoImg)) . '
-                    </td>
-                    <td width="60%" style="border: none; text-align: center; vertical-align: middle;">
+                    <td width="100%" style="border: none; text-align: center; vertical-align: middle;">
                         <div style="font-size: 14px; font-weight: bold; color: #000; margin-bottom: 4px;">' . $companyNameKh . '</div>
                         <div style="font-size: 12px; font-weight: bold; color: #000; margin-bottom: 8px;">' . $companyName . '</div>
                         <div style="font-size: 11px; color: #000; margin-bottom: 4px;">Capital & Share Report</div>
                         <div style="font-size: 10px; color: #000;">Date: ' . $dateLabel . '</div>
                     </td>
-                    <td width="20%" style="border: none;"></td>
                 </tr>
             </table>
         ');

@@ -9,7 +9,6 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Carbon\Carbon;
 
@@ -89,8 +88,8 @@ class WriteOffCollectionExcelExport
             $groupedData['ALL'] = [];
         }
 
-        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? "ប្រាក់ រហ័ស ហ្វាយនែន ម.ក";
-        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? "Quick Fund Finance Plc.";
+        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? '';
+        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? '';
         $reportTitle = "Write-Off Collection Report";
 
         $fDate = $fromDateStr ? Carbon::parse($fromDateStr)->format('d/m/Y') : "";
@@ -136,19 +135,6 @@ class WriteOffCollectionExcelExport
             $sheet->setShowGridlines(false);
 
             $filterInfo = "Recovery Period: $fDate - $tDate | As of: $tDate | Currency: $sheetName";
-
-            // 1. Title area & Logo
-            $drawing = new Drawing();
-            $drawing->setName('Logo');
-            $drawing->setDescription('Logo');
-            $logoPath = public_path('images/logo.jpg');
-            if (file_exists($logoPath)) {
-                $drawing->setPath($logoPath);
-                $drawing->setHeight(90);
-                $drawing->setCoordinates('A1');
-                $drawing->setOffsetY(5);
-                $drawing->setWorksheet($sheet);
-            }
 
             $sheet->getRowDimension(1)->setRowHeight(45);
 

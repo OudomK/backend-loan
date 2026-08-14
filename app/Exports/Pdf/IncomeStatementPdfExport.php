@@ -13,17 +13,9 @@ class IncomeStatementPdfExport
     {
         $fileLabel = Carbon::today()->format('Ymd');
         
-        $companyName = Setting::where('key', 'company_name')->value('value') ?? 'Quick Fund Finance Plc.';
-        $companyNameKh = Setting::where('key', 'company_name_khmer')->value('value') ?? 'ប្រាក់ រហ័ស ហ្វាយនែន ម.ក';
+        $companyName = Setting::where('key', 'company_name')->value('value') ?? '';
+        $companyNameKh = Setting::where('key', 'company_name_khmer')->value('value') ?? '';
         
-        $logoPath = Setting::where('key', 'company_logo')->value('value');
-        $logoImg = '';
-        if ($logoPath && file_exists(storage_path('app/public/' . $logoPath))) {
-            $logoImg = '<img src="' . storage_path('app/public/' . $logoPath) . '" width="50" />';
-        } elseif (file_exists(public_path('images/logo.jpg'))) {
-            $logoImg = '<img src="' . public_path('images/logo.jpg') . '" width="50" />';
-        }
-
         $html = view('exports.income_statement_pdf', [
             'data' => $data,
         ])->render();
@@ -54,15 +46,13 @@ class IncomeStatementPdfExport
         $mpdf->SetHTMLHeader('
             <table width="100%" style="border-collapse: collapse; border-bottom: 1px solid #000; padding-bottom: 5px;">
                 <tr>
-                    <td width="15%" style="vertical-align: middle; border: none;">' . $logoImg . '</td>
-                    <td width="70%" style="text-align: center; vertical-align: middle; border: none;">
+                    <td width="100%" style="text-align: center; vertical-align: middle; border: none;">
                         <div style="font-size: 13px; font-weight: bold; color: #000;">' . htmlspecialchars($companyName) . '</div>
                         <div style="font-size: 10px; color: #555; margin-top: 1px;">' . htmlspecialchars($companyNameKh) . '</div>
                         <div style="font-size: 11px; font-weight: bold; color: #000; margin-top: 4px; letter-spacing: 1px;">INCOME STATEMENT</div>
                         <div style="font-size: 9px; color: #555; margin-top: 1px;">របាយការណ៍ចំណូល និង ចំណាយ</div>
                         <div style="font-size: 8px; color: #333; margin-top: 3px; font-style: italic;">For the period ' . $fromFmt . ' to ' . $toFmt . '</div>
                     </td>
-                    <td width="15%" style="border: none;"></td>
                 </tr>
             </table>
         ');

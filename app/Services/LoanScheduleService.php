@@ -9,18 +9,19 @@ use Illuminate\Database\Eloquent\Collection;
 
 class LoanScheduleService
 {
-    public const SPLIT_METHODS = [
-        'fixed_15days_70_30',
-        'fixed_15days_50_50',
+    public const SUPPORTED_METHODS = [
+        'fixed_daily',
+        'fixed_weekly',
+        'fixed_biweekly',
+        'fixed_monthly',
+        'linear_monthly',
+        'annuity_monthly',
+        'Balloon',
+        'negotiable',
     ];
 
     public function __construct(private readonly LoanCalculator $calculator)
     {
-    }
-
-    public static function isSplitMethod(?string $method): bool
-    {
-        return in_array($method, self::SPLIT_METHODS, true);
     }
 
     public static function canonicalPaymentFrequency(string $method, ?string $fallback = null): string
@@ -28,7 +29,7 @@ class LoanScheduleService
         return match ($method) {
             'fixed_daily' => 'daily',
             'fixed_weekly' => 'weekly',
-            'fixed_biweekly', 'fixed_15days_70_30', 'fixed_15days_50_50' => 'biweekly',
+            'fixed_biweekly' => 'biweekly',
             'negotiable' => 'term',
             'fixed_monthly', 'linear_monthly', 'annuity_monthly', 'Balloon' => 'monthly',
             default => strtolower(trim($fallback ?: 'monthly')),
@@ -81,17 +82,9 @@ class LoanScheduleService
         $adminFee = (float) ($input['admin_fee'] ?? 0);
         $adminFeeType = (string) ($input['admin_fee_type'] ?? 'one_time');
         $payDay1 = isset($input['pay_day_1']) ? (int) $input['pay_day_1'] : null;
-        $payDay2 = isset($input['pay_day_2']) ? (int) $input['pay_day_2'] : null;
         $firstRepaymentDate = !empty($input['first_repayment_date'])
             ? (string) $input['first_repayment_date']
             : null;
-
-        if (self::isSplitMethod($method)) {
-            // These two products are contractually fixed to the 11th/26th.
-            $payDay1 = 11;
-            $payDay2 = 26;
-            $firstRepaymentDate = null;
-        }
 
         if ($calculationMethod === 'Balloon') {
             $rawSchedule = BalloonPaymentCalculator::generateSchedule(
@@ -134,7 +127,7 @@ class LoanScheduleService
             $adminFee,
             $adminFeeType,
             $payDay1,
-            $payDay2,
+            null,
             $firstRepaymentDate
         ), $currency, $amount);
     }

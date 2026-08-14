@@ -778,9 +778,3 @@ html.fi:not(.dark) .fi-resource-repayment-transactions .fi-ta-table > tbody > tr
 html.fi:not(.dark) .fi-resource-repayment-transactions .fi-ta-cell .fi-badge {
     font-weight: 400 !important;
 }
-
-.fi-logo,
-.fi-sidebar-header img,
-.fi-sidebar-header a img {
-    border-radius: 0.70rem !important;
-}

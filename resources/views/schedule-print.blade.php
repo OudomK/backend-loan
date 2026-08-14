@@ -74,18 +74,6 @@
             margin-bottom: 2px;
         }
 
-        .logo-wrap {
-            width: 122px;
-        }
-
-        .header img {
-            width: 88px;
-            height: 88px;
-            object-fit: contain;
-            display: block;
-            border-radius: 10px;
-        }
-
         .title-wrap {
             flex: 1;
             text-align: center;
@@ -302,16 +290,10 @@
 
             <!-- Header -->
             <div class="header">
-                <div class="logo-wrap">
-                    <img src="{{ asset('images/logo.jpg') }}" alt="LOGO"
-                        data-fallback="{{ asset('images/light_logo.png') }}"
-                        onerror="this.onerror=null; this.src=this.dataset.fallback;">
-                </div>
                 <div class="title-wrap">
                     <h1 class="title">តារាងកាលវិភាគបង់ប្រាក់</h1>
                     <div class="subtitle">{{ $customer_info['product_name'] ?? 'Personal Loan' }}</div>
                 </div>
-                <div style="width: 122px;"></div>
             </div>
 
             <div class="line"></div>
@@ -426,32 +408,6 @@
 
             <!-- Schedule Table -->
             @php
-                $isSplitMethod = in_array($customer_info['repayment_method'] ?? '', ['fixed_15days_70_30', 'fixed_15days_50_50']);
-                $khmerNums = ['0' => '០', '1' => '១', '2' => '២', '3' => '៣', '4' => '៤', '5' => '៥', '6' => '៦', '7' => '៧', '8' => '៨', '9' => '៩'];
-                $day1Kh = '១១';
-                $day2Kh = '២៦';
-                if ($isSplitMethod && count($schedule) > 0) {
-                    $uniqueDays = [];
-                    foreach ($schedule as $item) {
-                        $uniqueDays[] = (int) substr($item['date'], 0, 2);
-                    }
-                    $uniqueDays = array_unique($uniqueDays);
-                    sort($uniqueDays);
-                    $day1 = count($uniqueDays) > 0 ? $uniqueDays[0] : 11;
-                    $day2 = count($uniqueDays) > 1 ? $uniqueDays[1] : 26;
-
-                    $day1Kh = strtr($day1, $khmerNums);
-                    $day2Kh = strtr($day2, $khmerNums);
-
-                    $groupedByMonth = [];
-                    foreach ($schedule as $item) {
-                        $m = substr($item['date'], 3, 7);
-                        if (!isset($groupedByMonth[$m]))
-                            $groupedByMonth[$m] = [];
-                        $groupedByMonth[$m][] = $item;
-                    }
-                }
-
                 $khmerDays = [
                     0 => 'អាទិត្យ',
                     1 => 'ចន្ទ',
@@ -487,108 +443,6 @@
                 };
             @endphp
 
-            @if($isSplitMethod)
-                <table class="schedule-table">
-                    <thead class="bg-[#d7ffff] text-black"
-                        style="-webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; background-color: #d7ffff !important; box-shadow: inset 0 0 0 1000px #d7ffff !important;">
-                        {{-- Hidden row to define column widths for table-layout:fixed --}}
-                        <tr style="visibility: collapse; height: 0; line-height: 0; padding: 0; border: none;">
-                            <th style="width: 5%;"></th>
-                            <th style="width: 24%;"></th>
-                            <th style="width: 14%;"></th>
-                            <th style="width: 13%;"></th>
-                            <th style="width: 13%;"></th>
-                            <th style="width: 17%;"></th>
-                            <th style="width: 14%;"></th>
-                        </tr>
-                        <tr>
-                            <th rowspan="2" scope="col" style="width: 5%; height: 28px;">ល.រ</th>
-                            <th rowspan="2" scope="col" style="width: 24%; height: 28px;">ថ្ងៃសងប្រាក់</th>
-                            <th rowspan="2" scope="col" style="width: 14%; height: 28px;">ប្រាក់ដើម</th>
-                            <th colspan="2" scope="col" style="width: 26%; height: 28px;">សរុបទឹកប្រាក់បង់</th>
-                            <th rowspan="2" scope="col" style="width: 17%; height: 28px;">សមតុល្យប្រាក់ដើម</th>
-                            <th rowspan="2" scope="col" style="width: 14%; height: 28px;">ផ្សេងៗ</th>
-                        </tr>
-                        <tr>
-                            <th scope="col" style="width: 13%; height: 28px;">បង់ថ្ងៃទី <span class="text-red-600"
-                                    style="color: red; text-decoration: underline;">{{ $day1Kh }}</span></th>
-                            <th scope="col" style="width: 13%; height: 28px;">បង់ថ្ងៃទី <span class="text-red-600"
-                                    style="color: red; text-decoration: underline;">{{ $day2Kh }}</span></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @if(isset($groupedByMonth))
-                            @php $index = 0; @endphp
-                            @foreach($groupedByMonth as $month => $items)
-                                @php
-                                    $payment1 = null;
-                                    $payment2 = null;
-                                    foreach ($items as $i) {
-                                        $d = (int) substr($i['date'], 0, 2);
-                                        if ($d == $day1)
-                                            $payment1 = $i;
-                                        else
-                                            $payment2 = $i;
-                                    }
-
-                                    $displayItem = $payment1 ?: $payment2;
-                                    $dayOfWeekKh = '';
-                                    try {
-                                        $dateObj = \Carbon\Carbon::createFromFormat('d/m/Y', $displayItem['date']);
-                                        $formattedDate = $dateObj->format('d/m/Y');
-                                        $dayOfWeekKh = $khmerDays[$dateObj->dayOfWeek] ?? '';
-                                    } catch (\Exception $e) {
-                                        $formattedDate = $displayItem['date'];
-                                    }
-
-                                    $monthPrincipal = ($payment1 ? $payment1['principal'] : 0) + ($payment2 ? $payment2['principal'] : 0);
-                                    $balance = $payment2 ? $payment2['balance'] : ($payment1 ? $payment1['balance'] : 0);
-                                @endphp
-                                <tr>
-                                    <td>
-                                        {{ $index + 1 }}
-                                    </td>
-                                    <td class="date-split-cell">
-                                        <span class="date-split">
-                                            <span class="date-split-number">{{ $formattedDate }}</span>
-                                            <span class="date-split-day">{{ $dayOfWeekKh }}</span>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {{ $formatMoney($monthPrincipal) }}
-                                    </td>
-                                    <td>
-                                        {{ $formatMoney($payment1 ? $payment1['payment'] : 0) }}
-                                    </td>
-                                    <td>
-                                        {{ $formatMoney($payment2 ? $payment2['payment'] : 0) }}
-                                    </td>
-                                    <td>
-                                        {{ $formatOutstandingBalance($balance) }}
-                                    </td>
-                                    <td>
-
-                                    </td>
-                                </tr>
-                                @php $index++; @endphp
-                            @endforeach
-                        @endif
-
-                        <!-- Total Row -->
-                        <tr>
-                            <td style="border: none;"></td>
-                            <td style="border: none; text-align: right; padding-right: 8px;">សរុប:</td>
-                            <td style="background: #fff;">
-                                {{ $formatMoney(collect($schedule)->sum('principal')) }}
-                            </td>
-                            <td style="border: none;"></td>
-                            <td style="border: none;"></td>
-                            <td style="border: none;"></td>
-                            <td style="border: none;"></td>
-                        </tr>
-                    </tbody>
-                </table>
-            @else
                 <table class="schedule-table">
                     <thead>
                         <tr>
@@ -656,7 +510,6 @@
                         </tr>
                     </tbody>
                 </table>
-            @endif
 
             <!-- Footer Signatures -->
             <div class="footer">

@@ -71,30 +71,9 @@ class ScheduleCalculator extends Component
             $this->repayment_method = $customerInfo['repayment_method'] ?? '';
         }
 
-        if ($this->isSplitRepaymentMethod($this->repayment_method)) {
-            $this->payment_frequency = 'Biweekly';
-            $this->first_repayment_date = $this->splitFirstRepaymentDate($this->loan_date);
-        }
-
         if (empty($this->first_repayment_date)) {
             $this->first_repayment_date = Carbon::now()->addMonth()->toDateString();
         }
-    }
-
-    private function isSplitRepaymentMethod(?string $method): bool
-    {
-        return LoanScheduleService::isSplitMethod($method);
-    }
-
-    private function splitFirstRepaymentDate(string $loanDate): string
-    {
-        $date = Carbon::parse($loanDate ?: Carbon::now()->toDateString());
-
-        if ($date->day <= 15) {
-            return $date->day(26)->toDateString();
-        }
-
-        return $date->addMonthNoOverflow()->day(11)->toDateString();
     }
 
     private function monthlyFirstRepaymentDate(string $loanDate, int $paymentDay = 11): string
@@ -133,8 +112,6 @@ class ScheduleCalculator extends Component
             $this->first_repayment_date = $loanDate->addDays(6)->toDateString();
         } elseif ($value === 'fixed_biweekly') {
             $this->first_repayment_date = $loanDate->addDays(13)->toDateString();
-        } elseif ($this->isSplitRepaymentMethod($value)) {
-            $this->first_repayment_date = $this->splitFirstRepaymentDate($loanDate->toDateString());
         } elseif ($value === 'Balloon') {
             $this->first_repayment_date = $loanDate->addMonthNoOverflow()->toDateString();
         } else {
@@ -152,14 +129,6 @@ class ScheduleCalculator extends Component
             $this->repayment_method,
             $this->payment_frequency
         );
-
-        if ($this->isSplitRepaymentMethod($this->repayment_method)) {
-            // Keep the standalone Web calculator aligned with the App/API:
-            // the term is in months, the frequency label is Biweekly, and the
-            // two fixed collection days are 11 and 26.
-            $this->payment_frequency = 'Biweekly';
-            $this->first_repayment_date = $this->splitFirstRepaymentDate($this->loan_date);
-        }
 
         $this->validate();
 
@@ -202,8 +171,7 @@ class ScheduleCalculator extends Component
 
         // Save current input to display on schedule sheet
         $durationSuffix = ' ខែ';
-        if (!$this->isSplitRepaymentMethod($this->repayment_method)) {
-            switch (strtolower($this->payment_frequency)) {
+        switch (strtolower($this->payment_frequency)) {
                 case 'daily':
                     $durationSuffix = ' ថ្ងៃ';
                     break;
@@ -217,7 +185,6 @@ class ScheduleCalculator extends Component
                 case 'term':
                     $durationSuffix = ' លើក';
                     break;
-            }
         }
 
         $productName = 'Personal Loan';

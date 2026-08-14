@@ -7,7 +7,6 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use App\Models\Setting;
@@ -61,8 +60,8 @@ class LoanCollectionExcelExport
         $excelFont = Setting::where('key', 'excel_export_font')->value('value') ?? 'Khmer OS Siemreap';
         $spreadsheet->getDefaultStyle()->getFont()->setName($excelFont)->setSize(8);
         
-        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? "ប្រាក់ រហ័ស ហ្វាយនែន ម.ក";
-        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? "Quick Fund Finance Plc.";
+        $khmerCompanyName = Setting::where('key', 'company_name_kh')->value('value') ?? '';
+        $englishCompanyName = Setting::where('key', 'company_name_en')->value('value') ?? '';
 
         $fDate = $fromDateStr ? Carbon::parse($fromDateStr)->format('d/m/Y') : "";
         $tDate = $toDateStr ? Carbon::parse($toDateStr)->format('d/m/Y') : "";
@@ -92,19 +91,6 @@ class LoanCollectionExcelExport
             $sheetName = substr(preg_replace('/[:\/\?\*\[\]]/', '_', trim($sheetName)), 0, 31);
             $sheet->setTitle($sheetName ?: 'LoanCollection');
             $sheet->setShowGridlines(false);
-
-            // Add Logo
-            $drawing = new Drawing();
-            $drawing->setName('Logo');
-            $drawing->setDescription('Logo');
-            $logoPath = public_path('images/logo.jpg');
-            if (file_exists($logoPath)) {
-                $drawing->setPath($logoPath);
-                $drawing->setHeight(90);
-                $drawing->setCoordinates('A1');
-                $drawing->setOffsetY(5);
-                $drawing->setWorksheet($sheet);
-            }
 
             // Title area
             $sheet->getRowDimension(1)->setRowHeight(45);

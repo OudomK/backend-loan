@@ -6,8 +6,8 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Schemas\Schema;
 use Filament\Pages\Page;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
@@ -84,7 +84,6 @@ class ManageSettings extends Page implements HasForms
 
         $this->form->fill([
             'company_name' => $dbSettings['company_name'] ?? config('app.company_name'),
-            'company_logo' => $dbSettings['company_logo'] ?? '',
             'default_language' => $dbSettings['default_language'] ?? 'EN',
             'admin_font_family' => AdminFontRegistry::resolveKey(isset($dbSettings['admin_font_family']) ? (string) $dbSettings['admin_font_family'] : null),
             'available_fonts_count' => (string) AdminFontRegistry::count(),
@@ -174,25 +173,6 @@ class ManageSettings extends Page implements HasForms
                             ->required()
                             ->default(config('app.company_name'))
                             ->columnSpan(2),
-                        FileUpload::make('company_logo')
-                            ->label('Company Logo')
-                            ->image()
-                            ->disk('public')
-                            ->directory('settings')
-                            ->visibility('public')
-                            ->columnSpan(1)
-                            ->live()
-                            ->afterStateUpdated(function ($state) {
-                                Setting::updateOrCreate(
-                                    ['key' => 'company_logo'],
-                                    ['value' => $state]
-                                );
-
-                                Notification::make()
-                                    ->title('Company logo updated')
-                                    ->success()
-                                    ->send();
-                            }),
                         Select::make('default_language')
                             ->label('System Language')
                             ->options([
@@ -299,7 +279,7 @@ class ManageSettings extends Page implements HasForms
                             ->native(false)
                             ->helperText('System fonts: ' . AdminFontRegistry::coreCount() . '. Imported active fonts: ' . AdminFontRegistry::activeCustomCount() . '.'),
                         Select::make('frontend_font_family')
-                            ->label('QuickFund App Font')
+                            ->label('Application Font')
                             ->options(fn() => AdminFontRegistry::options())
                             ->default('battambang')
                             ->required()

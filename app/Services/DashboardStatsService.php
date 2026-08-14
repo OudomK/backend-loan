@@ -13,6 +13,7 @@ use App\Models\Setting;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class DashboardStatsService
 {
@@ -355,9 +356,15 @@ class DashboardStatsService
             $months[] = now()->startOfMonth()->subMonths($i)->format('Y-m');
         }
 
+        $monthExpression = match (DB::connection()->getDriverName()) {
+            'sqlite' => "strftime('%Y-%m', start_date)",
+            'pgsql' => "to_char(start_date, 'YYYY-MM')",
+            default => "DATE_FORMAT(start_date, '%Y-%m')",
+        };
+
         $disbursementsRaw = Loan::where('status', 'active')
             ->where('start_date', '>=', now()->startOfMonth()->subMonths(11))
-            ->selectRaw('DATE_FORMAT(start_date, "%Y-%m") as month, currency, SUM(amount) as total_amount')
+            ->selectRaw("{$monthExpression} as month, currency, SUM(amount) as total_amount")
             ->groupBy('month', 'currency')
             ->get();
 

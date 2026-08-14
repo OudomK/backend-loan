@@ -139,9 +139,7 @@ class ActiveLoanReportController extends Controller
                 $loan->payment_frequency,
                 $loan->repayment_method
             );
-            $termFrequency = in_array($loan->repayment_method, ['fixed_15days_70_30', 'fixed_15days_50_50'], true)
-                ? 'monthly'
-                : $paymentFrequency;
+            $termFrequency = $paymentFrequency;
             $firstRepaymentDate = optional($loan->payments->first())->payment_date
                 ?? $this->fallbackScheduleDate($loan->start_date, 1, $termFrequency);
             $maturityDate = $loan->maturity_date
