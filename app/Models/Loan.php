@@ -601,7 +601,7 @@ class Loan extends Model
         if ($outstandingPrincipal <= 0) {
             $deletedPayments = Payment::where('loan_id', $this->id)
                 ->whereRaw('total_paid < 0.01')
-                ->forceDelete();
+                ->delete();
             $this->update(['status' => 'completed', 'monthly_payment' => 0]);
 
             activity('loan_schedule')
@@ -664,7 +664,7 @@ class Loan extends Model
             $deletedPayments = Payment::where('loan_id', $this->id)
                 ->where('payment_number', '>', $lastPaidNumber)
                 ->where('total_paid', '<', 0.01)
-                ->forceDelete();
+                ->delete();
             $this->update(['monthly_payment' => 0]);
 
             activity('loan_schedule')

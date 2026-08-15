@@ -19,7 +19,7 @@ return new class extends Migration
                 $table->decimal('fee_paid', 15, 2)->default(0)->after('fee_amount');
             }
             if (!Schema::hasColumn('payments', 'total_due')) {
-                $table->decimal('total_due', 15, 2)->virtualAs('principal_amount + interest_amount + fee_amount')->after('fee_paid');
+                $table->decimal('total_due', 15, 2)->storedAs('principal_amount + interest_amount + fee_amount')->after('fee_paid');
             }
         });
     }

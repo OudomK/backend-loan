@@ -16,6 +16,11 @@ return new class extends Migration
             DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'active', 'completed', 'paid_off', 'refinanced', 'written_off', 'rejected') DEFAULT 'pending'");
 
             return;
+        } elseif (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE loans DROP CONSTRAINT loans_status_check");
+            DB::statement("ALTER TABLE loans ADD CONSTRAINT loans_status_check CHECK (status IN ('pending', 'active', 'completed', 'paid_off', 'refinanced', 'written_off', 'rejected'))");
+
+            return;
         }
 
         Schema::table('loans', function (Blueprint $table): void {
@@ -32,6 +37,11 @@ return new class extends Migration
     {
         if (DB::getDriverName() === 'mysql') {
             DB::statement("ALTER TABLE loans MODIFY COLUMN status ENUM('pending', 'active', 'completed', 'paid_off') DEFAULT 'pending'");
+
+            return;
+        } elseif (DB::getDriverName() === 'pgsql') {
+            DB::statement("ALTER TABLE loans DROP CONSTRAINT loans_status_check");
+            DB::statement("ALTER TABLE loans ADD CONSTRAINT loans_status_check CHECK (status IN ('pending', 'active', 'completed', 'paid_off'))");
 
             return;
         }
